@@ -20,15 +20,12 @@ def transcribe_scribe(audio_path: Path, api_key: str, language: str = "por",
         "tag_audio_events": "true",
         "diarize": "false",
     }
-    files = {"file": (audio_path.name, open(audio_path, "rb"), "application/octet-stream")}
-    form = list(data.items())
-    for term in (keyterms or [])[:100]:
-        form.append(("keyterms", term))
-    try:
+    if keyterms:
+        data["keyterms"] = list(keyterms)[:100]
+    with open(audio_path, "rb") as fh:
+        files = {"file": (audio_path.name, fh, "application/octet-stream")}
         with httpx.Client(timeout=httpx.Timeout(3600, connect=30)) as client:
-            r = client.post(SCRIBE_URL, headers={"xi-api-key": api_key}, data=form, files=files)
-    finally:
-        files["file"][1].close()
+            r = client.post(SCRIBE_URL, headers={"xi-api-key": api_key}, data=data, files=files)
     if r.status_code != 200:
         raise RuntimeError(f"Scribe devolveu {r.status_code}: {r.text[:400]}")
     return r.json()
