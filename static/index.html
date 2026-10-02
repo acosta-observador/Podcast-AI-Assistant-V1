@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AutoTake · Podcast Plus</title>
+<style>
+:root{
+  --bg:#ffffff; --panel:#f5f5f7; --card:#ffffff; --line:#e3e3e8; --hover:#ececf0;
+  --text:#1d1d1f; --muted:#6e6e73; --faint:#aeaeb2;
+  --accent:#0071e3; --accent-soft:#e8f1fc; --warn:#c96a00; --warn-soft:#fff4e5; --ok:#248a3d;
+  --r:14px;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Helvetica Neue",Arial,sans-serif;
+  color-scheme:light dark;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#000000; --panel:#1c1c1e; --card:#1c1c1e; --line:#2c2c2e; --hover:#2a2a2d;
+    --text:#f5f5f7; --muted:#a1a1a6; --faint:#636366;
+    --accent:#2997ff; --accent-soft:#0b2a4a; --warn:#ffb340; --warn-soft:#2e2208; --ok:#30d158;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#000000; --panel:#1c1c1e; --card:#1c1c1e; --line:#2c2c2e; --hover:#2a2a2d;
+  --text:#f5f5f7; --muted:#a1a1a6; --faint:#636366;
+  --accent:#2997ff; --accent-soft:#0b2a4a; --warn:#ffb340; --warn-soft:#2e2208; --ok:#30d158;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.47;-webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+button,input{font:inherit;color:inherit;letter-spacing:inherit}
+button{cursor:pointer;background:none;border:0;padding:0}
+button:disabled{cursor:default}
+:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 45%,transparent);outline-offset:2px;border-radius:8px}
+a{color:var(--accent);text-decoration:none}
+
+/* barra de topo */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:color-mix(in srgb,var(--bg) 82%,transparent);
+  backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line)}
+.top-in{max-width:1180px;margin:0 auto;height:52px;padding:0 20px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+.brand{font-weight:600;font-size:15px;color:var(--text);white-space:nowrap}
+.brand span{color:var(--muted);font-weight:400}
+.back{display:inline-flex;align-items:center;gap:4px;font-size:15px;color:var(--accent)}
+.back svg{width:18px;height:18px}
+.top-title{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw}
+.top-actions{display:flex;justify-content:flex-end;gap:8px}
+
+.btn{height:32px;padding:0 14px;border-radius:980px;font-size:14px;font-weight:500;background:var(--panel);color:var(--text);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover:not(:disabled){background:var(--hover)}
+.btn:disabled{opacity:.45}
+.btn.blue{background:var(--accent);color:#fff}
+.btn.blue:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 88%,#000)}
+.btn svg{width:16px;height:16px}
+.link{color:var(--accent);font-size:14px}
+.link:disabled{color:var(--faint)}
+
+.wrap{max-width:1180px;margin:0 auto;padding:36px 20px 80px}
+.intro h1{font-size:34px;line-height:1.12;font-weight:700;letter-spacing:-.025em;margin:0 0 6px}
+.intro p{font-size:17px;color:var(--muted);margin:0 0 32px;max-width:56ch}
+
+/* cartões */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r)}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:24px;align-items:start}
+.section-t{font-size:13px;font-weight:600;color:var(--muted);margin:0 0 10px 4px}
+
+/* lista de episódios */
+.eps{overflow:hidden}
+.ep{display:grid;grid-template-columns:1fr auto;gap:4px 16px;padding:14px 18px;border-top:1px solid var(--line);color:var(--text)}
+.ep:first-child{border-top:0}
+.ep:hover{background:var(--panel)}
+.ep b{font-weight:600;font-size:16px}
+.ep small{color:var(--muted);font-size:13px}
+.ep .pill{grid-row:1/3;grid-column:2;align-self:center}
+.pill{font-size:12px;font-weight:600;padding:3px 10px;border-radius:980px;background:var(--panel);color:var(--muted);white-space:nowrap}
+.pill.ok{background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.run{background:var(--accent-soft);color:var(--accent)}
+.empty{padding:40px 24px;text-align:center;color:var(--muted)}
+
+/* formulário */
+form.new{padding:20px;display:flex;flex-direction:column;gap:14px}
+form.new h2{margin:0;font-size:19px;font-weight:600}
+.field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+.field input[type=text]{height:40px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font-size:15px;color:var(--text)}
+.field input[type=text]:focus{outline:3px solid color-mix(in srgb,var(--accent) 35%,transparent);border-color:var(--accent)}
+.drop{position:relative;border:1.5px dashed var(--line);border-radius:12px;padding:16px;display:flex;align-items:center;gap:12px;background:var(--bg)}
+.drop:hover{border-color:var(--faint)}
+.drop.has{border-style:solid;border-color:var(--accent);background:var(--accent-soft)}
+.drop svg{width:26px;height:26px;color:var(--accent);flex:none}
+.drop b{display:block;font-weight:600;font-size:15px;color:var(--text)}
+.drop small{display:block;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:250px}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.drop:focus-within{outline:3px solid color-mix(in srgb,var(--accent) 35%,transparent)}
+.primary{height:44px;border-radius:12px;background:var(--accent);color:#fff;font-size:16px;font-weight:600}
+.primary:disabled{background:var(--panel);color:var(--faint)}
+.bar{height:4px;background:var(--panel);border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .2s}
+.note{font-size:13px;color:var(--muted);margin:0}
+
+/* processamento */
+.proc{max-width:520px;margin:40px auto;padding:28px}
+.proc h1{font-size:24px;margin:0 0 4px;letter-spacing:-.02em}
+.proc > p{color:var(--muted);margin:0 0 22px}
+.stage{display:flex;align-items:center;gap:12px;padding:10px 0;color:var(--faint);font-size:16px}
+.stage .ic{width:22px;height:22px;border-radius:50%;border:1.5px solid currentColor;display:grid;place-items:center;flex:none}
+.stage.done{color:var(--text)} .stage.done .ic{background:var(--ok);border-color:var(--ok);color:#fff}
+.stage.done .ic svg{width:13px;height:13px}
+.stage.now{color:var(--text);font-weight:600} .stage.now .ic{border-color:var(--accent);border-top-color:transparent;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.errbox{margin-top:16px;padding:12px 14px;border-radius:12px;background:var(--warn-soft);color:var(--warn)}
+
+/* episódio */
+.ep-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.ep-head h1{font-size:28px;margin:0;letter-spacing:-.025em;line-height:1.15}
+.ep-head p{margin:4px 0 0;color:var(--muted)}
+.layout{display:grid;grid-template-columns:360px minmax(0,1fr);gap:24px;align-items:start}
+.blocks{overflow:hidden;max-height:calc(100vh - 190px);overflow-y:auto;position:sticky;top:72px}
+.blk{display:grid;grid-template-columns:18px 1fr auto;gap:10px;align-items:start;width:100%;text-align:left;padding:12px 14px;border-top:1px solid var(--line)}
+.blk:first-child{border-top:0}
+.blk:hover{background:var(--panel)}
+.blk.cur{background:var(--accent-soft)}
+.blk .n{font-size:13px;font-weight:600;color:var(--muted);padding-top:1px;text-align:right}
+.blk .t{font-size:14px;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.blk .r{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.blk .ch{font-size:12px;color:var(--muted);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.tick{width:14px;height:14px;color:var(--ok)}
+
+.detail{padding:28px 30px}
+.d-top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px}
+.d-top h2{margin:0;font-size:13px;font-weight:600;color:var(--muted)}
+.nav{display:flex;gap:6px}
+.nav button{width:32px;height:32px;border-radius:50%;background:var(--panel);display:grid;place-items:center}
+.nav button:hover:not(:disabled){background:var(--hover)}
+.nav button:disabled{opacity:.35}
+.nav svg{width:16px;height:16px}
+.script{font-size:21px;line-height:1.5;letter-spacing:-.015em;margin:0 0 26px;max-width:62ch}
+
+.segctl{display:inline-flex;flex-wrap:wrap;background:var(--panel);border-radius:10px;padding:3px;gap:2px}
+.segctl button{min-width:74px;padding:7px 14px;border-radius:8px;font-size:14px;font-weight:500;color:var(--text);display:flex;flex-direction:column;align-items:center;line-height:1.2}
+.segctl button small{font-size:11px;color:var(--muted);font-weight:400}
+.segctl button:hover:not([aria-pressed="true"]){background:var(--hover)}
+.segctl button[aria-pressed="true"]{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04)}
+.lbl{font-size:13px;color:var(--muted);margin:0 0 8px}
+
+.player{display:flex;align-items:center;gap:16px;margin:24px 0 8px}
+.play{width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}
+.play:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 88%,#000)}
+.play:disabled{background:var(--panel);color:var(--faint)}
+.play svg{width:22px;height:22px}
+.p-meta b{display:block;font-size:16px;font-weight:600}
+.p-meta span{color:var(--muted);font-size:14px}
+.prog{flex:1;height:4px;border-radius:2px;background:var(--panel);overflow:hidden;min-width:60px}
+.prog i{display:block;height:100%;width:0;background:var(--accent)}
+
+.flags{margin:20px 0 0;padding:12px 16px;border-radius:12px;background:var(--warn-soft);color:var(--warn);font-size:14px;display:flex;flex-direction:column;gap:4px}
+.said{margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}
+.said p{margin:0 0 14px;color:var(--muted);font-size:15px;max-width:66ch}
+.said p b{color:var(--text);font-weight:600;font-size:13px;display:block;margin-bottom:2px}
+.d-actions{display:flex;gap:18px;margin-top:22px;flex-wrap:wrap;align-items:center}
+.kb{margin-top:18px;font-size:12px;color:var(--faint)}
+kbd{font-family:var(--font);font-size:11px;border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--muted)}
+.banner{max-width:1180px;margin:12px auto 0;padding:10px 14px;border-radius:12px;background:var(--panel);color:var(--muted);font-size:13px}
+
+@media (max-width: 900px){
+  .grid2,.layout{grid-template-columns:1fr}
+  .blocks{position:static;max-height:none}
+  .detail{padding:22px 18px}
+  .script{font-size:18px}
+  .top-title{display:none}
+  .top-in{grid-template-columns:auto 1fr}
+}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<audio id="player" preload="none"></audio>
+
+<script>
+/* ---------- ícones ---------- */
+const I = {
+  chevL:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>',
+  down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+  play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.2v13.6c0 .8.9 1.3 1.6.8l10.2-6.8c.6-.4.6-1.2 0-1.6L9.6 4.4C8.9 3.9 8 4.4 8 5.2z"/></svg>',
+  stop:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>',
+  wave:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 12h1M7.5 9v6M11 5v14M14.5 8v8M18 10.5v3M20.5 12h-.5"/></svg>',
+  doc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
+  dl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+};
+
+/* ---------- estado ---------- */
+const S = { demo:false, list:[], ep:null, cur:0, playing:false, poll:null };
+const $app = document.getElementById('app');
+const player = document.getElementById('player');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
+  return (h ? h+':'+String(m).padStart(2,'0') : String(m)) + ':' + String(x).padStart(2,'0'); };
+const capital = s => s ? s[0].toUpperCase() + s.slice(1) : s;
+
+async function api(path, opts = {}) {
+  if (S.demo) return Demo.api(path, opts);
+  const r = await fetch(path, opts);
+  if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail || m } catch {} throw new Error(m); }
+  return r.headers.get('content-type')?.includes('json') ? r.json() : r.text();
+}
+
+/* ---------- navegação ---------- */
+window.addEventListener('hashchange', route);
+async function route() {
+  stopAudio(); clearTimeout(S.poll);
+  const m = location.hash.match(/^#\/ep\/([\w-]+)/);
+  if (m) return openEpisode(m[1]);
+  return home();
+}
+
+function topbar({ left, title = '', actions = '' }) {
+  return `<div class="top"><div class="top-in">
+    <div>${left}</div><div class="top-title">${esc(title)}</div><div class="top-actions">${actions}</div>
+  </div></div>${S.demo ? '<div class="banner">Demonstração: os dados são fictícios e não há áudio. No servidor, o upload e a transcrição funcionam a partir desta página.</div>' : ''}`;
+}
+const brand = `<a class="brand" href="#/">Podcast Plus <span>AutoTake</span></a>`;
+const backLink = `<a class="back" href="#/">${I.chevL}Episódios</a>`;
+
+/* ---------- início ---------- */
+function statusPill(st) {
+  const s = st?.status;
+  if (s === 'pronto') return '<span class="pill ok">Pronto</span>';
+  if (s === 'erro') return '<span class="pill warn">Erro</span>';
+  return `<span class="pill run">${esc(capital(s || 'na fila'))}</span>`;
+}
+
+async function home() {
+  try { S.list = await api('/api/episodes'); } catch { S.list = []; }
+  const rows = S.list.map(ep => `<a class="ep" href="#/ep/${ep.id}">
+      <b>${esc(ep.title)}</b>${statusPill(ep.state)}
+      <small>${new Date(ep.created * 1000).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' })}</small>
+    </a>`).join('') || '<div class="empty">Ainda não há episódios.<br>Carrega a gravação e o guião para começar.</div>';
+
+  $app.innerHTML = topbar({ left: brand }) + `
+  <div class="wrap">
+    <div class="intro">
+      <h1>AutoTake</h1>
+      <p>Carrega a gravação completa e o guião. O AutoTake encontra todas as tentativas de cada parágrafo, escolhe o último take completo e deixa-te ouvir e trocar antes de exportar.</p>
+    </div>
+    <div class="grid2">
+      <div><p class="section-t">Episódios</p><div class="card eps">${rows}</div></div>
+      <form class="card new" id="newForm">
+        <h2>Novo episódio</h2>
+        <label class="field">Nome<input type="text" name="title" required placeholder="O terramoto de 1755, episódio 3"></label>
+        <div class="drop" id="dropAudio">${I.wave}<div><b>Gravação</b><small>WAV, FLAC, MP3 ou M4A</small></div>
+          <input type="file" name="audio" accept="audio/*,.wav,.flac,.mp3,.m4a,.aif,.aiff" required aria-label="Gravação"></div>
+        <div class="drop" id="dropScript">${I.doc}<div><b>Guião</b><small>Word (.docx) ou texto (.txt)</small></div>
+          <input type="file" name="script" accept=".docx,.txt,.md" required aria-label="Guião"></div>
+        <div class="bar" hidden id="bar"><i></i></div>
+        <button class="primary" id="go">Processar</button>
+        <p class="note" id="formNote">Cada parágrafo do guião é um bloco. Indicações entre parênteses retos são ignoradas.</p>
+      </form>
+    </div>
+  </div>`;
+
+  const form = document.getElementById('newForm');
+  for (const [id, name] of [['dropAudio','audio'],['dropScript','script']]) {
+    const box = document.getElementById(id), input = form.elements[name];
+    input.addEventListener('change', () => {
+      const f = input.files[0]; box.classList.toggle('has', !!f);
+      if (f) box.querySelector('small').textContent = `${f.name}, ${(f.size/1048576).toFixed(0)} MB`;
+    });
+  }
+  form.addEventListener('submit', e => { e.preventDefault(); upload(form); });
+}
+
+function upload(form) {
+  const fd = new FormData(form), bar = document.getElementById('bar'), note = document.getElementById('formNote'), go = document.getElementById('go');
+  if (S.demo) { location.hash = '#/ep/demo'; return; }
+  go.disabled = true; bar.hidden = false;
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/episodes');
+  xhr.upload.onprogress = e => { if (e.lengthComputable) { const p = Math.round(e.loaded / e.total * 100); bar.firstChild.style.width = p + '%'; note.textContent = `A enviar, ${p}%`; } };
+  xhr.onload = () => {
+    if (xhr.status < 300) { location.hash = '#/ep/' + JSON.parse(xhr.responseText).id; return; }
+    let m = 'O envio falhou.'; try { m = JSON.parse(xhr.responseText).detail } catch {}
+    note.textContent = m; go.disabled = false; bar.hidden = true;
+  };
+  xhr.onerror = () => { note.textContent = 'O envio falhou. Verifica a ligação e tenta outra vez.'; go.disabled = false; bar.hidden = true; };
+  xhr.send(fd);
+}
+
+/* ---------- processamento ---------- */
+const STAGES = [['na fila','Na fila'],['a preparar','A preparar o áudio'],['a transcrever','A transcrever'],['a alinhar','A comparar com o guião'],['pronto','Pronto']];
+
+async function openEpisode(id) {
+  try { S.ep = await api('/api/episodes/' + id); }
+  catch { $app.innerHTML = topbar({ left: backLink }) + `<div class="wrap"><div class="card proc"><h1>Episódio não encontrado</h1><p>Pode ter sido apagado. <a href="#/">Voltar aos episódios</a></p></div></div>`; return; }
+  const st = S.ep.state || {};
+  if (st.status !== 'pronto' || !S.ep.result) return renderProcessing(id, st);
+  if (!S.demo) player.src = `/api/episodes/${id}/audio`;
+  S.cur = Math.min(S.cur, S.ep.result.blocks.length - 1);
+  renderEpisode();
+  if (st.render && st.render !== 'pronto' && st.render !== 'erro') pollRender();
+}
+
+function renderProcessing(id, st) {
+  const k = STAGES.findIndex(s => s[0] === st.status), err = st.status === 'erro';
+  const rows = STAGES.slice(0, -1).map(([key, label], i) => {
+    const cls = err ? (i < 3 ? '' : '') : i < k ? 'done' : i === k ? 'now' : '';
+    return `<div class="stage ${cls}"><span class="ic">${cls === 'done' ? I.check : ''}</span>${label}</div>`;
+  }).join('');
+  $app.innerHTML = topbar({ left: backLink, title: S.ep.meta.title }) + `
+    <div class="wrap"><div class="card proc">
+      <h1>${esc(S.ep.meta.title)}</h1>
+      <p>${err ? 'O processamento parou.' : 'Podes fechar esta página. O trabalho continua no servidor.'}</p>
+      ${rows}
+      ${err ? `<div class="errbox">${esc(st.message)}</div><p style="margin:16px 0 0"><button class="btn blue" onclick="reprocess('${id}')">Tentar outra vez</button></p>` : ''}
+    </div></div>`;
+  if (!err) S.poll = setTimeout(() => openEpisode(id), 3000);
+}
+async function reprocess(id) { await api(`/api/episodes/${id}/reprocess`, { method: 'POST' }); openEpisode(id); }
+
+/* ---------- revisão ---------- */
+function choiceOf(b) { return S.ep.selections[b.id] || b.auto || null; }
+function isChosen(b, n) { const c = choiceOf(b); return !!c && c.mode === 'take' && c.take === n; }
+function needsReview(b) { return b.confidence !== 'alta' && !S.ep.reviewed.includes(b.id); }
+function choiceLabel(b) { const c = choiceOf(b); return !c ? 'Sem take' : c.mode === 'composite' ? 'Composta' : `Take ${c.take}`; }
+function segsOf(b) {
+  const c = choiceOf(b); if (!c) return [];
+  if (c.mode === 'composite' && b.composite) return b.composite.cuts.map(x => [...x]);
+  const t = b.takes.find(t => t.n === c.take); return t ? [[...t.cut]] : [];
+}
+const segDur = segs => segs.reduce((a, [s, e]) => a + e - s, 0);
+
+function renderEpisode() {
+  const { meta, result, state } = S.ep, blocks = result.blocks;
+  const total = blocks.reduce((a, b) => a + segDur(segsOf(b)), 0) + blocks.length * 0.6;
+  const toReview = blocks.filter(needsReview).length;
+  const r = state.render, rendering = r === 'a montar' || r === 'na fila';
+
+  const list = blocks.map((b, i) => `<button class="blk ${i === S.cur ? 'cur' : ''}" data-i="${i}">
+      <span class="n">${b.index}</span><span class="t">${esc(b.text)}</span>
+      <span class="r">${needsReview(b) ? '<span class="dot" title="Por rever"></span>' : `<span class="tick">${I.check}</span>`}<span class="ch">${choiceLabel(b)}</span></span>
+    </button>`).join('');
+
+  $app.innerHTML = topbar({
+    left: backLink, title: meta.title,
+    actions: `<button class="btn" onclick="exportReaper()" ${S.demo ? 'disabled' : ''}>${I.dl}Reaper</button>
+              <button class="btn blue" onclick="exportWav()" ${S.demo || rendering ? 'disabled' : ''}>${rendering ? 'A montar…' : r === 'pronto' ? 'Descarregar áudio' : 'Exportar áudio'}</button>`,
+  }) + `
+  <div class="wrap">
+    <div class="ep-head">
+      <div><h1>${esc(meta.title)}</h1>
+      <p id="statusTxt">${blocks.length} blocos, ${toReview ? `${toReview} por rever` : 'todos revistos'}, montagem com ${fmt(total)}</p></div>
+    </div>
+    <div class="layout">
+      <div class="card blocks" id="blocks">${list}</div>
+      <div class="card detail" id="detail"></div>
+    </div>
+  </div>`;
+
+  document.getElementById('blocks').addEventListener('click', e => {
+    const el = e.target.closest('[data-i]'); if (!el) return;
+    stopAudio(); S.cur = +el.dataset.i; renderEpisode();
+  });
+  renderDetail();
+}
+
+function renderDetail() {
+  const blocks = S.ep.result.blocks, b = blocks[S.cur], c = choiceOf(b), el = document.getElementById('detail');
+  const manual = !!S.ep.selections[b.id], reviewed = S.ep.reviewed.includes(b.id);
+  const t = c?.mode === 'take' ? b.takes.find(t => t.n === c.take) : null;
+  const segs = segsOf(b);
+
+  const options = b.takes.map(tk => `<button aria-pressed="${isChosen(b, tk.n)}" onclick="choose(${tk.n}, true)">Take ${tk.n}<small>${tk.complete ? fmt(tk.cut[1] - tk.cut[0]) : 'incompleto'}</small></button>`).join('')
+    + (b.composite ? `<button aria-pressed="${c?.mode === 'composite'}" onclick="choose('C', true)">Composta<small>takes ${[...new Set(b.composite.takes)].join(' e ')}</small></button>` : '');
+
+  const what = t ? `Take ${t.n}` : c?.mode === 'composite' ? 'Montagem composta' : 'Sem take';
+  const sub = t ? `${t.complete ? 'Completo' : 'Incompleto'}, ${Math.round(t.coverage * 100)}% do guião${t.off_script ? `, ${t.off_script} palavras a mais` : ''}`
+            : c?.mode === 'composite' ? `${b.composite.cuts.length} cortes` : '';
+
+  el.innerHTML = `
+    <div class="d-top">
+      <h2>Bloco ${b.index} de ${blocks.length}</h2>
+      <div class="nav">
+        <button onclick="go(-1)" ${S.cur === 0 ? 'disabled' : ''} aria-label="Bloco anterior">${I.up}</button>
+        <button onclick="go(1)" ${S.cur === blocks.length - 1 ? 'disabled' : ''} aria-label="Bloco seguinte">${I.down}</button>
+      </div>
+    </div>
+    <p class="script">${esc(b.text)}</p>
+    ${b.takes.length ? `<p class="lbl">Take a usar${manual ? ', escolhido por ti' : ', escolha automática'}</p><div class="segctl" role="group">${options}</div>` : ''}
+    <div class="player">
+      <button class="play" onclick="togglePlay()" ${S.demo || !segs.length ? 'disabled' : ''} aria-label="${S.playing ? 'Parar' : 'Ouvir'}">${S.playing ? I.stop : I.play}</button>
+      <div class="p-meta"><b>${what}</b><span>${fmt(segDur(segs))}${sub ? ', ' + sub.charAt(0).toLowerCase() + sub.slice(1) : ''}</span></div>
+      <div class="prog"><i id="prog"></i></div>
+    </div>
+    ${b.flags.length ? `<div class="flags">${b.flags.map(f => `<span>${esc(f)}</span>`).join('')}</div>` : ''}
+    <div class="d-actions">
+      <button class="btn ${reviewed ? '' : 'blue'}" onclick="toggleReviewed()">${reviewed ? 'Revisto' : 'Marcar como revisto'}</button>
+      ${manual ? '<button class="link" onclick="choose(null)">Repor escolha automática</button>' : ''}
+    </div>
+    ${b.takes.length ? `<div class="said">${b.takes.map(x => `<p><b>Take ${x.n}${x.complete ? '' : ', incompleto'}</b>${esc(x.text)}</p>`).join('')}</div>` : ''}
+    <p class="kb"><kbd>↑</kbd> <kbd>↓</kbd> muda de bloco, <kbd>1</kbd>–<kbd>9</kbd> escolhe o take, <kbd>C</kbd> composta, <kbd>espaço</kbd> ouve, <kbd>R</kbd> revisto</p>`;
+}
+
+function go(d) {
+  const n = S.ep.result.blocks.length; stopAudio();
+  S.cur = Math.max(0, Math.min(n - 1, S.cur + d)); renderEpisode();
+  document.querySelector('.blk.cur')?.scrollIntoView({ block: 'nearest' });
+}
+
+async function choose(n, play = false) {
+  const b = S.ep.result.blocks[S.cur];
+  let choice;
+  if (n === null) choice = null;
+  else if (n === 'C') { if (!b.composite) return; choice = { mode: 'composite' }; }
+  else { if (!b.takes.find(t => t.n === n)) return; choice = { mode: 'take', take: n }; }
+  const same = b.auto && choice && JSON.stringify(b.auto) === JSON.stringify(choice);
+  if (choice === null || same) delete S.ep.selections[b.id]; else S.ep.selections[b.id] = choice;
+  S.ep.state.render = null; stopAudio();
+  renderEpisode();
+  api(`/api/episodes/${S.ep.meta.id}/blocks/${b.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ choice: choice === null || same ? null : choice }) }).catch(showErr);
+  if (play && !S.demo) playCurrent();
+}
+
+async function toggleReviewed() {
+  const b = S.ep.result.blocks[S.cur], on = !S.ep.reviewed.includes(b.id);
+  S.ep.reviewed = on ? [...S.ep.reviewed, b.id] : S.ep.reviewed.filter(x => x !== b.id);
+  api(`/api/episodes/${S.ep.meta.id}/blocks/${b.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reviewed: on }) }).catch(showErr);
+  if (on && S.cur < S.ep.result.blocks.length - 1) go(1); else renderEpisode();
+}
+
+function showErr(e) { const s = document.getElementById('statusTxt'); if (s) s.textContent = 'Erro: ' + e.message; }
+
+/* ---------- áudio: tocar só os trechos escolhidos ---------- */
+let segs = [], segI = 0, raf = 0, played = 0;
+function playCurrent() {
+  segs = segsOf(S.ep.result.blocks[S.cur]); if (!segs.length) return;
+  segI = 0; played = 0; player.currentTime = segs[0][0];
+  player.play().then(() => { S.playing = true; renderDetail(); tick(); }).catch(showErr);
+}
+function tick() {
+  cancelAnimationFrame(raf);
+  raf = requestAnimationFrame(() => {
+    if (!S.playing) return;
+    const [s, e] = segs[segI];
+    if (player.currentTime >= e) {
+      played += e - s; segI++;
+      if (segI >= segs.length) return stopAudio(true);
+      player.currentTime = segs[segI][0];
+    }
+    const p = document.getElementById('prog');
+    if (p) p.style.width = Math.min(100, (played + Math.max(0, player.currentTime - segs[segI][0])) / segDur(segs) * 100) + '%';
+    tick();
+  });
+}
+function stopAudio(render) { player.pause(); cancelAnimationFrame(raf); if (S.playing) { S.playing = false; if (render) renderDetail(); } }
+function togglePlay() { S.playing ? stopAudio(true) : playCurrent(); }
+
+/* ---------- exportações ---------- */
+function exportReaper() { if (!S.demo) location.href = `/api/episodes/${S.ep.meta.id}/export/reaper`; }
+async function exportWav() {
+  if (S.ep.state.render === 'pronto') { location.href = `/api/episodes/${S.ep.meta.id}/export/wav`; return; }
+  await api(`/api/episodes/${S.ep.meta.id}/render`, { method: 'POST' }).catch(showErr);
+  S.ep.state.render = 'na fila'; renderEpisode(); pollRender();
+}
+async function pollRender() {
+  clearTimeout(S.poll);
+  S.poll = setTimeout(async () => {
+    const st = await api(`/api/episodes/${S.ep.meta.id}`).then(r => r.state).catch(() => null);
+    if (!st) return;
+    S.ep.state = st;
+    if (st.render === 'pronto') { renderEpisode(); location.href = `/api/episodes/${S.ep.meta.id}/export/wav`; }
+    else if (st.render === 'erro') { renderEpisode(); showErr(new Error(st.render_message || 'a montagem falhou')); }
+    else pollRender();
+  }, 2500);
+}
+
+/* ---------- teclado ---------- */
+document.addEventListener('keydown', e => {
+  if (!S.ep?.result || location.hash.indexOf('#/ep/') !== 0 || e.target.closest('input,textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); go(e.key === 'ArrowDown' ? 1 : -1); }
+  else if (/^[1-9]$/.test(e.key)) choose(+e.key, true);
+  else if (e.key === 'c' || e.key === 'C') choose('C', true);
+  else if (e.key === ' ') { e.preventDefault(); if (!S.demo) togglePlay(); }
+  else if (e.key === 'r' || e.key === 'R') toggleReviewed();
+});
+
+/* ---------- modo demonstração (quando não há servidor) ---------- */
+const Demo = {
+  ep: null,
+  build() {
+    const mk = (n, start, dur, complete, cov, text, off = 0) => ({ id: 'x' + n, n, complete, coverage: cov, cut: [start, start + dur], text, off_script: off });
+    const B = [
+      ['Em 1755, Lisboa acordou para um dia de festa. Era o Dia de Todos os Santos e as igrejas estavam cheias. Ninguém imaginava o que estava prestes a acontecer.',
+        [mk(1, 5, 7, false, .68, 'Em 1755, Lisboa acordou para um dia de festa. Era o Dia de Todos os Santos e as'), mk(2, 15, 11.4, true, 1, 'Em 1755, Lisboa acordou para um dia de festa. Era o Dia de Todos os Santos e as igrejas estavam cheias. Ninguém imaginava o que estava prestes a acontecer.'), mk(3, 29, 11.5, true, 1, 'Em 1755, Lisboa acordou para um dia de festa. Era o Dia de Todos os Santos e as igrejas estavam cheias. Ninguém imaginava o que estava prestes a acontecer.')],
+        { mode: 'take', take: 3 }, 'alta', [], null],
+      ['Às nove e meia da manhã, a terra começou a tremer. Durante vários minutos, os edifícios ruíram uns atrás dos outros. Quem conseguiu fugir correu para a beira do rio.',
+        [mk(1, 45, 11.8, true, 1, 'Às nove e meia da manhã, a terra começou a tremer. Durante vários minutos, os edifícios ruíram uns atrás dos outros. Quem conseguiu fugir correu para a beira do rio.'), mk(2, 62, 3.3, false, .3, 'Quem conseguiu fugir correu para a beira do rio.')],
+        { mode: 'composite' }, 'média', ['Usei o take 1 com a retoma do take 2. Confirma o ponto de corte.'], { takes: [1, 2], cuts: [[45, 53.7], [62, 65.3]] }],
+      ['Foi aí que chegou o maremoto. Três ondas gigantes varreram a Baixa e levaram tudo o que encontraram pela frente.',
+        [mk(1, 67, 2.3, false, .55, 'Foi aí que chegou o maremoto. Três ondas gigantes varreram a'), mk(2, 73.6, 5.5, false, .7, 'Três ondas gigantes varreram a Baixa e levaram tudo o que encontraram pela frente.')],
+        { mode: 'composite' }, 'baixa', ['Nenhum take está completo: proposta composta por frases de takes diferentes.'], { takes: [1, 2], cuts: [[67, 69.5], [73.6, 79.1]] }],
+      ['Nos dias seguintes, os incêndios consumiram o que o sismo e o mar tinham deixado de pé. A cidade ardeu durante quase uma semana.',
+        [mk(1, 84, 8.1, true, .97, 'Nos dias seguintes, os incêndios consumiram o que o sismo e o mar tinham deixado de pé. A cidade ardeu durante quase uma semana.'), mk(2, 95, 8.4, true, .94, 'Nos dias seguintes, os incêndios, hum, consumiram o que o sismo e o mar tinham deixado de pé. A cidade ardeu durante quase uma semana.', 1), mk(3, 106, 8, true, 1, 'Nos dias seguintes, os incêndios consumiram o que o sismo e o mar tinham deixado de pé. A cidade ardeu durante quase uma semana.'), mk(4, 117, 3, false, .35, 'Nos dias seguintes, os incêndios consumiram')],
+        { mode: 'take', take: 3 }, 'média', ['Há 1 retoma parcial depois do take 3.'], null],
+      ['Coube ao Marquês de Pombal a tarefa de reconstruir Lisboa. A frase que lhe atribuem ficou para a história: enterrar os mortos e cuidar dos vivos.',
+        [mk(1, 125, 9.2, true, 1, 'Coube ao Marquês de Pombal a tarefa de reconstruir Lisboa. A frase que lhe atribuem ficou para a história: enterrar os mortos e cuidar dos vivos.')],
+        { mode: 'take', take: 1 }, 'alta', [], null],
+    ];
+    return {
+      meta: { id: 'demo', title: 'O terramoto de 1755, episódio 1', audio_file: 'raw.wav' },
+      state: { status: 'pronto' }, selections: {}, reviewed: [],
+      result: { duration: 140, blocks: B.map(([text, takes, auto, conf, flags, comp], i) => ({ id: 'b' + (i + 1), index: i + 1, text, takes, auto, confidence: conf, flags, composite: comp })) },
+    };
+  },
+  async api(path) {
+    if (!this.ep) this.ep = this.build();
+    if (path === '/api/episodes') return [{ id: 'demo', title: this.ep.meta.title, created: Date.now() / 1000, state: { status: 'pronto' } }];
+    if (path.startsWith('/api/episodes/demo/')) return { ok: true };
+    if (path === '/api/episodes/demo') return this.ep;
+    throw new Error('Indisponível na demonstração');
+  },
+};
+
+(async function start() {
+  try { const r = await fetch('/api/episodes'); if (!r.ok || !r.headers.get('content-type')?.includes('json')) throw 0; }
+  catch { S.demo = true; }
+  route();
+})();
+</script>
+</body>
+</html>
