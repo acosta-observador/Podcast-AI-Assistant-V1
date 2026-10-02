@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: podcast-plus-ai
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
+      - key: DATA_DIR
+        value: /data
+      - key: SCRIBE_MODEL
+        value: scribe_v2
