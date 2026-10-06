@@ -39,17 +39,32 @@ def make_preview(src: Path, dst: Path) -> None:
 
 
 def energy_envelope(src: Path) -> np.ndarray:
-    """RMS em dB por janela de 10 ms."""
-    p = subprocess.run(["ffmpeg", "-v", "error", "-i", str(src), "-ac", "1", "-ar", str(SR_ANALYSIS),
-                        "-f", "s16le", "-"], capture_output=True)
-    x = np.frombuffer(p.stdout, dtype=np.int16).astype(np.float32) / 32768.0
+    """RMS em dB por janela de 10 ms, calculado em blocos para gastar pouca memória."""
     hop = int(SR_ANALYSIS * FRAME)
-    n = len(x) // hop
-    if n == 0:
-        return np.zeros(0, dtype=np.float32)
-    frames = x[: n * hop].reshape(n, hop)
-    rms = np.sqrt((frames ** 2).mean(axis=1) + 1e-12)
-    return (20 * np.log10(rms)).astype(np.float32)
+    block_frames = 6000                      # 60 s por bloco
+    block_bytes = block_frames * hop * 2
+    out: list[np.ndarray] = []
+    proc = subprocess.Popen(["ffmpeg", "-v", "error", "-i", str(src), "-ac", "1", "-ar", str(SR_ANALYSIS),
+                             "-f", "s16le", "-"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    leftover = b""
+    try:
+        while True:
+            chunk = proc.stdout.read(block_bytes)
+            if not chunk:
+                break
+            chunk = leftover + chunk
+            usable = (len(chunk) // (hop * 2)) * hop * 2
+            leftover = chunk[usable:]
+            if usable == 0:
+                continue
+            x = np.frombuffer(chunk[:usable], dtype=np.int16).astype(np.float32) / 32768.0
+            frames = x.reshape(-1, hop)
+            rms = np.sqrt((frames * frames).mean(axis=1) + 1e-12)
+            out.append((20 * np.log10(rms)).astype(np.float32))
+    finally:
+        proc.stdout.close()
+        proc.wait()
+    return np.concatenate(out) if out else np.zeros(0, dtype=np.float32)
 
 
 def quietest_point(env: np.ndarray, t_from: float, t_to: float, prefer: float) -> float:
