@@ -86,8 +86,10 @@ def safe_name(name: str) -> str:
 # ---------- jobs em background ----------
 def run_autotake(d: Path) -> None:
     try:
+        tries = read_json(d / "state.json", {}).get("attempts", 0) + 1
+        set_state(d, attempts=tries)
         process(d, API_KEY, lambda stage, msg="": set_state(d, status=stage, message=msg))
-        set_state(d, status="pronto", message="")
+        set_state(d, status="pronto", message="", attempts=0)
     except Exception as e:
         traceback.print_exc()
         set_state(d, status="erro", message=str(e))
@@ -110,6 +112,11 @@ def resume_unfinished():
     for d in DATA.iterdir():
         st = read_json(d / "state.json", {})
         if st.get("status") in {"na fila", "a preparar", "a transcrever", "a alinhar"}:
+            if st.get("attempts", 0) >= 2:
+                # o servidor já reiniciou duas vezes a meio deste episódio (provavelmente falta de memória)
+                set_state(d, status="erro", message="O servidor ficou sem memória a processar este episódio. "
+                                                    "Tenta um ficheiro mais curto ou um plano com mais memória.")
+                continue
             set_state(d, status="na fila")
             jobs.submit(run_autotake, d)
 
@@ -187,7 +194,7 @@ async def update_block(eid: str, bid: str, request: Request):
 def reprocess(eid: str):
     """Volta a alinhar (usa a transcrição em cache, não gasta Scribe)."""
     d = ep_dir(eid)
-    set_state(d, status="na fila", message="")
+    set_state(d, status="na fila", message="", attempts=0)
     jobs.submit(run_autotake, d)
     return {"ok": True}
 
