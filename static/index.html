@@ -67,9 +67,13 @@ a{color:var(--accent);text-decoration:none}
 
 /* lista de episódios */
 .eps{overflow:hidden}
-.ep{display:grid;grid-template-columns:1fr auto;gap:4px 16px;padding:14px 18px;border-top:1px solid var(--line);color:var(--text)}
-.ep:first-child{border-top:0}
-.ep:hover{background:var(--panel)}
+.ep-row{display:flex;align-items:center;border-top:1px solid var(--line)}
+.ep-row:first-child{border-top:0}
+.ep-row:hover{background:var(--panel)}
+.ep{flex:1;min-width:0;display:grid;grid-template-columns:1fr auto;gap:4px 16px;padding:14px 18px;color:var(--text)}
+.ep-del{flex:none;width:36px;height:36px;margin-right:12px;display:grid;place-items:center;border:0;border-radius:50%;background:transparent;color:var(--faint);cursor:pointer}
+.ep-del:hover,.ep-del:focus-visible{background:var(--warn-soft);color:#d70015}
+.ep-del svg{width:18px;height:18px}
 .ep b{font-weight:600;font-size:16px}
 .ep small{color:var(--muted);font-size:13px}
 .ep .pill{grid-row:1/3;grid-column:2;align-self:center}
@@ -190,6 +194,7 @@ const I = {
   check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>',
   wave:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 12h1M7.5 9v6M11 5v14M14.5 8v8M18 10.5v3M20.5 12h-.5"/></svg>',
   doc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
   dl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
 };
 
@@ -234,12 +239,19 @@ function statusPill(st) {
   return `<span class="pill run">${esc(capital(s || 'na fila'))}</span>`;
 }
 
+async function deleteEpisode(id) {
+  const ep = S.list.find(e => e.id === id);
+  if (!confirm(`Eliminar "${ep ? ep.title : 'este episódio'}"?\n\nA gravação, o guião e todo o trabalho feito serão apagados e não é possível desfazer.`)) return;
+  try { await api('/api/episodes/' + id, { method: 'DELETE' }); } catch (e) { alert('Não foi possível eliminar: ' + e.message); }
+  home();
+}
+
 async function home() {
   try { S.list = await api('/api/episodes'); } catch { S.list = []; }
-  const rows = S.list.map(ep => `<a class="ep" href="#/ep/${ep.id}">
+  const rows = S.list.map(ep => `<div class="ep-row"><a class="ep" href="#/ep/${ep.id}">
       <b>${esc(ep.title)}</b>${statusPill(ep.state)}
       <small>${new Date(ep.created * 1000).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' })}</small>
-    </a>`).join('') || '<div class="empty">Ainda não há episódios.<br>Carrega a gravação e o guião para começar.</div>';
+    </a><button class="ep-del" type="button" title="Eliminar episódio" aria-label="Eliminar ${esc(ep.title)}" onclick="deleteEpisode('${ep.id}')">${I.trash}</button></div>`).join('') || '<div class="empty">Ainda não há episódios.<br>Carrega a gravação e o guião para começar.</div>';
 
   $app.innerHTML = topbar({ left: brand }) + `
   <div class="wrap">
