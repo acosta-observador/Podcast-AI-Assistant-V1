@@ -9,12 +9,17 @@ import threading
 import time
 import traceback
 import unicodedata
+import zipfile
+import io
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
+import numpy as np
+
+from autotake import sounddesign
 from autotake.export import to_reaper
 from autotake.pipeline import process, render_episode
 
@@ -22,6 +27,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.getenv("DATA_DIR", ROOT / "data")) / "episodes"
 DATA.mkdir(parents=True, exist_ok=True)
 API_KEY = os.getenv("ELEVENLABS_API_KEY")
+ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 
 app = FastAPI(title="Podcast Plus AI Assistant")
@@ -106,10 +112,77 @@ def run_render(d: Path) -> None:
         set_state(d, render="erro", render_message=str(e))
 
 
+def struct_path(d: Path) -> Path:
+    return d / "structure.json"
+
+
+def read_struct(d: Path) -> dict:
+    return read_json(struct_path(d), {"status": None, "message": "", "done": 0, "total": 0, "clips": []})
+
+
+def update_struct(d: Path, fn) -> None:
+    with _lock:
+        st = read_struct(d)
+        fn(st)
+        write_json(struct_path(d), st)
+
+
+def run_structure(d: Path) -> None:
+    """Estrutura Plus: o Claude planeia os sons a partir do guião e a ElevenLabs gera cada um."""
+    try:
+        update_struct(d, lambda st: st.update(status="a planear", message="", done=0, total=0))
+        result, sel = read_json(d / "result.json"), read_json(d / "selections.json", {})
+        tl = sounddesign.timeline(result, sel)
+        cues = sounddesign.plan_cues(tl, ANTHROPIC_KEY)
+        if not cues:
+            raise RuntimeError("O Claude não encontrou momentos para sound design neste guião.")
+        sounddesign.assign_lanes(cues)
+        sd = d / "sd"
+        shutil.rmtree(sd, ignore_errors=True)
+        sd.mkdir()
+        clips = [{**c, "id": f"c{i + 1}", "state": "a gerar", "peaks": [], "message": ""} for i, c in enumerate(cues)]
+        update_struct(d, lambda st: st.update(status="a gerar", clips=clips, total=len(clips), done=0))
+        for clip in clips:
+            gen_clip(d, clip["id"])
+            update_struct(d, lambda st: st.update(done=st["done"] + 1))
+        update_struct(d, lambda st: st.update(status="pronto"))
+    except Exception as e:
+        traceback.print_exc()
+        update_struct(d, lambda st: st.update(status="erro", message=str(e)))
+
+
+def gen_clip(d: Path, cid: str) -> None:
+    """Gera (ou volta a gerar) o áudio de um clip; os erros ficam no próprio clip."""
+    clip = next(c for c in read_struct(d)["clips"] if c["id"] == cid)
+    (d / "sd").mkdir(exist_ok=True)
+    dst = d / "sd" / f"{cid}.mp3"
+    try:
+        sounddesign.generate(clip, API_KEY, dst)
+        peaks = sounddesign.audio_peaks(dst, max(8, min(160, round(clip["dur"] * 3))))
+        patch = {"state": "gerado", "peaks": peaks, "message": ""}
+    except Exception as e:
+        traceback.print_exc()
+        patch = {"state": "erro", "message": str(e)}
+
+    def apply(st):
+        for c in st["clips"]:
+            if c["id"] == cid:
+                c.update(patch)
+    update_struct(d, apply)
+
+
+def run_clip(d: Path, cid: str) -> None:
+    gen_clip(d, cid)
+
+
 @app.on_event("startup")
 def resume_unfinished():
     # jobs interrompidos por um reinício do servidor voltam para a fila
     for d in DATA.iterdir():
+        ss = read_json(struct_path(d), {})
+        if ss.get("status") in {"a planear", "a gerar"}:
+            ss.update(status="erro", message="O servidor reiniciou a meio. Carrega em Create para tentar outra vez.")
+            write_json(struct_path(d), ss)
         st = read_json(d / "state.json", {})
         if st.get("status") in {"na fila", "a preparar", "a transcrever", "a alinhar"}:
             if st.get("attempts", 0) >= 2:
@@ -124,7 +197,7 @@ def resume_unfinished():
 # ---------- API ----------
 @app.get("/health")
 def health():
-    return {"ok": True, "scribe": bool(API_KEY)}
+    return {"ok": True, "scribe": bool(API_KEY), "anthropic": bool(ANTHROPIC_KEY)}
 
 
 @app.get("/api/episodes")
@@ -235,6 +308,93 @@ def export_reaper(eid: str):
     rpp = to_reaper(result, read_json(d / "selections.json", {}), meta["audio_file"], meta["title"])
     name = f"{slug(meta['title'])}-autotake.rpp"
     return PlainTextResponse(rpp, headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+# ---------- Estrutura Plus ----------
+@app.get("/api/episodes/{eid}/structure")
+def get_structure(eid: str):
+    d = ep_dir(eid)
+    result = read_json(d / "result.json")
+    if not result:
+        raise HTTPException(400, "O episódio ainda não foi processado")
+    tl = sounddesign.timeline(result, read_json(d / "selections.json", {}))
+    env_p = d / "work" / "envelope.npy"
+    peaks = sounddesign.narration_peaks(np.load(env_p), tl["blocks"], tl["segments"]) if env_p.exists() else {}
+    for b in tl["blocks"]:
+        b["peaks"] = peaks.get(b["block"], [])
+    return {"meta": read_json(d / "meta.json"), "structure": read_struct(d), "timeline": tl,
+            "ready": bool(API_KEY and ANTHROPIC_KEY), "missing": [k for k, v in
+                                                                  (("ELEVENLABS_API_KEY", API_KEY), ("ANTHROPIC_API_KEY", ANTHROPIC_KEY)) if not v]}
+
+
+@app.post("/api/episodes/{eid}/structure/create")
+def create_structure(eid: str):
+    d = ep_dir(eid)
+    if not (d / "result.json").exists():
+        raise HTTPException(400, "O episódio ainda não foi processado")
+    if not API_KEY or not ANTHROPIC_KEY:
+        raise HTTPException(400, "Faltam chaves no servidor (ELEVENLABS_API_KEY e ANTHROPIC_API_KEY).")
+    if read_struct(d).get("status") in {"a planear", "a gerar"}:
+        raise HTTPException(409, "A estrutura já está a ser criada")
+    update_struct(d, lambda st: st.update(status="a planear", message="", done=0, total=0))
+    jobs.submit(run_structure, d)
+    return {"ok": True}
+
+
+@app.post("/api/episodes/{eid}/structure/clips/{cid}/regenerate")
+async def regenerate_clip(eid: str, cid: str, request: Request):
+    d = ep_dir(eid)
+    body = await request.json() if (await request.body()) else {}
+    if not any(c["id"] == cid for c in read_struct(d)["clips"]):
+        raise HTTPException(404)
+
+    def apply(st):
+        for c in st["clips"]:
+            if c["id"] == cid:
+                c["state"] = "a gerar"
+                if body.get("prompt"):
+                    c["prompt"] = str(body["prompt"])[:400]
+    update_struct(d, apply)
+    jobs.submit(run_clip, d, cid)
+    return {"ok": True}
+
+
+@app.delete("/api/episodes/{eid}/structure/clips/{cid}")
+def delete_clip(eid: str, cid: str):
+    d = ep_dir(eid)
+    if not re.fullmatch(r"c\d+", cid):
+        raise HTTPException(404)
+    update_struct(d, lambda st: st.update(clips=[c for c in st["clips"] if c["id"] != cid]))
+    (d / "sd" / f"{cid}.mp3").unlink(missing_ok=True)
+    return {"ok": True}
+
+
+@app.get("/api/episodes/{eid}/structure/clips/{cid}/audio")
+def clip_audio(eid: str, cid: str):
+    if not re.fullmatch(r"c\d+", cid):
+        raise HTTPException(404)
+    p = ep_dir(eid) / "sd" / f"{cid}.mp3"
+    if not p.exists():
+        raise HTTPException(404, "Áudio ainda não disponível")
+    return FileResponse(p, media_type="audio/mpeg")
+
+
+@app.get("/api/episodes/{eid}/export/structure")
+def export_structure(eid: str):
+    """ZIP com o projeto Reaper (takes + faixas de sound design) e os áudios gerados."""
+    d = ep_dir(eid)
+    meta, result = read_json(d / "meta.json"), read_json(d / "result.json")
+    if not result:
+        raise HTTPException(400, "O episódio ainda não foi processado")
+    clips = [c for c in read_struct(d)["clips"] if c["state"] == "gerado"]
+    rpp = to_reaper(result, read_json(d / "selections.json", {}), meta["audio_file"], meta["title"], sound=clips)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
+        z.writestr(f"{slug(meta['title'])}-estrutura-plus.rpp", rpp)
+        for c in clips:
+            z.write(d / "sd" / f"{c['id']}.mp3", f"sd/{c['id']}.mp3")
+    return Response(buf.getvalue(), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{slug(meta["title"])}-estrutura-plus.zip"'})
 
 
 @app.delete("/api/episodes/{eid}")

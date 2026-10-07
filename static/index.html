@@ -81,6 +81,34 @@ a{color:var(--accent);text-decoration:none}
 .chip{height:30px;padding:0 12px;border-radius:980px;background:var(--panel);font-size:13px;font-weight:500}
 .chip:hover:not(:disabled){background:var(--hover)}.chip:disabled{opacity:.45}
 
+/* estrutura plus */
+.tl{overflow:hidden}
+.tl-bar{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tl-bar .play{width:36px;height:36px}.tl-bar .play svg{width:16px;height:16px}
+.tl-time{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.tl-row{display:flex;border-bottom:1px solid var(--line)}
+.tl-row:last-child{border-bottom:0}
+.tl-lbl{width:170px;flex:none;padding:0 14px;display:flex;flex-direction:column;justify-content:center;gap:2px;font-size:14px;font-weight:600}
+.tl-lbl small{font-size:12px;color:var(--muted);font-weight:400}
+.tl-lane{position:relative;flex:1;min-width:0;border-left:1px solid var(--line)}
+.tl-ruler{height:30px;background:var(--panel);cursor:pointer}
+.tl-ruler span{position:absolute;top:7px;padding-left:6px;font-size:11px;color:var(--muted);border-left:1px solid var(--faint);height:16px;line-height:14px;font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.tl-wrap{position:relative}
+.tl-ov{position:absolute;top:0;bottom:0;left:170px;right:0;pointer-events:none}
+.tl-ph{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);margin-left:-1px}
+.clip{position:absolute;top:6px;bottom:6px;border-radius:8px;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;padding:4px 8px;font-size:12px;font-weight:600;white-space:nowrap;text-align:left;cursor:pointer;min-width:6px}
+.clip .nm{overflow:hidden;text-overflow:ellipsis}
+.clip .bars{display:flex;align-items:center;gap:1px;height:50%}
+.clip .bars i{flex:1;border-radius:1px;min-width:1px;background:currentColor;opacity:.7}
+.clip.nar{background:var(--accent-soft);color:var(--accent)}
+.clip.sfx{background:rgba(255,159,10,.16);color:#c77700}
+.clip.mus{background:rgba(125,92,255,.14);color:#6b4cf0}
+.clip.sel{box-shadow:0 0 0 2px var(--accent)}
+.clip.gen{opacity:.55}.clip.err{background:var(--warn-soft);color:#d70015}
+.sel-card{margin-top:20px;padding:20px 22px;display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.sel-card textarea{width:100%;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:10px 12px;font:inherit;font-size:15px;color:var(--text);resize:vertical}
+.st-note{font-size:13px;color:var(--muted)}
+
 /* barra de topo */
 .top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 82%,transparent);
   backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line)}
@@ -245,6 +273,7 @@ const I = {
   grid:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>',
   layers:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>',
   logo:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 10v4M9 6v12M13 9v6M17 4v16M21 11v2"/></svg>',
+  spark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>',
   dl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
 };
 
@@ -267,7 +296,7 @@ async function api(path, opts = {}) {
 /* ---------- navegação ---------- */
 window.addEventListener('hashchange', route);
 async function route() {
-  stopAudio(); clearTimeout(S.poll); player.onloadedmetadata = player.ontimeupdate = player.onpause = player.onplay = null; if (!player.paused) player.pause();
+  stopAudio(); clearTimeout(S.poll); stopStructure(); clearTimeout(ST.poll); player.onloadedmetadata = player.ontimeupdate = player.onpause = player.onplay = null; if (!player.paused) player.pause();
   const m = location.hash.match(/^#\/ep\/([\w-]+)/);
   if (m) return openEpisode(m[1]);
   if (location.hash === '#/projeto') return projectPage();
@@ -350,8 +379,154 @@ async function projectPage() {
   wave.onclick = e => { if (player.duration) { const r = wave.getBoundingClientRect(); player.currentTime = (e.clientX - r.left) / r.width * player.duration; } };
 }
 
-function estruturaPage() {
-  $app.innerHTML = shell('estrutura', `<div class="wrap"><h1 class="page-t">Estrutura Plus</h1><p class="page-s" style="margin-bottom:32px">Em preparação.</p></div>`);
+/* ---------- Estrutura Plus ---------- */
+const ST = { id: null, data: null, sel: null, t: 0, total: 60, playing: false, raf: 0, t0: 0, tBase: 0, audios: {}, poll: null, prev: null, busy: false };
+const fmtT = s => { s = Math.max(0, s); const m = Math.floor(s / 60); return m + ':' + (s % 60).toFixed(1).padStart(4, '0'); };
+const running = st => st.status === 'a planear' || st.status === 'a gerar' || (st.clips || []).some(c => c.state === 'a gerar');
+
+async function estruturaPage() {
+  try { S.list = await api('/api/episodes'); } catch { S.list = []; }
+  const ready = S.list.find(e => e.state?.status === 'pronto');
+  if (!ready) {
+    $app.innerHTML = shell('estrutura', `<div class="wrap"><h1 class="page-t">Estrutura Plus</h1>
+      <p class="page-s" style="margin-bottom:32px">Cria a estrutura de sound design do episódio a partir do guião.</p>
+      <div class="card empty">Ainda não há nenhum episódio processado.<br>Carrega a gravação e o guião no <a href="#/autotake">AutoTake</a> primeiro.</div></div>`);
+    return;
+  }
+  ST.id = ready.id; ST.sel = null; ST.t = 0;
+  if (!S.demo) player.src = `/api/episodes/${ST.id}/audio`;
+  await loadStructure();
+}
+
+async function loadStructure(keepScroll) {
+  clearTimeout(ST.poll);
+  try { ST.data = await api(`/api/episodes/${ST.id}/structure`); }
+  catch (e) { $app.innerHTML = shell('estrutura', `<div class="wrap"><div class="errbox">${esc(e.message)}</div></div>`); return; }
+  const d = ST.data, ends = d.structure.clips.map(c => c.start + c.dur);
+  ST.total = Math.max(10, Math.ceil(Math.max(d.timeline.total, ...ends) / 10) * 10);
+  renderStructure();
+  if (running(d.structure)) ST.poll = setTimeout(() => loadStructure(), 2500);
+}
+
+function renderStructure() {
+  const d = ST.data, st = d.structure, tl = d.timeline, T = ST.total, pct = x => (x / T * 100).toFixed(3);
+  const bars = (arr, n) => (arr && arr.length ? arr : Array(n).fill(30)).map(h => `<i style="height:${h}%"></i>`).join('');
+  const nar = tl.blocks.map(b => `<button class="clip nar" style="left:${pct(b.start)}%;width:${pct(b.end - b.start)}%" data-seek="${b.start}" title="${esc(b.text)}"><span class="nm">Bloco ${b.block}</span><span class="bars">${bars(b.peaks, 8)}</span></button>`).join('');
+  const lane = k => st.clips.filter(c => c.lane === k).map(c => `<button class="clip ${c.kind === 'music' ? 'mus' : 'sfx'} ${c.state === 'a gerar' ? 'gen' : ''} ${c.state === 'erro' ? 'err' : ''} ${ST.sel === c.id ? 'sel' : ''}" style="left:${pct(c.start)}%;width:${pct(c.dur)}%" data-clip="${c.id}"><span class="nm">${esc(c.label)}${c.state === 'a gerar' ? ', a gerar…' : c.state === 'erro' ? ', erro' : ''}</span><span class="bars">${bars(c.peaks, 8)}</span></button>`).join('');
+  const ticks = Array.from({ length: Math.floor(T / 10) + 1 }, (_, i) => `<span style="left:${pct(i * 10)}%">${Math.floor(i * 10 / 60)}:${String(i * 10 % 60).padStart(2, '0')}</span>`).join('');
+  const busy = running(st), n = st.clips.length;
+  const status = d.missing.length ? `Faltam chaves no servidor: ${d.missing.join(', ')}.`
+    : st.status === 'a planear' ? 'A ler o guião e a planear os sons…'
+    : st.status === 'a gerar' ? `A gerar sons, ${st.done} de ${st.total}…`
+    : n ? `${st.clips.filter(c => c.state === 'gerado').length} de ${n} sons gerados a partir do guião` : 'Carrega em Create para gerar o sound design a partir do guião.';
+  const hasAudio = !S.demo && n;
+
+  $app.innerHTML = shell('estrutura', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios e não há áudio nem geração.</div>' : ''}
+    <div class="wrap">
+      <div class="ep-head"><div><h1 class="page-t">Estrutura Plus</h1>
+        <p class="page-s">Cria a estrutura de sound design do episódio a partir do guião: efeitos e música em faixas por baixo dos takes.</p></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" id="exp" ${S.demo || !n ? 'disabled' : ''}>${I.dl}Exportar Reaper</button>
+          <button class="btn blue" id="create" ${S.demo || busy || d.missing.length ? 'disabled' : ''}>${I.spark}${busy ? 'A criar…' : 'Create'}</button>
+        </div></div>
+      ${st.status === 'erro' ? `<div class="errbox" style="margin:0 0 16px">${esc(st.message)}</div>` : ''}
+      <div class="card tl">
+        <div class="tl-bar"><button class="play" id="tplay" aria-label="Ouvir" ${S.demo ? 'disabled' : ''}>${ST.playing ? I.stop : I.play}</button>
+          <span class="tl-time" id="ttime">${fmtT(ST.t)}</span><span style="flex:1"></span><span class="st-note" id="stnote">${esc(status)}</span></div>
+        <div class="tl-row"><div class="tl-lbl" style="height:30px"></div><div class="tl-lane tl-ruler" id="ruler">${ticks}</div></div>
+        <div class="tl-wrap">
+          <div class="tl-row" style="height:84px"><div class="tl-lbl">Narração<small>Takes</small></div><div class="tl-lane">${nar}</div></div>
+          <div class="tl-row" style="height:56px"><div class="tl-lbl">Efeitos 1<small>Sound design</small></div><div class="tl-lane">${lane(0)}</div></div>
+          <div class="tl-row" style="height:56px"><div class="tl-lbl">Efeitos 2<small>Sound design</small></div><div class="tl-lane">${lane(1)}</div></div>
+          <div class="tl-row" style="height:56px"><div class="tl-lbl">Música<small>Sound design</small></div><div class="tl-lane">${lane(2)}</div></div>
+          <div class="tl-ov"><div class="tl-ph" id="ph" style="left:${pct(ST.t)}%"></div></div>
+        </div>
+      </div>
+      <div id="selcard"></div>
+    </div>`);
+
+  $app.querySelectorAll('[data-clip]').forEach(el => el.onclick = () => { ST.sel = el.dataset.clip; renderStructure(); });
+  $app.querySelectorAll('[data-seek]').forEach(el => el.onclick = () => seekStructure(+el.dataset.seek));
+  document.getElementById('ruler').onclick = e => { const r = e.currentTarget.getBoundingClientRect(); seekStructure((e.clientX - r.left) / r.width * ST.total); };
+  document.getElementById('tplay').onclick = playStructure;
+  document.getElementById('create').onclick = createStructure;
+  document.getElementById('exp').onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/structure`; };
+  renderSelected();
+}
+
+function renderSelected() {
+  const el = document.getElementById('selcard'), c = ST.data.structure.clips.find(x => x.id === ST.sel);
+  if (!el) return;
+  if (!c) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="card sel-card">
+    <div style="flex:1 1 320px;min-width:0"><p class="section-t" style="margin:0 0 4px">Clip selecionado</p>
+      <b style="font-size:19px;font-weight:600">${esc(c.label)}</b>
+      <p class="note" style="margin:2px 0 14px">${c.kind === 'music' ? 'Música' : 'Efeito'}, ${c.dur.toFixed(1).replace('.', ',')} s, gerado a partir do bloco ${c.block} do guião${c.state === 'erro' ? `<br><span style="color:var(--warn)">${esc(c.message)}</span>` : ''}</p>
+      <label class="field">Descrição do som (em inglês, é o que a ElevenLabs recebe)<textarea id="cprompt" rows="3" ${S.demo ? 'disabled' : ''}>${esc(c.prompt)}</textarea></label></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-self:flex-end">
+      <button class="btn blue" id="cregen" ${S.demo || c.state === 'a gerar' ? 'disabled' : ''}>${I.spark}Regenerar</button>
+      <button class="btn" id="clisten" ${S.demo || c.state !== 'gerado' ? 'disabled' : ''}>Ouvir</button>
+      <button class="btn" id="cdel" ${S.demo ? 'disabled' : ''}>Remover</button></div></div>`;
+  document.getElementById('cregen').onclick = async () => {
+    await api(`/api/episodes/${ST.id}/structure/clips/${c.id}/regenerate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: document.getElementById('cprompt').value }) }).catch(showErr);
+    loadStructure();
+  };
+  document.getElementById('clisten').onclick = () => { ST.prev?.pause(); ST.prev = new Audio(`/api/episodes/${ST.id}/structure/clips/${c.id}/audio?v=${Date.now()}`); ST.prev.play().catch(showErr); };
+  document.getElementById('cdel').onclick = async () => {
+    if (!confirm(`Remover "${c.label}"?`)) return;
+    await api(`/api/episodes/${ST.id}/structure/clips/${c.id}`, { method: 'DELETE' }).catch(showErr);
+    ST.sel = null; loadStructure();
+  };
+}
+
+async function createStructure() {
+  const n = ST.data.structure.clips.length;
+  if (n && !confirm('Isto substitui os sons que já existem e gasta créditos da ElevenLabs. Continuar?')) return;
+  stopStructure();
+  try { await api(`/api/episodes/${ST.id}/structure/create`, { method: 'POST' }); } catch (e) { alert(e.message); return; }
+  ST.sel = null; loadStructure();
+}
+
+/* transporte: narração (takes escolhidos) e sons, sincronizados pelo relógio */
+function seekStructure(t) {
+  ST.t = Math.max(0, Math.min(ST.total, t));
+  if (ST.playing) { ST.tBase = ST.t; ST.t0 = performance.now(); stopClips(); }
+  movePlayhead();
+}
+function movePlayhead() {
+  const ph = document.getElementById('ph'), tt = document.getElementById('ttime');
+  if (ph) ph.style.left = (ST.t / ST.total * 100) + '%';
+  if (tt) tt.textContent = fmtT(ST.t);
+}
+function stopClips() { for (const k in ST.audios) ST.audios[k].pause(); ST.audios = {}; }
+function playStructure() {
+  if (ST.playing) return stopStructure(true);
+  if (ST.t >= ST.total - 0.05) ST.t = 0;
+  ST.playing = true; ST.tBase = ST.t; ST.t0 = performance.now(); ST.prev?.pause();
+  document.getElementById('tplay').innerHTML = I.stop; loopStructure();
+}
+function stopStructure(redraw) {
+  if (!ST.playing && !redraw) return;
+  ST.playing = false; cancelAnimationFrame(ST.raf); player.pause(); stopClips();
+  const b = document.getElementById('tplay'); if (b) b.innerHTML = I.play;
+}
+function loopStructure() {
+  ST.raf = requestAnimationFrame(() => {
+    if (!ST.playing) return;
+    const t = ST.t = ST.tBase + (performance.now() - ST.t0) / 1000;
+    if (t >= ST.total) { ST.t = ST.total; stopStructure(true); movePlayhead(); return; }
+    const seg = ST.data.timeline.segments.find(s => t >= s.start && t < s.end);
+    if (seg) {
+      const want = seg.src + (t - seg.start);
+      if (player.paused || Math.abs(player.currentTime - want) > 0.35) { player.currentTime = want; player.play().catch(() => {}); }
+    } else if (!player.paused) player.pause();
+    for (const c of ST.data.structure.clips) {
+      const on = c.state === 'gerado' && t >= c.start && t < c.start + c.dur, a = ST.audios[c.id];
+      if (on && !a) { const x = ST.audios[c.id] = new Audio(`/api/episodes/${ST.id}/structure/clips/${c.id}/audio`); x.currentTime = t - c.start; x.volume = c.kind === 'music' ? .5 : 1; x.play().catch(() => {}); }
+      else if (!on && a) { a.pause(); delete ST.audios[c.id]; }
+    }
+    movePlayhead(); loopStructure();
+  });
 }
 
 /* ---------- início ---------- */
@@ -652,9 +827,18 @@ const Demo = {
       result: { duration: 140, blocks: B.map(([text, takes, auto, conf, flags, comp], i) => ({ id: 'b' + (i + 1), index: i + 1, text, takes, auto, confidence: conf, flags, composite: comp })) },
     };
   },
+  structure() {
+    const pk = (seed, n) => Array.from({ length: n }, (_, i) => 18 + Math.round(Math.abs(Math.sin((i + seed) * .7) * Math.cos((i + seed) * .23 + 1)) * 78));
+    const bl = [[1, 0, 11.5], [2, 12.5, 26], [3, 27, 33.5], [4, 34.5, 43], [5, 44, 52.7]].map(([block, start, end], i) => ({ block, start, end, text: this.ep.result.blocks[i].text, peaks: pk(i * 5, Math.round((end - start) * 3)) }));
+    const cl = [[0, 2, 5, 'Sino de igreja', 'sfx', 1], [0, 12.5, 6.5, 'Terra a tremer', 'sfx', 2], [0, 19.5, 6, 'Edifícios a ruir', 'sfx', 2], [0, 35, 8, 'Fogo a crepitar', 'sfx', 4],
+      [1, 22, 6, 'Multidão a gritar', 'sfx', 2], [1, 28.5, 5.5, 'Ondas do mar', 'sfx', 3], [2, 0, 30, 'Tema de tensão', 'music', 1], [2, 43.5, 9.2, 'Tema final', 'music', 5]]
+      .map(([lane, start, dur, label, kind, block], i) => ({ id: 'c' + (i + 1), lane, start, dur, label, kind, block, prompt: 'Exemplo de descrição do som', state: 'gerado', message: '', peaks: pk(40 + i * 7, Math.round(dur * 3)) }));
+    return { meta: this.ep.meta, ready: true, missing: [], structure: { status: 'pronto', message: '', done: 8, total: 8, clips: cl }, timeline: { blocks: bl, segments: [], total: 52.7 } };
+  },
   async api(path) {
     if (!this.ep) this.ep = this.build();
     if (path === '/api/episodes') return [{ id: 'demo', title: this.ep.meta.title, created: Date.now() / 1000, state: { status: 'pronto' } }];
+    if (path === '/api/episodes/demo/structure') return this.structure();
     if (path.startsWith('/api/episodes/demo/')) return { ok: true };
     if (path === '/api/episodes/demo') return this.ep;
     throw new Error('Indisponível na demonstração');

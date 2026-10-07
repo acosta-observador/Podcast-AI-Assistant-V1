@@ -18,7 +18,7 @@ def _item(pos, length, soffs, name, src_name, src_type, mute=False) -> str:
             f"      <SOURCE {src_type}\n        FILE {_q(src_name)}\n      >\n    >\n")
 
 
-def to_reaper(result: dict, selections: dict, audio_name: str, title: str) -> str:
+def to_reaper(result: dict, selections: dict, audio_name: str, title: str, sound: list | None = None) -> str:
     src_type = _SOURCE_TYPES.get(Path(audio_name).suffix.lower(), "WAVE")
     cuts = build_cuts(result, selections)
     blocks = {b["index"]: b for b in result["blocks"]}
@@ -52,6 +52,11 @@ def to_reaper(result: dict, selections: dict, audio_name: str, title: str) -> st
     for k in sorted(alt_tracks):
         out.append(f'  <TRACK\n    NAME "Alternativa {k + 1}"\n    MUTESOLO 1 0 0\n'
                    + "".join(alt_tracks[k]) + "  >\n")
+    for k, lane in enumerate(("Efeitos 1", "Efeitos 2", "Música")):
+        items = [_item(c["start"], c["dur"], 0, c["label"], f"sd/{c['id']}.mp3", "MP3")
+                 for c in (sound or []) if c.get("lane") == k]
+        if items:
+            out.append(f'  <TRACK\n    NAME {_q(lane)}\n' + "".join(items) + "  >\n")
     out.append(f'  <TRACK\n    NAME "Original"\n    MUTESOLO 1 0 0\n'
                + _item(0, result["duration"], 0, "Gravação original", audio_name, src_type) + "  >\n")
     out.append(">\n")
