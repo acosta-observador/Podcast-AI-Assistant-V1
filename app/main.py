@@ -27,7 +27,6 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.getenv("DATA_DIR", ROOT / "data")) / "episodes"
 DATA.mkdir(parents=True, exist_ok=True)
 API_KEY = os.getenv("ELEVENLABS_API_KEY")
-ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 
 app = FastAPI(title="Podcast Plus AI Assistant")
@@ -128,14 +127,14 @@ def update_struct(d: Path, fn) -> None:
 
 
 def run_structure(d: Path) -> None:
-    """Estrutura Plus: o Claude planeia os sons a partir do guião e a ElevenLabs gera cada um."""
+    """Estrutura Plus: as regras locais escolhem os sons a partir do guião e a ElevenLabs gera cada um."""
     try:
         update_struct(d, lambda st: st.update(status="a planear", message="", done=0, total=0))
         result, sel = read_json(d / "result.json"), read_json(d / "selections.json", {})
         tl = sounddesign.timeline(result, sel)
-        cues = sounddesign.plan_cues(tl, ANTHROPIC_KEY)
+        cues = sounddesign.plan_local(tl)
         if not cues:
-            raise RuntimeError("O Claude não encontrou momentos para sound design neste guião.")
+            raise RuntimeError("Não encontrei momentos para sound design neste guião.")
         sounddesign.assign_lanes(cues)
         sd = d / "sd"
         shutil.rmtree(sd, ignore_errors=True)
@@ -197,7 +196,7 @@ def resume_unfinished():
 # ---------- API ----------
 @app.get("/health")
 def health():
-    return {"ok": True, "scribe": bool(API_KEY), "anthropic": bool(ANTHROPIC_KEY)}
+    return {"ok": True, "scribe": bool(API_KEY)}
 
 
 @app.get("/api/episodes")
@@ -323,8 +322,7 @@ def get_structure(eid: str):
     for b in tl["blocks"]:
         b["peaks"] = peaks.get(b["block"], [])
     return {"meta": read_json(d / "meta.json"), "structure": read_struct(d), "timeline": tl,
-            "ready": bool(API_KEY and ANTHROPIC_KEY), "missing": [k for k, v in
-                                                                  (("ELEVENLABS_API_KEY", API_KEY), ("ANTHROPIC_API_KEY", ANTHROPIC_KEY)) if not v]}
+            "ready": bool(API_KEY), "missing": [] if API_KEY else ["ELEVENLABS_API_KEY"]}
 
 
 @app.post("/api/episodes/{eid}/structure/create")
@@ -332,8 +330,8 @@ def create_structure(eid: str):
     d = ep_dir(eid)
     if not (d / "result.json").exists():
         raise HTTPException(400, "O episódio ainda não foi processado")
-    if not API_KEY or not ANTHROPIC_KEY:
-        raise HTTPException(400, "Faltam chaves no servidor (ELEVENLABS_API_KEY e ANTHROPIC_API_KEY).")
+    if not API_KEY:
+        raise HTTPException(400, "O servidor não tem a chave da ElevenLabs configurada (ELEVENLABS_API_KEY).")
     if read_struct(d).get("status") in {"a planear", "a gerar"}:
         raise HTTPException(409, "A estrutura já está a ser criada")
     update_struct(d, lambda st: st.update(status="a planear", message="", done=0, total=0))

@@ -86,12 +86,15 @@ a{color:var(--accent);text-decoration:none}
 .tl-bar{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .tl-bar .play{width:36px;height:36px}.tl-bar .play svg{width:16px;height:16px}
 .tl-time{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.tl-scroll{overflow-x:auto;overscroll-behavior-x:contain}
+.tl-inner{min-width:100%}
 .tl-row{display:flex;border-bottom:1px solid var(--line)}
 .tl-row:last-child{border-bottom:0}
-.tl-lbl{width:170px;flex:none;padding:0 14px;display:flex;flex-direction:column;justify-content:center;gap:2px;font-size:14px;font-weight:600}
+.tl-lbl{position:sticky;left:0;z-index:3;background:var(--card);width:170px;flex:none;padding:0 14px;display:flex;flex-direction:column;justify-content:center;gap:2px;font-size:14px;font-weight:600}
 .tl-lbl small{font-size:12px;color:var(--muted);font-weight:400}
 .tl-lane{position:relative;flex:1;min-width:0;border-left:1px solid var(--line)}
 .tl-ruler{height:30px;background:var(--panel);cursor:pointer}
+.tl-lbl.rl{background:var(--panel)}
 .tl-ruler span{position:absolute;top:7px;padding-left:6px;font-size:11px;color:var(--muted);border-left:1px solid var(--faint);height:16px;line-height:14px;font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .tl-wrap{position:relative}
 .tl-ov{position:absolute;top:0;bottom:0;left:170px;right:0;pointer-events:none}
@@ -380,7 +383,7 @@ async function projectPage() {
 }
 
 /* ---------- Estrutura Plus ---------- */
-const ST = { id: null, data: null, sel: null, t: 0, total: 60, playing: false, raf: 0, t0: 0, tBase: 0, audios: {}, poll: null, prev: null, busy: false };
+const ST = { id: null, data: null, sel: null, t: 0, total: 60, playing: false, raf: 0, t0: 0, tBase: 0, audios: {}, poll: null, prev: null, busy: false, zoom: 1, gz: 1 };
 const fmtT = s => { s = Math.max(0, s); const m = Math.floor(s / 60); return m + ':' + (s % 60).toFixed(1).padStart(4, '0'); };
 const running = st => st.status === 'a planear' || st.status === 'a gerar' || (st.clips || []).some(c => c.state === 'a gerar');
 
@@ -408,12 +411,33 @@ async function loadStructure(keepScroll) {
   if (running(d.structure)) ST.poll = setTimeout(() => loadStructure(), 2500);
 }
 
+function ticksHTML() {
+  const sc = document.getElementById('tlscroll'), T = ST.total;
+  const lane = ((sc ? sc.clientWidth : Math.max(500, window.innerWidth - 560)) - 170) * ST.zoom, pps = lane / T;
+  const step = [1, 2, 5, 10, 15, 30, 60, 120, 300].find(x => x * pps >= 70) || 300;
+  return Array.from({ length: Math.floor(T / step) + 1 }, (_, i) => { const s = i * step;
+    return `<span style="left:${(s / T * 100).toFixed(3)}%">${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</span>`; }).join('');
+}
+
+function applyZoom(z, clientX) {
+  const sc = document.getElementById('tlscroll'), inn = document.getElementById('tlinner'); if (!sc || !inn) return;
+  const rect = sc.getBoundingClientRect();
+  const ax = Math.max(170, clientX != null ? clientX - rect.left : (rect.width + 170) / 2);
+  const frac = (sc.scrollLeft + ax - 170) / Math.max(1, inn.clientWidth - 170);
+  ST.zoom = Math.max(1, Math.min(24, z));
+  inn.style.width = `calc(170px + (100% - 170px) * ${ST.zoom})`;
+  sc.scrollLeft = frac * (inn.clientWidth - 170) + 170 - ax;
+  document.getElementById('ruler').innerHTML = ticksHTML();
+  const l = document.getElementById('zlbl'); if (l) l.textContent = Math.round(ST.zoom * 100) + '%';
+}
+
 function renderStructure() {
+  const oldSc = document.getElementById('tlscroll'), keepLeft = oldSc ? oldSc.scrollLeft : 0;
   const d = ST.data, st = d.structure, tl = d.timeline, T = ST.total, pct = x => (x / T * 100).toFixed(3);
   const bars = (arr, n) => (arr && arr.length ? arr : Array(n).fill(30)).map(h => `<i style="height:${h}%"></i>`).join('');
   const nar = tl.blocks.map(b => `<button class="clip nar" style="left:${pct(b.start)}%;width:${pct(b.end - b.start)}%" data-seek="${b.start}" title="${esc(b.text)}"><span class="nm">Bloco ${b.block}</span><span class="bars">${bars(b.peaks, 8)}</span></button>`).join('');
   const lane = k => st.clips.filter(c => c.lane === k).map(c => `<button class="clip ${c.kind === 'music' ? 'mus' : 'sfx'} ${c.state === 'a gerar' ? 'gen' : ''} ${c.state === 'erro' ? 'err' : ''} ${ST.sel === c.id ? 'sel' : ''}" style="left:${pct(c.start)}%;width:${pct(c.dur)}%" data-clip="${c.id}"><span class="nm">${esc(c.label)}${c.state === 'a gerar' ? ', a gerar…' : c.state === 'erro' ? ', erro' : ''}</span><span class="bars">${bars(c.peaks, 8)}</span></button>`).join('');
-  const ticks = Array.from({ length: Math.floor(T / 10) + 1 }, (_, i) => `<span style="left:${pct(i * 10)}%">${Math.floor(i * 10 / 60)}:${String(i * 10 % 60).padStart(2, '0')}</span>`).join('');
+  const ticks = ticksHTML();
   const busy = running(st), n = st.clips.length;
   const status = d.missing.length ? `Faltam chaves no servidor: ${d.missing.join(', ')}.`
     : st.status === 'a planear' ? 'A ler o guião e a planear os sons…'
@@ -432,8 +456,10 @@ function renderStructure() {
       ${st.status === 'erro' ? `<div class="errbox" style="margin:0 0 16px">${esc(st.message)}</div>` : ''}
       <div class="card tl">
         <div class="tl-bar"><button class="play" id="tplay" aria-label="Ouvir" ${S.demo ? 'disabled' : ''}>${ST.playing ? I.stop : I.play}</button>
-          <span class="tl-time" id="ttime">${fmtT(ST.t)}</span><span style="flex:1"></span><span class="st-note" id="stnote">${esc(status)}</span></div>
-        <div class="tl-row"><div class="tl-lbl" style="height:30px"></div><div class="tl-lane tl-ruler" id="ruler">${ticks}</div></div>
+          <span class="tl-time" id="ttime">${fmtT(ST.t)}</span><span style="flex:1"></span><span class="st-note" id="stnote">${esc(status)}</span>
+          <button class="chip" id="zout" aria-label="Menos zoom">−</button><span class="st-note" id="zlbl" style="min-width:38px;text-align:center">${Math.round(ST.zoom * 100)}%</span><button class="chip" id="zin" aria-label="Mais zoom">+</button></div>
+        <div class="tl-scroll" id="tlscroll"><div class="tl-inner" id="tlinner" style="width:calc(170px + (100% - 170px) * ${ST.zoom})">
+        <div class="tl-row"><div class="tl-lbl rl" style="height:30px"></div><div class="tl-lane tl-ruler" id="ruler">${ticks}</div></div>
         <div class="tl-wrap">
           <div class="tl-row" style="height:84px"><div class="tl-lbl">Narração<small>Takes</small></div><div class="tl-lane">${nar}</div></div>
           <div class="tl-row" style="height:56px"><div class="tl-lbl">Efeitos 1<small>Sound design</small></div><div class="tl-lane">${lane(0)}</div></div>
@@ -441,6 +467,7 @@ function renderStructure() {
           <div class="tl-row" style="height:56px"><div class="tl-lbl">Música<small>Sound design</small></div><div class="tl-lane">${lane(2)}</div></div>
           <div class="tl-ov"><div class="tl-ph" id="ph" style="left:${pct(ST.t)}%"></div></div>
         </div>
+        </div></div>
       </div>
       <div id="selcard"></div>
     </div>`);
@@ -449,6 +476,15 @@ function renderStructure() {
   $app.querySelectorAll('[data-seek]').forEach(el => el.onclick = () => seekStructure(+el.dataset.seek));
   document.getElementById('ruler').onclick = e => { const r = e.currentTarget.getBoundingClientRect(); seekStructure((e.clientX - r.left) / r.width * ST.total); };
   document.getElementById('tplay').onclick = playStructure;
+  const sc = document.getElementById('tlscroll'); sc.scrollLeft = keepLeft;
+  document.getElementById('zin').onclick = () => applyZoom(ST.zoom * 1.5);
+  document.getElementById('zout').onclick = () => applyZoom(ST.zoom / 1.5);
+  const card = sc.closest('.tl');
+  card.addEventListener('wheel', e => { if (e.ctrlKey) { e.preventDefault(); applyZoom(ST.zoom * Math.exp(-e.deltaY * 0.012), e.clientX); } }, { passive: false });
+  card.addEventListener('gesturestart', e => { e.preventDefault(); ST.gz = ST.zoom; });
+  card.addEventListener('gesturechange', e => { e.preventDefault(); applyZoom(ST.gz * e.scale, e.clientX); });
+  applyZoom(ST.zoom);
+  sc.scrollLeft = keepLeft;
   document.getElementById('create').onclick = createStructure;
   document.getElementById('exp').onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/structure`; };
   renderSelected();
@@ -481,7 +517,7 @@ function renderSelected() {
 
 async function createStructure() {
   const n = ST.data.structure.clips.length;
-  if (n && !confirm('Isto substitui os sons que já existem e gasta créditos da ElevenLabs. Continuar?')) return;
+  if (n && !confirm('Isto substitui os sons que já existem e gasta créditos da ElevenLabs (efeitos e música de fundo). Continuar?')) return;
   stopStructure();
   try { await api(`/api/episodes/${ST.id}/structure/create`, { method: 'POST' }); } catch (e) { alert(e.message); return; }
   ST.sel = null; loadStructure();
@@ -525,7 +561,13 @@ function loopStructure() {
       if (on && !a) { const x = ST.audios[c.id] = new Audio(`/api/episodes/${ST.id}/structure/clips/${c.id}/audio`); x.currentTime = t - c.start; x.volume = c.kind === 'music' ? .5 : 1; x.play().catch(() => {}); }
       else if (!on && a) { a.pause(); delete ST.audios[c.id]; }
     }
-    movePlayhead(); loopStructure();
+    movePlayhead();
+    const sc = document.getElementById('tlscroll');
+    if (sc && ST.zoom > 1) {
+      const px = 170 + ST.t / ST.total * (sc.scrollWidth - 170);
+      if (px > sc.scrollLeft + sc.clientWidth - 40 || px < sc.scrollLeft + 170) sc.scrollLeft = px - 170 - 60;
+    }
+    loopStructure();
   });
 }
 

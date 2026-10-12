@@ -1,8 +1,8 @@
 """Estrutura Plus: planeia e gera sound design (efeitos e música) a partir do guião.
 
-O Claude lê o guião, já alinhado com os takes, e propõe os momentos de sound design.
-A ElevenLabs gera cada áudio (efeitos e música). Tudo fica numa linha do tempo
-medida na montagem final, não na gravação original.
+As regras locais procuram no guião, já alinhado com os takes, as palavras que pedem som
+(porta, tiro, comboio, mar...) e propõem uma cama de música. A ElevenLabs gera cada áudio.
+Tudo fica numa linha do tempo medida na montagem final, não na gravação original.
 """
 import json
 import os
@@ -15,25 +15,9 @@ import numpy as np
 
 from .pipeline import build_cuts
 
-ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5-5")
 SFX_URL = "https://api.elevenlabs.io/v1/sound-generation"
 MUSIC_URL = "https://api.elevenlabs.io/v1/music"
-MAX_CUES = 40
 LANES = ("Efeitos 1", "Efeitos 2", "Música")
-
-SYSTEM = """És sonoplasta de um podcast narrativo em português (Podcast Plus do Observador).
-Recebes os blocos do guião com o tempo de início e fim de cada um, em segundos, na montagem final.
-Propõe o sound design: efeitos sonoros curtos que ilustram o que a narração descreve e, se fizer sentido,
-camas de música. Responde APENAS com um array JSON, sem texto à volta. Cada elemento:
-{"block": nº do bloco onde começa, "kind": "sfx" ou "music", "label": nome curto em português (2 a 4 palavras),
- "prompt": descrição do som EM INGLÊS para um gerador de áudio (concreta, sonora, sem nomes próprios),
- "at": segundos depois do início do bloco em que entra (só sfx), "duration": segundos (sfx 1 a 10),
- "until_block": nº do bloco onde a música acaba (só music)}.
-Regras: no máximo 3 efeitos por bloco e só quando acrescentam algo audível (portas, passos, tiros, comboios,
-multidões, mar, fogo, sinos). Não repitas o mesmo som sem necessidade. A música não pode tapar a voz:
-descreve-a como cama discreta. Não ponhas efeitos sobre indicações entre parênteses retos."""
-
 
 # ---------- linha do tempo da montagem ----------
 def timeline(result: dict, selections: dict) -> dict:
@@ -87,35 +71,68 @@ def audio_peaks(path: Path, n: int) -> list[int]:
     return [int(max(8, min(100, 100 * float(np.abs(x[a:max(b, a + 1)]).max())))) for a, b in zip(edges[:-1], edges[1:])]
 
 
-# ---------- planeamento com o Claude ----------
-def plan_cues(tl: dict, anthropic_key: str) -> list[dict]:
-    lines = [f"Bloco {b['block']} ({b['start']:.1f}s a {b['end']:.1f}s): {b['text']}" for b in tl["blocks"]]
-    body = {"model": ANTHROPIC_MODEL, "max_tokens": 4096, "system": SYSTEM,
-            "messages": [{"role": "user", "content": "\n".join(lines)}]}
-    r = httpx.post(ANTHROPIC_URL, json=body, timeout=120,
-                   headers={"x-api-key": anthropic_key, "anthropic-version": "2023-06-01"})
-    if r.status_code != 200:
-        raise RuntimeError(f"A Anthropic devolveu {r.status_code}: {r.text[:300]}")
-    text = "".join(p.get("text", "") for p in r.json().get("content", []))
-    m = re.search(r"\[.*\]", text, re.S)
-    if not m:
-        raise RuntimeError("O Claude não devolveu uma lista de sons.")
-    raw = json.loads(m.group(0))
-    by_block = {b["block"]: b for b in tl["blocks"]}
-    cues = []
-    for c in raw[:MAX_CUES]:
-        b = by_block.get(int(c.get("block", 0)))
-        if not b or c.get("kind") not in ("sfx", "music") or not c.get("prompt"):
-            continue
-        if c["kind"] == "music":
-            end_b = by_block.get(int(c.get("until_block") or c["block"]), b)
-            start, dur = b["start"], max(10.0, end_b["end"] - b["start"])
-            dur = min(dur, 120.0)
-        else:
-            start = min(b["end"] - 0.5, b["start"] + max(0.0, float(c.get("at", 0))))
-            dur = max(1.0, min(10.0, float(c.get("duration", 3))))
-        cues.append({"kind": c["kind"], "label": str(c.get("label", "Som"))[:40], "prompt": str(c["prompt"])[:400],
-                     "block": b["block"], "start": round(start, 2), "dur": round(dur, 2)})
+# ---------- planeamento local (sem LLM): palavras-chave do guião ----------
+# (padrão sobre o texto sem acentos e em minúsculas, nome, descrição para a ElevenLabs, duração em s)
+RULES = [
+    (r"\bporta(s)?\b", "Porta a abrir", "A heavy wooden door creaking open and then closing", 3),
+    (r"\b(tiros?|disparos?|disparou|balas?)\b", "Tiro", "A single gunshot echoing in the distance", 2),
+    (r"\b(comboios?|carruagens?|locomotiva)\b", "Comboio a passar", "A steam train passing by on the tracks with rhythmic clatter", 6),
+    (r"\b(passos|caminhou|andou)\b", "Passos", "Slow footsteps on gravel", 3),
+    (r"\b(sinos?|igrejas?)\b", "Sino de igreja", "A church bell tolling slowly", 5),
+    (r"\b(mar|ondas?|maremoto|oceano|tsunami)\b", "Ondas do mar", "Large ocean waves crashing and receding", 6),
+    (r"\b(fogo|incendios?|chamas|ardeu|arder|ardia)\b", "Fogo a crepitar", "A large fire crackling and roaring", 6),
+    (r"\b(terramoto|sismo|abalo|tremer|tremor)\b", "Terra a tremer", "Deep low rumbling of an earthquake with debris falling", 6),
+    (r"\b(multidao|gritos?|gritaram|povo|populacao)\b", "Multidão", "A frightened crowd shouting and murmuring in the distance", 5),
+    (r"\b(chuva|trovoada|trovao|tempestade)\b", "Chuva e trovoada", "Heavy rain with distant thunder", 6),
+    (r"\b(telefone|telefonou|chamada)\b", "Telefone", "An old telephone ringing", 3),
+    (r"\b(carros?|automovel|viatura|viaturas)\b", "Carro a passar", "A car passing by on a road", 4),
+    (r"\b(sirenes?|policia|ambulancia|ambulancias)\b", "Sirene", "A distant police siren", 5),
+    (r"\bvento\b", "Vento", "Wind howling", 5),
+    (r"\b(relogio|relogios)\b", "Relógio", "A ticking clock in a quiet room", 4),
+    (r"\b(aviao|avioes|helicoptero)\b", "Avião", "An airplane passing overhead", 5),
+    (r"\b(cao|caes|ladrar|ladrou)\b", "Cão a ladrar", "A dog barking in the distance", 3),
+    (r"\b(explosao|explodiu|bomba|bombas)\b", "Explosão", "A loud explosion followed by a rumbling echo", 4),
+    (r"\b(janela|vidros?)\b", "Vidro a partir", "Glass breaking", 2),
+    (r"\b(sussurro|sussurrou|segredo)\b", "Sussurros", "Quiet indistinct whispering in a room", 4),
+]
+MUSIC_PROMPT = ("Subtle atmospheric instrumental underscore for a narrative documentary podcast, "
+                "low intensity, slow, understated, no vocals, leaves room for a spoken voice")
+MUSIC_PART = 120.0
+MAX_PER_BLOCK = 3
+MIN_REPEAT_GAP = 12.0
+
+
+def _norm(t: str) -> str:
+    import unicodedata
+    return unicodedata.normalize("NFKD", t).encode("ascii", "ignore").decode().lower()
+
+
+def plan_local(tl: dict) -> list[dict]:
+    """Escolhe os sons sem LLM: procura palavras-chave no texto de cada bloco e põe uma cama de música."""
+    cues, last = [], {}
+    for b in tl["blocks"]:
+        text, span = _norm(b["text"]), max(0.1, b["end"] - b["start"])
+        hits = []
+        for k, (pat, label, prompt, dur) in enumerate(RULES):
+            m = re.search(pat, text)
+            if m:
+                hits.append((m.start(), k, label, prompt, dur))
+        for pos, k, label, prompt, dur in sorted(hits)[:MAX_PER_BLOCK]:
+            start = b["start"] + span * pos / max(1, len(text))
+            start = max(b["start"], min(b["end"] - 0.5, start - 0.3))
+            if start - last.get(k, -1e9) < MIN_REPEAT_GAP:
+                continue
+            last[k] = start
+            cues.append({"kind": "sfx", "label": label, "prompt": prompt, "block": b["block"],
+                         "start": round(start, 2), "dur": float(dur)})
+    t, first = 0.0, tl["blocks"][0]["block"] if tl["blocks"] else 1
+    total = tl["total"]
+    while t < total - 3:
+        part = min(MUSIC_PART, total - t)
+        blk = next((b["block"] for b in tl["blocks"] if b["end"] > t), first)
+        cues.append({"kind": "music", "label": "Música de fundo", "prompt": MUSIC_PROMPT, "block": blk,
+                     "start": round(t, 2), "dur": round(max(10.0, part), 2)})
+        t += part
     return cues
 
 
