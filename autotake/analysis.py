@@ -170,7 +170,10 @@ def analyze_scene(items: list[dict], scenes: list[dict], n: int, key: str, guide
     reading = [{"item": int(x.get("item", 0)), "events": [str(e)[:200] for e in x.get("events", [])][:12],
                 "not_happening": [str(e)[:200] for e in x.get("not_happening", [])][:12]}
                for x in data.get("reading", []) if isinstance(x, dict) and str(x.get("item", "")).isdigit()]
-    return {"reading": reading, "cues": clean_cues(data.get("cues", []), by_id, sc)}
+    cues = clean_cues(data.get("cues", []), by_id, sc)
+    for i, c in enumerate(cues):
+        c["id"] = f"s{n}a{i + 1}"              # único no episódio (a edição e o apagar dependem disto)
+    return {"reading": reading, "cues": cues}
 
 
 def clean_cues(raw: list, by_id: dict, sc: dict) -> list[dict]:
@@ -241,3 +244,21 @@ def cues_for_scene(analysis: dict, n: int, tl: dict, structure_scene: dict) -> t
                     "prompt": c["prompt"], "anchor": c.get("anchor", ""), "duration": c.get("duration", 3),
                     "until_block": until or blk, "gain": c.get("gain")})
     return sd.cues_from_claude(raw, tl, structure_scene), skipped
+
+
+def ensure_ids(an: dict) -> bool:
+    """Análises antigas repetiam ids entre cenas. Devolve True se corrigiu alguma coisa."""
+    seen, changed = set(), False
+    for sc in an.get("scenes", []):
+        for i, c in enumerate(sc.get("cues", [])):
+            if c["id"] in seen or not c["id"].startswith(f"s{sc['n']}a"):
+                c["id"], changed = f"s{sc['n']}a{i + 1}", True
+            seen.add(c["id"])
+    return changed
+
+
+def cues_sig(cues: list[dict]) -> str:
+    import hashlib
+    keep = [(c["item"], c["kind"], c["prompt"], c.get("anchor", ""), c.get("duration"), c.get("until_item"), c.get("gain"))
+            for c in cues]
+    return hashlib.md5(json.dumps(keep, ensure_ascii=False).encode()).hexdigest()[:12]

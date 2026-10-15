@@ -124,6 +124,25 @@ a{color:var(--accent);text-decoration:none}
 .tl-lane[data-lane]{cursor:crosshair}
 .an-sc{padding:20px 22px;margin-bottom:16px}
 .an-sc h3{margin:0;font-size:19px;font-weight:600;letter-spacing:-.02em}
+.an-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 24px}
+.an-row{display:contents}
+.an-row>div{padding:12px 0;border-top:1px solid var(--line);min-width:0}
+.an-head{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--muted);padding:8px 0}
+.an-txt{font-size:15px;line-height:1.5}
+.an-txt.titulo{font-size:12px;font-weight:700;letter-spacing:.05em;color:var(--muted)}
+.an-txt.nota{font-size:13px;font-style:italic;color:var(--faint)}
+.an-txt.entrevista{color:var(--muted);border-radius:8px;background:rgba(255,159,10,.08);padding:8px 10px}
+.cue-e{display:grid;grid-template-columns:auto 1fr auto;gap:6px 10px;align-items:start;margin-bottom:10px;padding:10px 12px;border-radius:12px;background:var(--panel)}
+.cue-e textarea{grid-column:2;width:100%;border:0;background:transparent;font:inherit;font-size:14px;line-height:1.4;color:var(--text);resize:none;padding:0;min-height:20px}
+.cue-e textarea:focus,.cue-e input:focus{outline:2px solid var(--accent-soft);border-radius:6px;background:var(--bg)}
+.cue-e .pr{grid-column:2/4;display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.cue-e .pr input{flex:1;min-width:0;border:0;background:transparent;font:inherit;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted);padding:2px 4px}
+.cue-e select{border:0;background:transparent;font:inherit;font-size:11px;font-weight:700;letter-spacing:.02em;border-radius:980px;padding:3px 6px;cursor:pointer}
+.cue-e select.sfx{background:rgba(255,159,10,.16);color:#c77700}.cue-e select.ambience{background:rgba(48,176,199,.16);color:#1d8a9c}.cue-e select.music{background:rgba(125,92,255,.14);color:#6b4cf0}
+.cue-add{font-size:13px;color:var(--accent);padding:4px 0}
+.cue-form{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:12px;border:1px dashed var(--line);margin-top:4px}
+.cue-form input[type=text]{height:36px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 10px;font:inherit;font-size:14px;color:var(--text)}
+@media (max-width:900px){.an-grid{grid-template-columns:1fr}.an-row>div:first-child{border-bottom:0;padding-bottom:0}.an-row>div:last-child{border-top:0;padding-top:4px}}
 .an-cue{display:grid;grid-template-columns:auto 1fr auto;gap:10px 14px;align-items:start;padding:12px 0;border-top:1px solid var(--line)}
 .an-cue .del{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:var(--faint)}
 .an-cue .del:hover{background:var(--warn-soft);color:#d70015}
@@ -328,8 +347,8 @@ async function route() {
   if (location.hash === '#/autotake') return home();
   const ma = location.hash.match(/^#\/analise(?:\/([\w-]+))?$/);
   if (ma) return analisePage(ma[1]);
-  const me = location.hash.match(/^#\/estrutura(?:\/([\w-]+))?$/);
-  if (me) return estruturaPage(me[1]);
+  const me = location.hash.match(/^#\/estrutura(?:\/([\w-]+))?(?:\/(\d+))?$/);
+  if (me) return estruturaPage(me[1], me[2] ? +me[2] : null);
   return projectsPage();
 }
 
@@ -409,7 +428,7 @@ async function projectPage() {
 }
 
 /* ---------- Análise de Guião ---------- */
-const AN = { id: null, data: null, poll: null };
+const AN = { id: null, data: null, poll: null, adding: null };
 const KIND_CLS = { sfx: 'sfx', ambience: 'amb', music: 'mus' }, KIND_NAME = { sfx: 'EFEITO', ambience: 'AMBIENTE', music: 'MÚSICA' };
 const anRunning = a => a.status === 'a dividir em cenas' || a.status === 'a analisar cenas';
 
@@ -449,58 +468,81 @@ function scriptSummary(an) {
 function renderAnalysis() {
   const d = AN.data, an = d.analysis, busy = anRunning(an), scenes = an.scenes || [];
   const nCues = scenes.reduce((a, sc) => a + (sc.cues || []).length, 0);
-  const status = !d.claude ? 'Falta a chave da Anthropic no servidor (ANTHROPIC_API_KEY).'
+  const status = !d.claude ? 'Falta a chave da Anthropic no servidor (ANTHROPIC_API_KEY): só podes editar à mão.'
     : an.status === 'a dividir em cenas' ? 'A ler o guião e a dividir em cenas…'
     : an.status === 'a analisar cenas' ? `A analisar cenas, ${an.done} de ${an.total}…`
-    : scenes.length ? `${scenes.length} cenas, ${nCues} sons propostos` : 'Ainda não há análise deste guião.';
+    : scenes.length ? `${scenes.length} cenas, ${nCues} sons. Podes editar tudo: a Estrutura Plus monta a partir daqui.` : 'Ainda não há análise deste guião.';
   const epOpts = S.list.map(e => `<option value="${e.id}" ${e.id === AN.id ? 'selected' : ''}>${esc(e.title)}</option>`).join('');
-  const itemsOf = sc => (an.items || []).filter(it => it.id >= sc.from && it.id <= sc.to);
-  const card = sc => `<div class="card an-sc">
+  const tagName = t => t === 'narracao' ? 'NARRAÇÃO' : t === 'entrevista' ? 'ENTREVISTA' : t === 'titulo' ? 'TÍTULO' : 'NOTA';
+  const cueHTML = c => `<div class="cue-e" data-cuebox="${c.id}">
+      <select class="${c.kind}" data-kind="${c.id}" aria-label="Tipo de som" ${S.demo ? 'disabled' : ''}>
+        <option value="sfx" ${c.kind === 'sfx' ? 'selected' : ''}>EFEITO</option><option value="ambience" ${c.kind === 'ambience' ? 'selected' : ''}>AMBIENTE</option><option value="music" ${c.kind === 'music' ? 'selected' : ''}>MÚSICA</option></select>
+      <textarea rows="2" data-desc="${c.id}" aria-label="Descrição do som" ${S.demo ? 'disabled' : ''}>${esc(c.description || c.label)}</textarea>
+      <button class="del" data-delcue="${c.id}" aria-label="Remover ${esc(c.label)}" ${S.demo ? 'disabled' : ''}>${I.trash}</button>
+      <div class="pr"><span>Prompt</span><input data-prompt="${c.id}" value="${esc(c.prompt)}" aria-label="Prompt em inglês" ${S.demo ? 'disabled' : ''}></div>
+      ${c.anchor ? `<div class="pr"><span>Entra em: “${esc(c.anchor)}”</span></div>` : ''}</div>`;
+  const rowHTML = (sc, it) => {
+    const mine = (sc.cues || []).filter(c => c.item === it.id);
+    const canAdd = it.type === 'narracao' || it.type === 'titulo';
+    const adding = AN.adding === it.id;
+    return `<div class="an-row"><div><span class="itag ${it.type}">${tagName(it.type)}${it.speaker ? ' · ' + esc(it.speaker.slice(0, 40)) : ''}</span>
+        <div class="an-txt ${it.type}" style="margin-top:6px">${esc(it.text.length > 700 ? it.text.slice(0, 700) + '…' : it.text)}</div></div>
+      <div>${mine.map(cueHTML).join('')}
+        ${it.type === 'entrevista' ? '<span class="note">Sem sons por cima da entrevista.</span>' : ''}
+        ${adding ? `<div class="cue-form" data-form="${it.id}">
+          <select id="addkind" class="epsel"><option value="sfx">Efeito</option><option value="ambience">Ambiente</option><option value="music">Música</option></select>
+          <input type="text" id="addtext" maxlength="300" placeholder="Ex.: carros a buzinar ao longe, um avião a passar">
+          <input type="text" id="addanchor" maxlength="120" placeholder="Entra em (palavras do texto, opcional)">
+          <label class="note" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="addend" checked> Ambiente e música: até ao fim da cena</label>
+          <div style="display:flex;gap:8px"><button class="btn blue" id="addok">Adicionar</button><button class="btn" id="addcancel">Cancelar</button></div></div>`
+          : canAdd && !S.demo ? `<button class="link cue-add" data-add="${it.id}">+ Adicionar som</button>` : ''}</div></div>`;
+  };
+  const card = sc => {
+    const items = (an.items || []).filter(it => it.id >= sc.from && it.id <= sc.to), has = (sc.cues || []).length;
+    return `<div class="card an-sc">
       <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
         <div><h3>Cena ${sc.n} · ${esc(sc.title)}</h3><p class="note" style="margin:2px 0 0">${esc(sc.setting || '')}</p></div>
-        <button class="btn" data-rerun="${sc.n}" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}Analisar esta cena</button></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" data-rerun="${sc.n}" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${has ? 'Analisar de novo' : 'Analisar esta cena'}</button>
+          <a class="btn blue" href="#/estrutura/${AN.id}/${sc.n}">${I.layers}Montar na Estrutura Plus</a></div></div>
       ${sc.direction ? `<p style="margin:12px 0 4px"><b style="font-size:12px;color:var(--muted);letter-spacing:.04em">DIREÇÃO SONORA</b><br>${esc(sc.direction)}</p>` : ''}
       ${sc.error ? `<div class="errbox" style="margin:12px 0">${esc(sc.error)}</div>` : ''}
-      <label class="field" style="margin:10px 0 4px">Notas para o Claude sobre esta cena (opcional, usadas ao analisar esta cena)
+      <label class="field" style="margin:10px 0 8px">Notas para o Claude sobre esta cena (usadas ao analisar esta cena)
         <input type="text" data-note="${sc.n}" maxlength="2000" value="${esc((an.notes || {})[String(sc.n)] || '')}" ${S.demo ? 'disabled' : ''}></label>
-      <div style="margin-top:8px">${(sc.cues || []).length ? sc.cues.map(c => `<div class="an-cue">
-        <span class="kchip ${KIND_CLS[c.kind]}">${KIND_NAME[c.kind]}</span>
-        <div style="min-width:0"><b style="font-weight:600">${esc(c.label)}</b>
-          ${c.description ? `<div style="font-size:14px;margin-top:2px">${esc(c.description)}</div>` : ''}
-          ${c.anchor ? `<div class="note" style="margin-top:2px">Entra em: “${esc(c.anchor)}”</div>` : ''}
-          <div class="note" style="margin-top:2px;font-family:ui-monospace,Menlo,monospace;font-size:12px">${esc(c.prompt)}</div></div>
-        <button class="del" data-delcue="${c.id}" aria-label="Remover ${esc(c.label)}" ${S.demo ? 'disabled' : ''}>${I.trash}</button></div>`).join('') : `<p class="note">${busy ? 'A analisar…' : 'Sem sons propostos nesta cena.'}</p>`}</div>
+      <div class="an-grid"><div class="an-head">TEXTO DO GUIÃO</div><div class="an-head">SONS (editáveis)</div>
+        ${items.map(it => rowHTML(sc, it)).join('')}</div>
       ${(sc.reading || []).length ? `<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600;font-size:14px">O que o Claude percebeu</summary>
         ${sc.reading.map(x => `<div style="margin-top:10px"><b class="note">ITEM ${x.item}</b>
           ${x.events.length ? `<p class="note" style="margin:3px 0">Acontece: ${x.events.map(esc).join(' · ')}</p>` : ''}
           ${x.not_happening.length ? `<p class="note" style="margin:3px 0;color:var(--warn)">Não acontece (sem som): ${x.not_happening.map(esc).join(' · ')}</p>` : ''}</div>`).join('')}</details>` : ''}
-      <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600;font-size:14px">Texto da cena (${itemsOf(sc).length} itens)</summary>
-        ${itemsOf(sc).map(it => `<div style="display:flex;gap:10px;margin-top:8px;align-items:flex-start"><span class="itag ${it.type}">${it.type === 'narracao' ? 'NARRAÇÃO' : it.type === 'entrevista' ? 'ENTREVISTA' : it.type === 'titulo' ? 'TÍTULO' : 'NOTA'}</span>
-          <span style="font-size:14px;min-width:0">${esc(it.text.length > 400 ? it.text.slice(0, 400) + '…' : it.text)}</span></div>`).join('')}</details>
     </div>`;
+  };
 
   $app.innerHTML = shell('analise', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios.</div>' : ''}
     <div class="wrap">
       <div class="ep-head"><div><h1 class="page-t">Análise de Guião</h1>
-        <p class="page-s">O Claude lê o guião, narração e entrevistas, divide o episódio em cenas e propõe os sons de cada uma. A Estrutura Plus usa esta análise para os pôr na linha do tempo.</p></div>
+        <p class="page-s">A folha de sonoplastia do episódio: cenas, o texto de cada parágrafo e, ao lado, os sons que o Claude sugere. Edita, apaga ou acrescenta sons. A Estrutura Plus vai buscar daqui e monta a cena.</p></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <select class="epsel" id="anep" aria-label="Episódio">${epOpts}</select>
-          <button class="btn blue" id="anrun" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${busy ? 'A analisar…' : scenes.length ? 'Analisar de novo' : 'Analisar guião'}</button>
+          <button class="btn blue" id="anrun" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${busy ? 'A analisar…' : scenes.length ? 'Analisar tudo de novo' : 'Analisar guião'}</button>
         </div></div>
       <p class="st-note" style="margin:0 0 16px">${esc(status)}</p>
       ${an.status === 'erro' ? `<div class="errbox" style="margin:0 0 16px">${esc(an.message)}</div>` : ''}
-      ${scenes.length ? `<p style="margin:0 0 16px"><a class="btn" href="#/estrutura/${AN.id}">${I.layers}Ir para a Estrutura Plus</a></p>` : scriptSummary(an)}
+      ${scenes.length ? '' : scriptSummary(an)}
       ${scenes.map(card).join('')}
     </div>`);
 
   document.getElementById('anep').onchange = e => { location.hash = '#/analise/' + e.target.value; };
   document.getElementById('anrun').onclick = async () => {
-    if (scenes.length && !confirm('Isto volta a analisar o guião todo e substitui as cenas e os sons propostos. Continuar?')) return;
+    if (scenes.length && !confirm('Isto volta a analisar o guião todo e substitui as cenas e os sons, incluindo as tuas edições. Continuar?')) return;
     try { await api(`/api/episodes/${AN.id}/analysis/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch (e) { alert(e.message); return; }
     loadAnalysis();
   };
+  const findCue = id => { for (const sc of scenes) { const c = (sc.cues || []).find(x => x.id === id); if (c) return c; } };
+  const patch = (id, body) => api(`/api/episodes/${AN.id}/analysis/cues/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   $app.querySelectorAll('[data-rerun]').forEach(b => b.onclick = async () => {
-    const n = +b.dataset.rerun, note = $app.querySelector(`[data-note="${n}"]`).value;
+    const n = +b.dataset.rerun, sc = scenes.find(x => x.n === n), note = $app.querySelector(`[data-note="${n}"]`).value;
+    if ((sc.cues || []).length && !confirm('Isto substitui os sons desta cena, incluindo as tuas edições. Continuar?')) return;
     try { await api(`/api/episodes/${AN.id}/analysis/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: n, notes: note }) }); } catch (e) { alert(e.message); return; }
     loadAnalysis();
   });
@@ -509,6 +551,42 @@ function renderAnalysis() {
     renderAnalysis();
     await api(`/api/episodes/${AN.id}/analysis/cues/${b.dataset.delcue}`, { method: 'DELETE' }).catch(e => { showErr(e); loadAnalysis(); });
   });
+  $app.querySelectorAll('[data-desc]').forEach(t => {
+    const fit = () => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }; fit(); t.oninput = fit;
+    t.onchange = async () => {
+      const c = findCue(t.dataset.desc); if (!c || t.value.trim() === (c.description || c.label)) return;
+      t.disabled = true;
+      try { Object.assign(c, await patch(c.id, { description: t.value })); } catch (e) { showErr(e); }
+      renderAnalysis();
+    };
+  });
+  $app.querySelectorAll('[data-prompt]').forEach(i => i.onchange = async () => {
+    const c = findCue(i.dataset.prompt); if (!c) return;
+    try { Object.assign(c, await patch(c.id, { prompt: i.value })); } catch (e) { showErr(e); }
+  });
+  $app.querySelectorAll('[data-kind]').forEach(sel => sel.onchange = async () => {
+    const c = findCue(sel.dataset.kind); if (!c) return;
+    try { Object.assign(c, await patch(c.id, { kind: sel.value })); } catch (e) { showErr(e); }
+    renderAnalysis();
+  });
+  $app.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { AN.adding = +b.dataset.add; renderAnalysis(); document.getElementById('addtext')?.focus(); });
+  const form = $app.querySelector('[data-form]');
+  if (form) {
+    const item = +form.dataset.form, txt = document.getElementById('addtext'); txt.focus();
+    const go = async () => {
+      const text = txt.value.trim(); if (!text) return;
+      const body = { item, kind: document.getElementById('addkind').value, text, anchor: document.getElementById('addanchor').value, to_end: document.getElementById('addend').checked };
+      document.getElementById('addok').disabled = true;
+      try {
+        const c = await api(`/api/episodes/${AN.id}/analysis/cues`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const sc = scenes.find(x => item >= x.from && item <= x.to); (sc.cues = sc.cues || []).push(c);
+      } catch (e) { alert(e.message); }
+      AN.adding = null; renderAnalysis();
+    };
+    txt.onkeydown = e => { if (e.key === 'Enter') go(); else if (e.key === 'Escape') { AN.adding = null; renderAnalysis(); } };
+    document.getElementById('addok').onclick = go;
+    document.getElementById('addcancel').onclick = () => { AN.adding = null; renderAnalysis(); };
+  }
 }
 
 /* ---------- Estrutura Plus ---------- */
@@ -518,7 +596,7 @@ const fmtT = s => { s = Math.max(0, s); const m = Math.floor(s / 60); return m +
 const running = st => st.status === 'a planear' || st.status === 'a gerar' || st.batch > 0 || (st.clips || []).some(c => c.state === 'a gerar');
 const SFX_LANES = 5;
 
-async function estruturaPage(wanted) {
+async function estruturaPage(wanted, scene) {
   try { S.list = await api('/api/episodes'); } catch { S.list = []; }
   const ready = S.list.filter(e => e.state?.status === 'pronto');
   if (!ready.length) {
@@ -529,6 +607,7 @@ async function estruturaPage(wanted) {
   }
   const pick = ready.find(e => e.id === wanted) || ready.find(e => e.id === ST.id) || ready[0];
   if (ST.id !== pick.id) { ST.id = pick.id; ST.scene = null; ST.sel = null; ST.zoom = 1; }
+  if (scene) { ST.scene = scene; ST.zoom = 1; }
   if (!S.demo) player.src = `/api/episodes/${ST.id}/audio`;
   await loadStructure();
 }
@@ -608,6 +687,13 @@ function renderStructure() {
       ${st.status === 'erro' ? `<div class="errbox" style="margin:0 0 16px">${esc(st.message)}</div>` : ''}
       <div class="scn-bar">${chips}</div>
       ${st.note ? `<div class="errbox" style="margin:0 0 16px">${esc(st.note)}</div>` : ''}
+      ${scene && d.has_analysis ? (() => {
+        const n = String(scene.n), mine = sceneClips(scene.n).length, planned = d.planned[n] || 0, stale = mine && st.sigs && st.sigs[n] && st.sigs[n] !== d.sigs[n];
+        const link = `<a href="#/analise/${ST.id}">Ver e editar os sons desta cena na Análise de Guião</a>`;
+        return !mine && planned ? `<p class="st-note" style="margin:0 0 12px">Esta cena tem ${planned} sons na Análise de Guião. Carrega em <b>Create</b> para a montar. ${link}</p>`
+          : stale ? `<div class="errbox" style="margin:0 0 12px">A Análise de Guião mudou desde que montaste esta cena. Carrega em <b>Create</b> para a atualizar. ${link}</div>`
+          : `<p class="st-note" style="margin:0 0 12px">${link}</p>`;
+      })() : ''}
       ${st.mood && st.planner === 'claude' ? `<p class="st-note" style="margin:0 0 12px">Direção sonora (Claude): ${esc(st.mood)}</p>` : ''}
       ${scene ? `<label class="field" style="margin:0 0 16px">Notas para o Claude sobre esta cena (opcional)
         <input type="text" id="snote" maxlength="2000" value="${esc(ST.draft[scene.n] ?? ((st.notes || {})[String(scene.n)] || ''))}" placeholder="Ex.: os polícias NÃO bateram à porta; a cena passa-se de noite" ${S.demo ? 'disabled' : ''}></label>` : ''}
