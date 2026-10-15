@@ -175,14 +175,14 @@ def plan_local(tl: dict, span: tuple | None = None) -> list[dict]:
     """Escolhe os sons sem LLM: procura palavras-chave no texto de cada bloco e põe uma cama de música."""
     cues, last = [], {}
     for b in tl["blocks"]:
-        text, span = _norm(b["text"]), max(0.1, b["end"] - b["start"])
+        text, blen = _norm(b["text"]), max(0.1, b["end"] - b["start"])
         hits = []
         for k, (pat, label, prompt, dur) in enumerate(RULES):
             m = re.search(pat, text)
             if m:
                 hits.append((m.start(), k, label, prompt, dur))
         for pos, k, label, prompt, dur in sorted(hits)[:MAX_PER_BLOCK]:
-            start = b["start"] + span * pos / max(1, len(text))
+            start = b["start"] + blen * pos / max(1, len(text))
             start = max(b["start"], min(b["end"] - 0.5, start - 0.3))
             if start - last.get(k, -1e9) < MIN_REPEAT_GAP:
                 continue
