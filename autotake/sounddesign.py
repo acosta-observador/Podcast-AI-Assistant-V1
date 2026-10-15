@@ -23,9 +23,12 @@ ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5-5")
 SFX_URL = "https://api.elevenlabs.io/v1/sound-generation"
 MUSIC_URL = "https://api.elevenlabs.io/v1/music"
-N_SFX_LANES = 4
-MUSIC_LANE = N_SFX_LANES
-LANE_NAMES = tuple(f"Efeitos {i + 1}" for i in range(N_SFX_LANES)) + ("Música",)
+N_SFX_LANES = 5
+AMB_LANE = N_SFX_LANES
+MUSIC_LANE = N_SFX_LANES + 1
+LANE_NAMES = tuple(f"Efeitos {i + 1}" for i in range(N_SFX_LANES)) + ("Ambiente", "Música")
+GUIDE_FILE = Path(__file__).with_name("guia_sound_design.md")
+MAX_CUES = 120
 # pausas na linha do tempo da Estrutura Plus (a montagem do AutoTake continua com as suas)
 BLOCK_GAP = 1.5
 SCENE_GAP = 4.0
@@ -164,28 +167,28 @@ RULES = [
 CLAUDE_SYSTEM = """És o sonoplasta de um podcast true crime em português (Podcast Plus, Observador).
 Tom: sombrio, misterioso, contido e realista. Recebes o guião de um episódio e trabalhas UMA cena de cada vez:
 os blocos marcados são a cena; os outros só dão contexto. Decide o sound design apenas dessa cena.
-Responde APENAS com JSON: {"mood": "uma frase sobre o clima da cena", "cues": [ ... ]}.
+Segue o GUIA DE ABORDAGEM no fim destas instruções: é o método de trabalho do utilizador e tem prioridade.
+Pinta a cena com várias camadas (ambiente, foley, efeitos de ação, pontuação, transições), não a deixes despida.
 
-Princípios:
-1. Percebe a cena (lugar, hora, emoção, o que está em jogo) antes de decidir.
-2. Menos é mais. Só pões um som quando acrescenta tensão, lugar ou ação. Deixa silêncio nas revelações
-   e nos momentos de emoção, para a voz respirar.
-3. Música é OPCIONAL. Há cenas que pedem só ambiente ou silêncio: nesses casos não ponhas música.
-   Quando pões, é uma cama de fundo discreta: lenta, sombria, minimalista (drones, piano esparso, cordas graves,
-   texturas), sem melodia marcante, sem percussão forte, que nunca compete com a voz. Pode entrar depois do início
-   da cena e sair antes do fim.
-4. Ambiente: camas de lugar (sala vazia, chuva, trânsito distante, corredor de tribunal, noite) quando a cena
-   precisa de situar o ouvinte.
-5. Efeitos: concretos e realistas, pelo que a narração descreve ou sugere (porta, passos, telefone, carro, tiro,
-   papéis, chaves, sirene). Nada de efeitos exagerados ou cómicos.
-6. No máximo 3 sons por bloco. Não repitas o mesmo som sem razão.
+Faz o trabalho em dois passos, e devolve os dois.
+
+PASSO 1, "reading": lê cada bloco literalmente, frase a frase, e escreve para cada bloco
+  {"block": nº, "events": [coisas que ACONTECEM fisicamente e podem fazer som], "not_happening": [coisas negadas,
+   hipotéticas, perguntadas, metafóricas ou só contadas de passagem, para as quais NÃO podes pôr som]}.
+  Atenção às negações: "não bateram à porta" vai para not_happening, nunca para events.
+PASSO 2, "cues": só podes criar sons a partir de "events". Nunca a partir de "not_happening".
+
+Responde APENAS com JSON:
+{"mood": "uma frase sobre o clima da cena", "reading": [ ... ], "cues": [ ... ]}
 
 Cada elemento de "cues":
 {"block": nº do bloco onde começa, "kind": "sfx" | "ambience" | "music", "label": nome curto em português (2 a 4 palavras),
- "prompt": descrição EM INGLÊS para o gerador de áudio (concreta; para music: estilo, instrumentos, andamento, atmosfera;
- sem nomes de artistas), "anchor": 3 a 6 palavras EXATAS do texto do bloco onde o som deve começar (em ambience e music
- pode faltar: começa no início do bloco), "duration": segundos (sfx 1 a 8, ambience 5 a 40), "until_block": nº do bloco
- onde acaba (só ambience e music), "gain": volume relativo de 0.1 a 1 (música e ambiente baixos, 0.2 a 0.5; efeitos 0.5 a 1)}."""
+ "prompt": descrição EM INGLÊS para o gerador de áudio (concreta, física, com distância e espaço; para music: estilo,
+ instrumentos, andamento, atmosfera; sem nomes de artistas), "anchor": 3 a 6 palavras EXATAS do texto do bloco onde o som
+ deve começar (em ambience e music pode faltar: começa no início do bloco), "duration": segundos (sfx 0.5 a 8, ambience 5 a 40),
+ "until_block": nº do bloco onde acaba (só ambience e music), "gain": volume relativo de 0.1 a 1}.
+A música é opcional: há cenas que pedem só ambiente e silêncio. Quando pões, é cama de fundo discreta.
+Se uma frase for ambígua, não ponhas o som."""
 MUSIC_SUFFIX = ", instrumental, no vocals, very subtle dark background underscore with low presence, leaves room for a spoken voice"
 AMBIENCE_SUFFIX = ", seamless ambient bed, no music, no speech"
 MUSIC_PROMPT = ("Subtle atmospheric instrumental underscore for a narrative documentary podcast, "
@@ -229,7 +232,14 @@ def plan_local(tl: dict, span: tuple | None = None) -> list[dict]:
     return cues
 
 
-def plan_claude(tl: dict, scene: dict, key: str) -> dict:
+def load_guide(custom_path: Path | None = None) -> str:
+    """Guia de abordagem: o do utilizador (editado na app) ou o que vem com o código."""
+    if custom_path and custom_path.exists():
+        return custom_path.read_text(encoding="utf-8")
+    return GUIDE_FILE.read_text(encoding="utf-8")
+
+
+def plan_claude(tl: dict, scene: dict, key: str, guide: str = "", notes: str = "") -> dict:
     """O Claude lê a cena (com o resto do episódio como contexto) e decide sons, ambiente e música."""
     ids = set(scene["blocks"])
     parts = []
@@ -240,9 +250,12 @@ def plan_claude(tl: dict, scene: dict, key: str) -> dict:
             parts.append(f"(bloco {b['block']}, fora desta cena: {b['text'][:160]}...)")
     msg = (f"Cena a trabalhar: {scene['title']}, blocos {scene['blocks'][0]} a {scene['blocks'][-1]}, "
            f"de {scene['start']:.1f}s a {scene['end']:.1f}s.\n\n" + "\n\n".join(parts))
-    body = {"model": ANTHROPIC_MODEL, "max_tokens": 3000, "system": CLAUDE_SYSTEM,
+    if notes.strip():
+        msg += f"\n\nNOTAS DO UTILIZADOR PARA ESTA CENA (têm prioridade):\n{notes.strip()}"
+    system = CLAUDE_SYSTEM + ("\n\n# GUIA DE ABORDAGEM\n\n" + guide if guide.strip() else "")
+    body = {"model": ANTHROPIC_MODEL, "max_tokens": 8000, "system": system,
             "messages": [{"role": "user", "content": msg}]}
-    r = httpx.post(ANTHROPIC_URL, json=body, timeout=120,
+    r = httpx.post(ANTHROPIC_URL, json=body, timeout=240,
                    headers={"x-api-key": key, "anthropic-version": "2023-06-01"})
     if r.status_code != 200:
         raise RuntimeError(f"A Anthropic devolveu {r.status_code}: {r.text[:300]}")
@@ -251,7 +264,11 @@ def plan_claude(tl: dict, scene: dict, key: str) -> dict:
     if not m:
         raise RuntimeError("O Claude não devolveu JSON.")
     data = json.loads(m.group(0))
-    return {"mood": str(data.get("mood", ""))[:200], "cues": cues_from_claude(data.get("cues", []), tl, scene)}
+    reading = [{"block": int(x.get("block", 0)), "events": [str(e)[:200] for e in x.get("events", [])][:12],
+                "not_happening": [str(e)[:200] for e in x.get("not_happening", [])][:12]}
+               for x in data.get("reading", []) if isinstance(x, dict)]
+    return {"mood": str(data.get("mood", ""))[:200], "reading": reading,
+            "cues": cues_from_claude(data.get("cues", []), tl, scene)}
 
 
 def cues_from_claude(raw: list, tl: dict, scene: dict) -> list[dict]:
@@ -263,7 +280,7 @@ def cues_from_claude(raw: list, tl: dict, scene: dict) -> list[dict]:
         cues.append({"kind": kind, "label": label, "prompt": prompt, "block": block,
                      "start": round(start, 2), "dur": round(dur, 2), "gain": round(gain, 2)})
 
-    for c in raw[:40]:
+    for c in raw[:MAX_CUES]:
         try:
             blk = int(c.get("block", 0))
         except (TypeError, ValueError):
@@ -307,10 +324,12 @@ def cues_from_claude(raw: list, tl: dict, scene: dict) -> list[dict]:
 
 
 def assign_lanes(cues: list[dict]) -> None:
-    busy: dict[int, list[tuple[float, float]]] = {k: [] for k in range(N_SFX_LANES + 1)}
+    busy: dict[int, list[tuple[float, float]]] = {k: [] for k in range(N_SFX_LANES + 2)}
     for c in sorted(cues, key=lambda x: x["start"]):
         if c["kind"] == "music":
             c["lane"] = MUSIC_LANE
+        elif c["kind"] == "ambience":
+            c["lane"] = AMB_LANE
         else:
             c["lane"] = next((k for k in range(N_SFX_LANES)
                               if all(c["start"] >= e or c["start"] + c["dur"] <= s0 for s0, e in busy[k])),

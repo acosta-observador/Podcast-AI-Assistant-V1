@@ -60,7 +60,7 @@ def to_reaper(result: dict, selections: dict, audio_name: str, title: str, sound
     for k in sorted(alt_tracks):
         out.append(f'  <TRACK\n    NAME "Alternativa {k + 1}"\n    MUTESOLO 1 0 0\n'
                    + "".join(alt_tracks[k]) + "  >\n")
-    for k, lane in enumerate(("Efeitos 1", "Efeitos 2", "Efeitos 3", "Efeitos 4", "Música")):
+    for k, lane in enumerate(("Efeitos 1", "Efeitos 2", "Efeitos 3", "Efeitos 4", "Efeitos 5", "Ambiente", "Música")):
         items = [_item(c["start"], c["dur"], 0, c["label"], f"sd/{c['id']}.mp3", "MP3")
                  for c in (sound or []) if c.get("lane") == k]
         if items:

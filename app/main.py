@@ -29,7 +29,10 @@ DATA = Path(os.getenv("DATA_DIR", ROOT / "data")) / "episodes"
 DATA.mkdir(parents=True, exist_ok=True)
 API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY")
+GEN_WORKERS = int(os.getenv("GEN_WORKERS", "4"))
 APP_PASSWORD = os.getenv("APP_PASSWORD")
+
+GUIDE_PATH = DATA.parent / "guia_sound_design.md"
 
 app = FastAPI(title="Podcast Plus AI Assistant")
 jobs = ThreadPoolExecutor(max_workers=int(os.getenv("WORKERS", "1")))
@@ -121,7 +124,11 @@ def read_struct(d: Path) -> dict:
     st = read_json(struct_path(d), {"status": None, "message": "", "done": 0, "total": 0, "scene": None, "clips": []})
     for c in st["clips"]:
         if c.get("kind") == "music":
-            c["lane"] = sounddesign.MUSIC_LANE    # versões antigas tinham a música na faixa 2
+            c["lane"] = sounddesign.MUSIC_LANE    # versões antigas tinham menos faixas
+        elif c.get("kind") == "ambience":
+            c["lane"] = sounddesign.AMB_LANE
+        else:
+            c["lane"] = min(c.get("lane", 0), sounddesign.N_SFX_LANES - 1)
         c.setdefault("scene", 1)
     return st
 
@@ -149,12 +156,14 @@ def run_structure(d: Path, scene: int) -> None:
         sc = next((x for x in tl["scenes"] if x["n"] == scene), None)
         if not sc:
             raise RuntimeError("Cena não encontrada.")
-        planner, mood, note = "local", "", ""
+        planner, mood, note, reading = "local", "", "", []
         cues = []
         if ANTHROPIC_KEY:
             try:
-                plan = sounddesign.plan_claude(tl, sc, ANTHROPIC_KEY)
-                cues, mood, planner = plan["cues"], plan["mood"], "claude"
+                guide = sounddesign.load_guide(GUIDE_PATH)
+                notes = read_struct(d).get("notes", {}).get(str(scene), "")
+                plan = sounddesign.plan_claude(tl, sc, ANTHROPIC_KEY, guide, notes)
+                cues, mood, planner, reading = plan["cues"], plan["mood"], "claude", plan["reading"]
             except Exception as e:
                 traceback.print_exc()
                 note = f"O Claude não conseguiu planear ({e}). Usei as regras simples."
@@ -176,10 +185,15 @@ def run_structure(d: Path, scene: int) -> None:
                 st["clips"].append({**c, "id": f"c{nxt}", "scene": scene, "state": "a gerar", "peaks": [], "message": ""})
                 nxt += 1
             st.update(status="a gerar", next=nxt, total=len(cues), done=0, planner=planner, mood=mood, note=note)
+            st.setdefault("readings", {})[str(scene)] = reading
         update_struct(d, start)
-        for cid in [c["id"] for c in read_struct(d)["clips"] if c.get("scene") == scene and c["state"] == "a gerar"]:
+        todo = [c["id"] for c in read_struct(d)["clips"] if c.get("scene") == scene and c["state"] == "a gerar"]
+
+        def work(cid):
             gen_clip(d, cid)
             update_struct(d, lambda st: st.update(done=st["done"] + 1))
+        with ThreadPoolExecutor(max_workers=GEN_WORKERS) as pool:
+            list(pool.map(work, todo))
         update_struct(d, lambda st: st.update(status="pronto"))
     except Exception as e:
         traceback.print_exc()
@@ -368,6 +382,28 @@ def export_reaper(eid: str):
     return PlainTextResponse(rpp, headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
+# ---------- guia de sound design (editável) ----------
+@app.get("/api/sound-guide")
+def get_guide():
+    return {"text": sounddesign.load_guide(GUIDE_PATH), "custom": GUIDE_PATH.exists()}
+
+
+@app.put("/api/sound-guide")
+async def put_guide(request: Request):
+    body = await request.json()
+    text = str(body.get("text", "")).strip()
+    if not text:
+        raise HTTPException(400, "O guia não pode ficar vazio")
+    GUIDE_PATH.write_text(text[:30000], encoding="utf-8")
+    return {"ok": True}
+
+
+@app.delete("/api/sound-guide")
+def reset_guide():
+    GUIDE_PATH.unlink(missing_ok=True)
+    return {"ok": True}
+
+
 # ---------- Estrutura Plus ----------
 @app.get("/api/episodes/{eid}/structure")
 def get_structure(eid: str):
@@ -395,11 +431,13 @@ async def create_structure(eid: str, request: Request):
         raise HTTPException(400, "O servidor não tem a chave da ElevenLabs configurada (ELEVENLABS_API_KEY).")
     body = await request.json() if (await request.body()) else {}
     scene = int(body.get("scene") or 0)
+    notes = str(body.get("notes") or "")[:2000]
     if not any(sc["n"] == scene for sc in scenes_of(d, result)):
         raise HTTPException(400, "Escolhe uma cena")
     if read_struct(d).get("status") in {"a planear", "a gerar"}:
         raise HTTPException(409, "Já há sound design a ser criado")
-    update_struct(d, lambda st: st.update(status="a planear", message="", done=0, total=0, scene=scene))
+    update_struct(d, lambda st: (st.update(status="a planear", message="", done=0, total=0, scene=scene),
+                                 st.setdefault("notes", {}).__setitem__(str(scene), notes)))
     jobs.submit(run_structure, d, scene)
     return {"ok": True}
 

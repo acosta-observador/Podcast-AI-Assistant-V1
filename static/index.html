@@ -392,11 +392,11 @@ async function projectPage() {
 }
 
 /* ---------- Estrutura Plus ---------- */
-const ST = { id: null, data: null, scene: 0, sel: null, t: 0, v0: 0, v1: 60, playing: false, raf: 0, t0: 0, tBase: 0, audios: {}, poll: null, prev: null, zoom: 1, gz: 1 };
+const ST = { id: null, data: null, scene: 0, sel: null, t: 0, v0: 0, v1: 60, playing: false, raf: 0, t0: 0, tBase: 0, audios: {}, poll: null, prev: null, zoom: 1, gz: 1, draft: {} };
 const clock = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 const fmtT = s => { s = Math.max(0, s); const m = Math.floor(s / 60); return m + ':' + (s % 60).toFixed(1).padStart(4, '0'); };
 const running = st => st.status === 'a planear' || st.status === 'a gerar' || (st.clips || []).some(c => c.state === 'a gerar');
-const SFX_LANES = 4;
+const SFX_LANES = 5;
 
 async function estruturaPage(wanted) {
   try { S.list = await api('/api/episodes'); } catch { S.list = []; }
@@ -486,6 +486,8 @@ function renderStructure() {
       <div class="scn-bar">${chips}</div>
       ${st.note ? `<div class="errbox" style="margin:0 0 16px">${esc(st.note)}</div>` : ''}
       ${st.mood && st.planner === 'claude' ? `<p class="st-note" style="margin:0 0 12px">Claude, sobre a ${esc(st.scene ? 'cena ' + st.scene : 'cena')}: ${esc(st.mood)}</p>` : ''}
+      ${scene ? `<label class="field" style="margin:0 0 16px">Notas para o Claude sobre esta cena (opcional)
+        <input type="text" id="snote" maxlength="2000" value="${esc(ST.draft[scene.n] ?? ((st.notes || {})[String(scene.n)] || ''))}" placeholder="Ex.: os polícias NÃO bateram à porta; a cena passa-se de noite" ${S.demo ? 'disabled' : ''}></label>` : ''}
       <div class="card tl">
         <div class="tl-bar"><button class="play" id="tplay" aria-label="Ouvir" ${S.demo ? 'disabled' : ''}>${ST.playing ? I.stop : I.play}</button>
           <span class="tl-time" id="ttime">${fmtT(ST.t)}</span><span class="st-note">${esc(info)}</span><span style="flex:1"></span><span class="st-note" id="stnote">${esc(status)}</span>
@@ -495,13 +497,16 @@ function renderStructure() {
         <div class="tl-wrap">
           ${scnRow}
           <div class="tl-row" style="height:84px"><div class="tl-lbl">Narração<small>Takes</small></div><div class="tl-lane">${nar}</div></div>
-          ${Array.from({ length: SFX_LANES }, (_, k) => row(k, 'Efeitos ' + (k + 1), 'Sound design', 52)).join('')}
-          ${row(SFX_LANES, 'Música', 'Sound design', 52)}
+          ${Array.from({ length: SFX_LANES }, (_, k) => row(k, 'Efeitos ' + (k + 1), 'Sound design', 44)).join('')}
+          ${row(SFX_LANES, 'Ambiente', 'Sound design', 44)}
+          ${row(SFX_LANES + 1, 'Música', 'Sound design', 44)}
           <div class="tl-ov"><div class="tl-ph" id="ph" style="left:${pct(ST.t)}%"></div></div>
         </div>
         </div></div>
       </div>
       <div id="selcard"></div>
+      ${readingHTML(st, scene)}
+      <div id="guidebox"></div>
     </div>`);
 
   $app.querySelectorAll('[data-clip]').forEach(el => el.onclick = () => { ST.sel = el.dataset.clip; renderStructure(); });
@@ -522,12 +527,34 @@ function renderStructure() {
   }, { passive: false });
   card.addEventListener('gesturestart', e => { e.preventDefault(); ST.gz = ST.zoom; });
   card.addEventListener('gesturechange', e => { e.preventDefault(); applyZoom(ST.gz * e.scale, e.clientX); });
+  const sn = document.getElementById('snote'); if (sn) sn.oninput = () => { ST.draft[scene.n] = sn.value; };
   const cr = document.getElementById('create'); if (cr) cr.onclick = createStructure;
+  renderGuide();
   document.getElementById('exp').onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/structure`; };
   applyZoom(ST.zoom);
   sc.scrollLeft = keepLeft;
   requestAnimationFrame(() => { const r = document.getElementById('ruler'); if (r) r.innerHTML = ticksHTML(); });
   renderSelected();
+}
+
+function readingHTML(st, scene) {
+  const rd = scene && (st.readings || {})[String(scene.n)];
+  if (!rd || !rd.length) return '';
+  return `<details class="card" style="margin-top:20px;padding:16px 20px"><summary style="cursor:pointer;font-weight:600">O que o Claude percebeu nesta cena</summary>
+    ${rd.map(x => `<div style="margin-top:14px"><b style="font-size:13px;color:var(--muted)">BLOCO ${x.block}</b>
+      ${x.events.length ? `<p class="note" style="margin:4px 0">Acontece: ${x.events.map(esc).join(' · ')}</p>` : ''}
+      ${x.not_happening.length ? `<p class="note" style="margin:4px 0;color:var(--warn)">Não acontece (sem som): ${x.not_happening.map(esc).join(' · ')}</p>` : ''}</div>`).join('')}</details>`;
+}
+
+async function renderGuide() {
+  const box = document.getElementById('guidebox'); if (!box || S.demo) return;
+  let g; try { g = await api('/api/sound-guide'); } catch { return; }
+  box.innerHTML = `<details class="card" style="margin-top:20px;padding:16px 20px"><summary style="cursor:pointer;font-weight:600">Guia de sound design do Claude${g.custom ? ' (editado)' : ''}</summary>
+    <p class="note" style="margin:10px 0">É o método que o Claude segue em todas as cenas. Edita à vontade: densidade de sons, regras de leitura do texto, estilo, música.</p>
+    <textarea id="guidetxt" rows="16" style="width:100%;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:12px;font:inherit;font-size:14px;color:var(--text);resize:vertical">${esc(g.text)}</textarea>
+    <div style="display:flex;gap:8px;margin-top:10px"><button class="btn blue" id="gsave">Guardar guia</button><button class="btn" id="greset" ${g.custom ? '' : 'disabled'}>Repor o original</button><span class="note" id="gnote" style="align-self:center"></span></div></details>`;
+  document.getElementById('gsave').onclick = async () => { await api('/api/sound-guide', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: document.getElementById('guidetxt').value }) }).catch(showErr); document.getElementById('gnote').textContent = 'Guardado.'; };
+  document.getElementById('greset').onclick = async () => { if (!confirm('Repor o guia original? As tuas alterações perdem-se.')) return; await api('/api/sound-guide', { method: 'DELETE' }).catch(showErr); renderGuide(); };
 }
 
 function chooseScene(n) {
@@ -566,7 +593,7 @@ async function createStructure() {
   const sc = ST.data.timeline.scenes.find(x => x.n === ST.scene); if (!sc) return;
   if (ST.data.structure.clips.some(c => c.scene === sc.n) && !confirm(`Isto substitui os sons da ${sc.title} e gasta créditos da ElevenLabs (efeitos e música de fundo). Continuar?`)) return;
   stopStructure(true);
-  try { await api(`/api/episodes/${ST.id}/structure/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: sc.n }) }); } catch (e) { alert(e.message); return; }
+  try { await api(`/api/episodes/${ST.id}/structure/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: sc.n, notes: (document.getElementById('snote') || {}).value || '' }) }); } catch (e) { alert(e.message); return; }
   ST.sel = null; loadStructure();
 }
 
@@ -923,7 +950,7 @@ const Demo = {
     const bl = [[1, 0, 11.5], [2, 13, 26.5], [3, 28, 34.5], [4, 38.5, 47], [5, 48.5, 57.2]].map(([block, start, end], i) => ({ block, start, end, text: this.ep.result.blocks[i].text, peaks: pk(i * 5, Math.round((end - start) * 3)) }));
     const scenes = [{ n: 1, title: 'Cena 1', blocks: [1, 2, 3], start: 0, end: 34.5 }, { n: 2, title: 'Cena 2', blocks: [4, 5], start: 38.5, end: 57.2 }];
     const cl = [[0, 2, 5, 'Sino de igreja', 'sfx', 1, 1], [0, 14, 6.5, 'Terra a tremer', 'sfx', 2, 1], [1, 20.5, 6, 'Edifícios a ruir', 'sfx', 2, 1], [2, 23.5, 5, 'Multidão', 'sfx', 2, 1], [1, 28.5, 6, 'Ondas do mar', 'sfx', 3, 1],
-      [4, 0, 34.5, 'Música de fundo', 'music', 1, 1], [0, 40, 6, 'Fogo a crepitar', 'sfx', 4, 2], [4, 38.5, 18.7, 'Música de fundo', 'music', 4, 2]]
+      [6, 0, 34.5, 'Música de fundo', 'music', 1, 1], [0, 40, 6, 'Fogo a crepitar', 'sfx', 4, 2], [6, 38.5, 18.7, 'Música de fundo', 'music', 4, 2]]
       .map(([lane, start, dur, label, kind, block, scene], i) => ({ id: 'c' + (i + 1), lane, start, dur, label, kind, block, scene, prompt: 'Exemplo de descrição do som', state: 'gerado', message: '', peaks: pk(40 + i * 7, Math.round(dur * 3)) }));
     return { meta: this.ep.meta, ready: true, missing: [], structure: { status: 'pronto', message: '', done: 8, total: 8, scene: null, clips: cl }, timeline: { blocks: bl, segments: [], total: 57.2, scenes } };
   },
