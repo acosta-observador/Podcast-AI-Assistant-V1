@@ -19,6 +19,8 @@ from .pipeline import build_cuts
 from .script_parser import _is_direction
 from .text import tokenize
 
+ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5-5")
 SFX_URL = "https://api.elevenlabs.io/v1/sound-generation"
 MUSIC_URL = "https://api.elevenlabs.io/v1/music"
 N_SFX_LANES = 4
@@ -159,6 +161,33 @@ RULES = [
     (r"\b(janela|vidros?)\b", "Vidro a partir", "Glass breaking", 2),
     (r"\b(sussurro|sussurrou|segredo)\b", "Sussurros", "Quiet indistinct whispering in a room", 4),
 ]
+CLAUDE_SYSTEM = """És o sonoplasta de um podcast true crime em português (Podcast Plus, Observador).
+Tom: sombrio, misterioso, contido e realista. Recebes o guião de um episódio e trabalhas UMA cena de cada vez:
+os blocos marcados são a cena; os outros só dão contexto. Decide o sound design apenas dessa cena.
+Responde APENAS com JSON: {"mood": "uma frase sobre o clima da cena", "cues": [ ... ]}.
+
+Princípios:
+1. Percebe a cena (lugar, hora, emoção, o que está em jogo) antes de decidir.
+2. Menos é mais. Só pões um som quando acrescenta tensão, lugar ou ação. Deixa silêncio nas revelações
+   e nos momentos de emoção, para a voz respirar.
+3. Música é OPCIONAL. Há cenas que pedem só ambiente ou silêncio: nesses casos não ponhas música.
+   Quando pões, é uma cama de fundo discreta: lenta, sombria, minimalista (drones, piano esparso, cordas graves,
+   texturas), sem melodia marcante, sem percussão forte, que nunca compete com a voz. Pode entrar depois do início
+   da cena e sair antes do fim.
+4. Ambiente: camas de lugar (sala vazia, chuva, trânsito distante, corredor de tribunal, noite) quando a cena
+   precisa de situar o ouvinte.
+5. Efeitos: concretos e realistas, pelo que a narração descreve ou sugere (porta, passos, telefone, carro, tiro,
+   papéis, chaves, sirene). Nada de efeitos exagerados ou cómicos.
+6. No máximo 3 sons por bloco. Não repitas o mesmo som sem razão.
+
+Cada elemento de "cues":
+{"block": nº do bloco onde começa, "kind": "sfx" | "ambience" | "music", "label": nome curto em português (2 a 4 palavras),
+ "prompt": descrição EM INGLÊS para o gerador de áudio (concreta; para music: estilo, instrumentos, andamento, atmosfera;
+ sem nomes de artistas), "anchor": 3 a 6 palavras EXATAS do texto do bloco onde o som deve começar (em ambience e music
+ pode faltar: começa no início do bloco), "duration": segundos (sfx 1 a 8, ambience 5 a 40), "until_block": nº do bloco
+ onde acaba (só ambience e music), "gain": volume relativo de 0.1 a 1 (música e ambiente baixos, 0.2 a 0.5; efeitos 0.5 a 1)}."""
+MUSIC_SUFFIX = ", instrumental, no vocals, very subtle dark background underscore with low presence, leaves room for a spoken voice"
+AMBIENCE_SUFFIX = ", seamless ambient bed, no music, no speech"
 MUSIC_PROMPT = ("Subtle atmospheric instrumental underscore for a narrative documentary podcast, "
                 "low intensity, slow, understated, no vocals, leaves room for a spoken voice")
 MUSIC_PART = 120.0
@@ -197,6 +226,83 @@ def plan_local(tl: dict, span: tuple | None = None) -> list[dict]:
         cues.append({"kind": "music", "label": "Música de fundo", "prompt": MUSIC_PROMPT, "block": blk,
                      "start": round(t, 2), "dur": round(max(10.0, part), 2)})
         t += part
+    return cues
+
+
+def plan_claude(tl: dict, scene: dict, key: str) -> dict:
+    """O Claude lê a cena (com o resto do episódio como contexto) e decide sons, ambiente e música."""
+    ids = set(scene["blocks"])
+    parts = []
+    for b in tl["blocks"]:
+        if b["block"] in ids:
+            parts.append(f"[BLOCO {b['block']} | {b['start']:.1f}s a {b['end']:.1f}s | {b['end'] - b['start']:.1f}s]\n{b['text']}")
+        else:
+            parts.append(f"(bloco {b['block']}, fora desta cena: {b['text'][:160]}...)")
+    msg = (f"Cena a trabalhar: {scene['title']}, blocos {scene['blocks'][0]} a {scene['blocks'][-1]}, "
+           f"de {scene['start']:.1f}s a {scene['end']:.1f}s.\n\n" + "\n\n".join(parts))
+    body = {"model": ANTHROPIC_MODEL, "max_tokens": 3000, "system": CLAUDE_SYSTEM,
+            "messages": [{"role": "user", "content": msg}]}
+    r = httpx.post(ANTHROPIC_URL, json=body, timeout=120,
+                   headers={"x-api-key": key, "anthropic-version": "2023-06-01"})
+    if r.status_code != 200:
+        raise RuntimeError(f"A Anthropic devolveu {r.status_code}: {r.text[:300]}")
+    text = "".join(p.get("text", "") for p in r.json().get("content", []))
+    m = re.search(r"\{.*\}", text, re.S)
+    if not m:
+        raise RuntimeError("O Claude não devolveu JSON.")
+    data = json.loads(m.group(0))
+    return {"mood": str(data.get("mood", ""))[:200], "cues": cues_from_claude(data.get("cues", []), tl, scene)}
+
+
+def cues_from_claude(raw: list, tl: dict, scene: dict) -> list[dict]:
+    by = {b["block"]: b for b in tl["blocks"]}
+    ids = set(scene["blocks"])
+    cues = []
+
+    def add(kind, label, prompt, block, start, dur, gain):
+        cues.append({"kind": kind, "label": label, "prompt": prompt, "block": block,
+                     "start": round(start, 2), "dur": round(dur, 2), "gain": round(gain, 2)})
+
+    for c in raw[:40]:
+        try:
+            blk = int(c.get("block", 0))
+        except (TypeError, ValueError):
+            continue
+        b = by.get(blk)
+        kind = c.get("kind")
+        if blk not in ids or not b or kind not in ("sfx", "ambience", "music") or not c.get("prompt"):
+            continue
+        label, prompt = str(c.get("label", "Som"))[:40], str(c["prompt"])[:400]
+        try:
+            gain = max(0.05, min(1.0, float(c.get("gain", 0.8 if kind == "sfx" else 0.35))))
+        except (TypeError, ValueError):
+            gain = 0.8 if kind == "sfx" else 0.35
+        start, anchor = b["start"], _norm(str(c.get("anchor", "")).strip())
+        if anchor:
+            text = _norm(b["text"])
+            i = text.find(anchor)
+            if i >= 0:
+                start = b["start"] + (b["end"] - b["start"]) * i / max(1, len(text))
+                start = max(b["start"], start - 0.3)
+        start = min(start, b["end"] - 0.5)
+        if kind == "sfx":
+            try:
+                dur = max(0.5, min(10.0, float(c.get("duration", 3))))
+            except (TypeError, ValueError):
+                dur = 3.0
+            add("sfx", label, prompt, blk, start, dur, gain)
+            continue
+        end_b = by.get(int(c.get("until_block") or blk), b) if str(c.get("until_block") or blk).isdigit() else b
+        end = min(scene["end"], max(end_b["end"], start + 5))
+        chunk = 120.0 if kind == "music" else 20.0
+        suffix = MUSIC_SUFFIX if kind == "music" else AMBIENCE_SUFFIX
+        prompt = prompt.rstrip(". ") + suffix
+        t, k = start, 1
+        while t < end - 2:
+            d = min(chunk, end - t)
+            add(kind, label if k == 1 else f"{label} ({k})", prompt, blk, t, max(5.0, d), gain)
+            t += d
+            k += 1
     return cues
 
 

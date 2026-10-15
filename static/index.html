@@ -106,6 +106,7 @@ a{color:var(--accent);text-decoration:none}
 .clip.nar{background:var(--accent-soft);color:var(--accent)}
 .clip.sfx{background:rgba(255,159,10,.16);color:#c77700}
 .clip.mus{background:rgba(125,92,255,.14);color:#6b4cf0}
+.clip.amb{background:rgba(48,176,199,.16);color:#1d8a9c}
 .clip.sel{box-shadow:0 0 0 2px var(--accent)}
 .clip.gen{opacity:.55}.clip.err{background:var(--warn-soft);color:#d70015}
 .sel-card{margin-top:20px;padding:20px 22px;display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
@@ -459,7 +460,7 @@ function renderStructure() {
   const scene = tl.scenes.find(x => x.n === ST.scene), sceneClips = n => st.clips.filter(c => c.scene === n);
   const bars = (arr, n) => (arr && arr.length ? arr : Array(n).fill(30)).map(h => `<i style="height:${h}%"></i>`).join('');
   const nar = tl.blocks.filter(b => inView(b.start, b.end)).map(b => `<button class="clip nar" style="left:${pct(b.start)}%;width:${(b.end - b.start) / span * 100}%" data-seek="${b.start}" title="${esc(b.text)}"><span class="nm">Bloco ${b.block}</span><span class="bars">${bars(b.peaks, 8)}</span></button>`).join('');
-  const lane = k => st.clips.filter(c => c.lane === k && inView(c.start, c.start + c.dur)).map(c => `<button class="clip ${c.kind === 'music' ? 'mus' : 'sfx'} ${c.state === 'a gerar' ? 'gen' : ''} ${c.state === 'erro' ? 'err' : ''} ${ST.sel === c.id ? 'sel' : ''}" style="left:${pct(c.start)}%;width:${c.dur / span * 100}%" data-clip="${c.id}"><span class="nm">${esc(c.label)}${c.state === 'a gerar' ? ', a gerar…' : c.state === 'erro' ? ', erro' : ''}</span><span class="bars">${bars(c.peaks, 8)}</span></button>`).join('');
+  const lane = k => st.clips.filter(c => c.lane === k && inView(c.start, c.start + c.dur)).map(c => `<button class="clip ${c.kind === 'music' ? 'mus' : c.kind === 'ambience' ? 'amb' : 'sfx'} ${c.state === 'a gerar' ? 'gen' : ''} ${c.state === 'erro' ? 'err' : ''} ${ST.sel === c.id ? 'sel' : ''}" style="left:${pct(c.start)}%;width:${c.dur / span * 100}%" data-clip="${c.id}"><span class="nm">${esc(c.label)}${c.state === 'a gerar' ? ', a gerar…' : c.state === 'erro' ? ', erro' : ''}</span><span class="bars">${bars(c.peaks, 8)}</span></button>`).join('');
   const row = (k, name, sub, h) => `<div class="tl-row" style="height:${h}px"><div class="tl-lbl">${name}<small>${sub}</small></div><div class="tl-lane">${lane(k)}</div></div>`;
   const scnRow = ST.scene === 0 ? `<div class="tl-row" style="height:36px"><div class="tl-lbl">Cenas<small>Estrutura</small></div><div class="tl-lane">${tl.scenes.map(x => `<button class="clip scn" style="left:${pct(x.start)}%;width:${(x.end - x.start) / span * 100}%" data-scene="${x.n}">${esc(x.title)}</button>`).join('')}</div></div>` : '';
   const chips = `<button class="sc-chip ${ST.scene === 0 ? 'on' : ''}" data-scene="0">Todas</button>` + tl.scenes.map(x => `<button class="sc-chip ${ST.scene === x.n ? 'on' : ''}" data-scene="${x.n}">${esc(x.title)}${sceneClips(x.n).length ? I.check : ''}</button>`).join('');
@@ -483,6 +484,8 @@ function renderStructure() {
         </div></div>
       ${st.status === 'erro' ? `<div class="errbox" style="margin:0 0 16px">${esc(st.message)}</div>` : ''}
       <div class="scn-bar">${chips}</div>
+      ${st.note ? `<div class="errbox" style="margin:0 0 16px">${esc(st.note)}</div>` : ''}
+      ${st.mood && st.planner === 'claude' ? `<p class="st-note" style="margin:0 0 12px">Claude, sobre a ${esc(st.scene ? 'cena ' + st.scene : 'cena')}: ${esc(st.mood)}</p>` : ''}
       <div class="card tl">
         <div class="tl-bar"><button class="play" id="tplay" aria-label="Ouvir" ${S.demo ? 'disabled' : ''}>${ST.playing ? I.stop : I.play}</button>
           <span class="tl-time" id="ttime">${fmtT(ST.t)}</span><span class="st-note">${esc(info)}</span><span style="flex:1"></span><span class="st-note" id="stnote">${esc(status)}</span>
@@ -541,7 +544,7 @@ function renderSelected() {
   el.innerHTML = `<div class="card sel-card">
     <div style="flex:1 1 320px;min-width:0"><p class="section-t" style="margin:0 0 4px">Clip selecionado</p>
       <b style="font-size:19px;font-weight:600">${esc(c.label)}</b>
-      <p class="note" style="margin:2px 0 14px">${c.kind === 'music' ? 'Música' : 'Efeito'}, ${c.dur.toFixed(1).replace('.', ',')} s, cena ${c.scene}, bloco ${c.block} do guião${c.state === 'erro' ? `<br><span style="color:var(--warn)">${esc(c.message)}</span>` : ''}</p>
+      <p class="note" style="margin:2px 0 14px">${c.kind === 'music' ? 'Música' : c.kind === 'ambience' ? 'Ambiente' : 'Efeito'}, ${c.dur.toFixed(1).replace('.', ',')} s, cena ${c.scene}, bloco ${c.block} do guião${c.state === 'erro' ? `<br><span style="color:var(--warn)">${esc(c.message)}</span>` : ''}</p>
       <label class="field">Descrição do som (em inglês, é o que a ElevenLabs recebe)<textarea id="cprompt" rows="3" ${S.demo ? 'disabled' : ''}>${esc(c.prompt)}</textarea></label></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-self:flex-end">
       <button class="btn blue" id="cregen" ${S.demo || c.state === 'a gerar' ? 'disabled' : ''}>${I.spark}Regenerar</button>
@@ -602,7 +605,7 @@ function loopStructure() {
     } else if (!player.paused) player.pause();
     for (const c of ST.data.structure.clips) {
       const on = c.state === 'gerado' && t >= c.start && t < c.start + c.dur, a = ST.audios[c.id];
-      if (on && !a) { const x = ST.audios[c.id] = new Audio(`/api/episodes/${ST.id}/structure/clips/${c.id}/audio`); x.currentTime = t - c.start; x.volume = c.kind === 'music' ? .5 : 1; x.play().catch(() => {}); }
+      if (on && !a) { const x = ST.audios[c.id] = new Audio(`/api/episodes/${ST.id}/structure/clips/${c.id}/audio`); x.currentTime = t - c.start; x.volume = Math.min(1, c.gain ?? (c.kind === 'sfx' ? .8 : .4)); x.play().catch(() => {}); }
       else if (!on && a) { a.pause(); delete ST.audios[c.id]; }
     }
     movePlayhead();

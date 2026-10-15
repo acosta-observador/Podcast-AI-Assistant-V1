@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.getenv("DATA_DIR", ROOT / "data")) / "episodes"
 DATA.mkdir(parents=True, exist_ok=True)
 API_KEY = os.getenv("ELEVENLABS_API_KEY")
+ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 
 app = FastAPI(title="Podcast Plus AI Assistant")
@@ -148,8 +149,19 @@ def run_structure(d: Path, scene: int) -> None:
         sc = next((x for x in tl["scenes"] if x["n"] == scene), None)
         if not sc:
             raise RuntimeError("Cena não encontrada.")
-        part = {**tl, "blocks": [b for b in tl["blocks"] if b["block"] in sc["blocks"]]}
-        cues = sounddesign.plan_local(part, span=(sc["start"], sc["end"]))
+        planner, mood, note = "local", "", ""
+        cues = []
+        if ANTHROPIC_KEY:
+            try:
+                plan = sounddesign.plan_claude(tl, sc, ANTHROPIC_KEY)
+                cues, mood, planner = plan["cues"], plan["mood"], "claude"
+            except Exception as e:
+                traceback.print_exc()
+                note = f"O Claude não conseguiu planear ({e}). Usei as regras simples."
+        if not cues:
+            part = {**tl, "blocks": [b for b in tl["blocks"] if b["block"] in sc["blocks"]]}
+            cues = sounddesign.plan_local(part, span=(sc["start"], sc["end"]))
+            planner = "local"
         if not cues:
             raise RuntimeError("Não encontrei momentos para sound design nesta cena.")
         sounddesign.assign_lanes(cues)
@@ -163,7 +175,7 @@ def run_structure(d: Path, scene: int) -> None:
             for c in cues:
                 st["clips"].append({**c, "id": f"c{nxt}", "scene": scene, "state": "a gerar", "peaks": [], "message": ""})
                 nxt += 1
-            st.update(status="a gerar", next=nxt, total=len(cues), done=0)
+            st.update(status="a gerar", next=nxt, total=len(cues), done=0, planner=planner, mood=mood, note=note)
         update_struct(d, start)
         for cid in [c["id"] for c in read_struct(d)["clips"] if c.get("scene") == scene and c["state"] == "a gerar"]:
             gen_clip(d, cid)
@@ -220,7 +232,7 @@ def resume_unfinished():
 # ---------- API ----------
 @app.get("/health")
 def health():
-    return {"ok": True, "scribe": bool(API_KEY)}
+    return {"ok": True, "scribe": bool(API_KEY), "anthropic": bool(ANTHROPIC_KEY)}
 
 
 @app.get("/api/episodes")
@@ -369,7 +381,7 @@ def get_structure(eid: str):
     for b in tl["blocks"]:
         b["peaks"] = peaks.get(b["block"], [])
     return {"meta": read_json(d / "meta.json"), "structure": read_struct(d), "timeline": tl,
-            "ready": bool(API_KEY), "missing": [] if API_KEY else ["ELEVENLABS_API_KEY"]}
+            "ready": bool(API_KEY), "claude": bool(ANTHROPIC_KEY), "missing": [] if API_KEY else ["ELEVENLABS_API_KEY"]}
 
 
 @app.post("/api/episodes/{eid}/structure/create")
