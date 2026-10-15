@@ -4,6 +4,8 @@ As regras locais procuram no guião, já alinhado com os takes, as palavras que 
 (porta, tiro, comboio, mar...) e propõem uma cama de música. A ElevenLabs gera cada áudio.
 Tudo fica numa linha do tempo medida na montagem final, não na gravação original.
 """
+from __future__ import annotations
+
 import json
 import os
 import re
@@ -14,28 +16,90 @@ import httpx
 import numpy as np
 
 from .pipeline import build_cuts
+from .script_parser import _is_direction
+from .text import tokenize
 
 SFX_URL = "https://api.elevenlabs.io/v1/sound-generation"
 MUSIC_URL = "https://api.elevenlabs.io/v1/music"
-LANES = ("Efeitos 1", "Efeitos 2", "Música")
+N_SFX_LANES = 4
+MUSIC_LANE = N_SFX_LANES
+LANE_NAMES = tuple(f"Efeitos {i + 1}" for i in range(N_SFX_LANES)) + ("Música",)
+# pausas na linha do tempo da Estrutura Plus (a montagem do AutoTake continua com as suas)
+BLOCK_GAP = 1.5
+SCENE_GAP = 4.0
+SCENE_RE = re.compile(r"^[\[(#\s]*(cena|scene)\s*\d+", re.I)
+FALLBACK_SCENE_BLOCKS = 4
+
+# ---------- cenas ----------
+def _raw_items(path: Path) -> list[str]:
+    if path.suffix.lower() == ".docx":
+        import docx
+        return [p.text for p in docx.Document(str(path)).paragraphs]
+    text = path.read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
+    if re.search(r"\n\s*\n", text):
+        return [" ".join(c.split("\n")) for c in re.split(r"\n\s*\n", text)]
+    return text.split("\n")
+
+
+def scenes_for(script_path: Path, n_blocks: int) -> list[dict]:
+    """Cenas do episódio: linhas 'CENA 1', 'CENA 2'... no guião; sem elas, grupos de 4 blocos."""
+    starts, count = [], 0
+    try:
+        for item in _raw_items(script_path):
+            s = item.strip()
+            if SCENE_RE.match(s) and len(s) < 60:
+                starts.append(count + 1)
+            elif not _is_direction(s) and tokenize(s):
+                count += 1
+    except Exception:
+        starts = []
+    starts = sorted({x for x in starts if 1 <= x <= n_blocks})
+    if not starts:
+        starts = list(range(1, n_blocks + 1, FALLBACK_SCENE_BLOCKS))
+    elif starts[0] != 1:
+        starts.insert(0, 1)
+    out = []
+    for i, st in enumerate(starts):
+        end = (starts[i + 1] - 1) if i + 1 < len(starts) else n_blocks
+        out.append({"n": i + 1, "title": f"Cena {i + 1}", "blocks": list(range(st, end + 1))})
+    return out
+
 
 # ---------- linha do tempo da montagem ----------
-def timeline(result: dict, selections: dict) -> dict:
-    """Posição de cada bloco e de cada corte na montagem final (segundos)."""
+def timeline(result: dict, selections: dict, scenes: list[dict] | None = None) -> dict:
+    """Posição de cada bloco e de cada corte na linha do tempo (segundos).
+
+    Entre blocos há uma pausa maior do que na montagem do AutoTake, e maior ainda entre cenas.
+    """
     cuts = build_cuts(result, selections)
     texts = {b["index"]: b["text"] for b in result["blocks"]}
-    pos, spans, segs = 0.0, {}, []
-    for c in cuts:
+    scene_first = {sc["blocks"][0] for sc in (scenes or [])}
+    pos, spans, segs, gaps = 0.0, {}, [], {}
+    for k, c in enumerate(cuts):
         length = c["end"] - c["start"]
         sp = spans.setdefault(c["block"], [pos, pos])
         segs.append({"start": round(pos, 3), "end": round(pos + length, 3),
                      "src": round(c["start"], 3), "block": c["block"]})
         pos += length
         sp[1] = pos
-        pos += c["gap_after"]
+        last = k == len(cuts) - 1 or cuts[k + 1]["block"] != c["block"]
+        if last:
+            nxt = cuts[k + 1]["block"] if k + 1 < len(cuts) else None
+            gap = 0.0 if nxt is None else (SCENE_GAP if nxt in scene_first else BLOCK_GAP)
+            gaps[c["block"]] = gap
+            pos += gap
+        else:
+            pos += c["gap_after"]
     blocks = [{"block": i, "start": round(s, 3), "end": round(e, 3), "text": texts[i]}
               for i, (s, e) in sorted(spans.items())]
-    return {"blocks": blocks, "segments": segs, "total": round(pos, 3)}
+    by_block = {b["block"]: b for b in blocks}
+    sc_out = []
+    for sc in scenes or []:
+        bs = [by_block[i] for i in sc["blocks"] if i in by_block]
+        if bs:
+            sc_out.append({"n": sc["n"], "title": sc["title"], "blocks": [b["block"] for b in bs],
+                           "start": bs[0]["start"], "end": bs[-1]["end"]})
+    return {"blocks": blocks, "segments": segs, "total": round(pos, 3), "gaps": gaps, "scenes": sc_out}
 
 
 def narration_peaks(env: np.ndarray, blocks: list[dict], segments: list[dict], n_per_sec: float = 3.0) -> dict:
@@ -107,7 +171,7 @@ def _norm(t: str) -> str:
     return unicodedata.normalize("NFKD", t).encode("ascii", "ignore").decode().lower()
 
 
-def plan_local(tl: dict) -> list[dict]:
+def plan_local(tl: dict, span: tuple | None = None) -> list[dict]:
     """Escolhe os sons sem LLM: procura palavras-chave no texto de cada bloco e põe uma cama de música."""
     cues, last = [], {}
     for b in tl["blocks"]:
@@ -125,8 +189,8 @@ def plan_local(tl: dict) -> list[dict]:
             last[k] = start
             cues.append({"kind": "sfx", "label": label, "prompt": prompt, "block": b["block"],
                          "start": round(start, 2), "dur": float(dur)})
-    t, first = 0.0, tl["blocks"][0]["block"] if tl["blocks"] else 1
-    total = tl["total"]
+    t, first = (span[0] if span else 0.0), tl["blocks"][0]["block"] if tl["blocks"] else 1
+    total = span[1] if span else tl["total"]
     while t < total - 3:
         part = min(MUSIC_PART, total - t)
         blk = next((b["block"] for b in tl["blocks"] if b["end"] > t), first)
@@ -137,12 +201,14 @@ def plan_local(tl: dict) -> list[dict]:
 
 
 def assign_lanes(cues: list[dict]) -> None:
-    busy: dict[int, list[tuple[float, float]]] = {0: [], 1: [], 2: []}
+    busy: dict[int, list[tuple[float, float]]] = {k: [] for k in range(N_SFX_LANES + 1)}
     for c in sorted(cues, key=lambda x: x["start"]):
         if c["kind"] == "music":
-            c["lane"] = 2
+            c["lane"] = MUSIC_LANE
         else:
-            c["lane"] = 0 if all(c["start"] >= e or c["start"] + c["dur"] <= s for s, e in busy[0]) else 1
+            c["lane"] = next((k for k in range(N_SFX_LANES)
+                              if all(c["start"] >= e or c["start"] + c["dur"] <= s0 for s0, e in busy[k])),
+                             N_SFX_LANES - 1)
         busy[c["lane"]].append((c["start"], c["start"] + c["dur"]))
 
 

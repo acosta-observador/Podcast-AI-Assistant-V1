@@ -92,7 +92,7 @@ a{color:var(--accent);text-decoration:none}
 .tl-row:last-child{border-bottom:0}
 .tl-lbl{position:sticky;left:0;z-index:3;background:var(--card);width:170px;flex:none;padding:0 14px;display:flex;flex-direction:column;justify-content:center;gap:2px;font-size:14px;font-weight:600}
 .tl-lbl small{font-size:12px;color:var(--muted);font-weight:400}
-.tl-lane{position:relative;flex:1;min-width:0;border-left:1px solid var(--line)}
+.tl-lane{position:relative;flex:1;min-width:0;border-left:1px solid var(--line);overflow:hidden}
 .tl-ruler{height:30px;background:var(--panel);cursor:pointer}
 .tl-lbl.rl{background:var(--panel)}
 .tl-ruler span{position:absolute;top:7px;padding-left:6px;font-size:11px;color:var(--muted);border-left:1px solid var(--faint);height:16px;line-height:14px;font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -110,6 +110,13 @@ a{color:var(--accent);text-decoration:none}
 .clip.gen{opacity:.55}.clip.err{background:var(--warn-soft);color:#d70015}
 .sel-card{margin-top:20px;padding:20px 22px;display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
 .sel-card textarea{width:100%;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:10px 12px;font:inherit;font-size:15px;color:var(--text);resize:vertical}
+.scn-bar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
+.sc-chip{height:34px;padding:0 14px;border-radius:980px;background:var(--panel);font-size:14px;font-weight:500;display:inline-flex;align-items:center;gap:6px;color:var(--text)}
+.sc-chip:hover{background:var(--hover)}
+.sc-chip.on{background:var(--accent);color:#fff}
+.sc-chip svg{width:12px;height:12px;color:var(--ok)}.sc-chip.on svg{color:#fff}
+.clip.scn{background:var(--panel);color:var(--text);justify-content:center;align-items:center;text-align:center;top:4px;bottom:4px}
+.epsel{height:34px;border-radius:980px;border:1px solid var(--line);background:var(--card);padding:0 12px;font:inherit;font-size:14px;color:var(--text);max-width:100%}
 .st-note{font-size:13px;color:var(--muted)}
 
 /* barra de topo */
@@ -304,7 +311,8 @@ async function route() {
   if (m) return openEpisode(m[1]);
   if (location.hash === '#/projeto') return projectPage();
   if (location.hash === '#/autotake') return home();
-  if (location.hash === '#/estrutura') return estruturaPage();
+  const me = location.hash.match(/^#\/estrutura(?:\/([\w-]+))?$/);
+  if (me) return estruturaPage(me[1]);
   return projectsPage();
 }
 
@@ -383,40 +391,53 @@ async function projectPage() {
 }
 
 /* ---------- Estrutura Plus ---------- */
-const ST = { id: null, data: null, sel: null, t: 0, total: 60, playing: false, raf: 0, t0: 0, tBase: 0, audios: {}, poll: null, prev: null, busy: false, zoom: 1, gz: 1 };
+const ST = { id: null, data: null, scene: 0, sel: null, t: 0, v0: 0, v1: 60, playing: false, raf: 0, t0: 0, tBase: 0, audios: {}, poll: null, prev: null, zoom: 1, gz: 1 };
+const clock = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 const fmtT = s => { s = Math.max(0, s); const m = Math.floor(s / 60); return m + ':' + (s % 60).toFixed(1).padStart(4, '0'); };
 const running = st => st.status === 'a planear' || st.status === 'a gerar' || (st.clips || []).some(c => c.state === 'a gerar');
+const SFX_LANES = 4;
 
-async function estruturaPage() {
+async function estruturaPage(wanted) {
   try { S.list = await api('/api/episodes'); } catch { S.list = []; }
-  const ready = S.list.find(e => e.state?.status === 'pronto');
-  if (!ready) {
+  const ready = S.list.filter(e => e.state?.status === 'pronto');
+  if (!ready.length) {
     $app.innerHTML = shell('estrutura', `<div class="wrap"><h1 class="page-t">Estrutura Plus</h1>
       <p class="page-s" style="margin-bottom:32px">Cria a estrutura de sound design do episódio a partir do guião.</p>
       <div class="card empty">Ainda não há nenhum episódio processado.<br>Carrega a gravação e o guião no <a href="#/autotake">AutoTake</a> primeiro.</div></div>`);
     return;
   }
-  ST.id = ready.id; ST.sel = null; ST.t = 0;
+  const pick = ready.find(e => e.id === wanted) || ready.find(e => e.id === ST.id) || ready[0];
+  if (ST.id !== pick.id) { ST.id = pick.id; ST.scene = null; ST.sel = null; ST.zoom = 1; }
   if (!S.demo) player.src = `/api/episodes/${ST.id}/audio`;
   await loadStructure();
 }
 
-async function loadStructure(keepScroll) {
+function setView() {
+  const d = ST.data, tl = d.timeline, sc = tl.scenes.find(x => x.n === ST.scene);
+  const ends = d.structure.clips.filter(c => !sc || c.scene === sc.n).map(c => c.start + c.dur);
+  if (sc) { ST.v0 = Math.max(0, sc.start - 1); ST.v1 = Math.max(sc.end, ...ends) + 1; }
+  else { ST.v0 = 0; ST.v1 = Math.max(10, Math.ceil(Math.max(tl.total, ...ends) / 10) * 10); }
+  ST.t = Math.min(ST.v1, Math.max(ST.v0, ST.t));
+}
+
+async function loadStructure() {
   clearTimeout(ST.poll);
   try { ST.data = await api(`/api/episodes/${ST.id}/structure`); }
   catch (e) { $app.innerHTML = shell('estrutura', `<div class="wrap"><div class="errbox">${esc(e.message)}</div></div>`); return; }
-  const d = ST.data, ends = d.structure.clips.map(c => c.start + c.dur);
-  ST.total = Math.max(10, Math.ceil(Math.max(d.timeline.total, ...ends) / 10) * 10);
+  const scenes = ST.data.timeline.scenes;
+  if (ST.scene === null || (ST.scene !== 0 && !scenes.some(x => x.n === ST.scene))) ST.scene = scenes.length ? scenes[0].n : 0;
+  setView();
   renderStructure();
-  if (running(d.structure)) ST.poll = setTimeout(() => loadStructure(), 2500);
+  if (running(ST.data.structure)) ST.poll = setTimeout(() => loadStructure(), 2500);
 }
 
 function ticksHTML() {
-  const sc = document.getElementById('tlscroll'), T = ST.total;
-  const lane = ((sc ? sc.clientWidth : Math.max(500, window.innerWidth - 560)) - 170) * ST.zoom, pps = lane / T;
-  const step = [1, 2, 5, 10, 15, 30, 60, 120, 300].find(x => x * pps >= 70) || 300;
-  return Array.from({ length: Math.floor(T / step) + 1 }, (_, i) => { const s = i * step;
-    return `<span style="left:${(s / T * 100).toFixed(3)}%">${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}</span>`; }).join('');
+  const sc = document.getElementById('tlscroll'), span = ST.v1 - ST.v0;
+  const w = sc && sc.clientWidth > 300 ? sc.clientWidth : Math.max(600, window.innerWidth - 300);
+  const lane = (w - 170) * ST.zoom, pps = lane / span;
+  const step = [1, 2, 5, 10, 15, 30, 60, 120, 300].find(x => x * pps >= 70) || 300, out = [];
+  for (let t = Math.ceil(ST.v0 / step) * step; t <= ST.v1; t += step) out.push(`<span style="left:${((t - ST.v0) / span * 100).toFixed(3)}%">${clock(t)}</span>`);
+  return out.join('');
 }
 
 function applyZoom(z, clientX) {
@@ -433,38 +454,46 @@ function applyZoom(z, clientX) {
 
 function renderStructure() {
   const oldSc = document.getElementById('tlscroll'), keepLeft = oldSc ? oldSc.scrollLeft : 0;
-  const d = ST.data, st = d.structure, tl = d.timeline, T = ST.total, pct = x => (x / T * 100).toFixed(3);
+  const d = ST.data, st = d.structure, tl = d.timeline, v0 = ST.v0, span = ST.v1 - ST.v0;
+  const pct = x => ((x - v0) / span * 100).toFixed(3), inView = (a, b) => b > v0 && a < ST.v1;
+  const scene = tl.scenes.find(x => x.n === ST.scene), sceneClips = n => st.clips.filter(c => c.scene === n);
   const bars = (arr, n) => (arr && arr.length ? arr : Array(n).fill(30)).map(h => `<i style="height:${h}%"></i>`).join('');
-  const nar = tl.blocks.map(b => `<button class="clip nar" style="left:${pct(b.start)}%;width:${pct(b.end - b.start)}%" data-seek="${b.start}" title="${esc(b.text)}"><span class="nm">Bloco ${b.block}</span><span class="bars">${bars(b.peaks, 8)}</span></button>`).join('');
-  const lane = k => st.clips.filter(c => c.lane === k).map(c => `<button class="clip ${c.kind === 'music' ? 'mus' : 'sfx'} ${c.state === 'a gerar' ? 'gen' : ''} ${c.state === 'erro' ? 'err' : ''} ${ST.sel === c.id ? 'sel' : ''}" style="left:${pct(c.start)}%;width:${pct(c.dur)}%" data-clip="${c.id}"><span class="nm">${esc(c.label)}${c.state === 'a gerar' ? ', a gerar…' : c.state === 'erro' ? ', erro' : ''}</span><span class="bars">${bars(c.peaks, 8)}</span></button>`).join('');
-  const ticks = ticksHTML();
-  const busy = running(st), n = st.clips.length;
-  const status = d.missing.length ? `Faltam chaves no servidor: ${d.missing.join(', ')}.`
-    : st.status === 'a planear' ? 'A ler o guião e a planear os sons…'
-    : st.status === 'a gerar' ? `A gerar sons, ${st.done} de ${st.total}…`
-    : n ? `${st.clips.filter(c => c.state === 'gerado').length} de ${n} sons gerados a partir do guião` : 'Carrega em Create para gerar o sound design a partir do guião.';
-  const hasAudio = !S.demo && n;
+  const nar = tl.blocks.filter(b => inView(b.start, b.end)).map(b => `<button class="clip nar" style="left:${pct(b.start)}%;width:${(b.end - b.start) / span * 100}%" data-seek="${b.start}" title="${esc(b.text)}"><span class="nm">Bloco ${b.block}</span><span class="bars">${bars(b.peaks, 8)}</span></button>`).join('');
+  const lane = k => st.clips.filter(c => c.lane === k && inView(c.start, c.start + c.dur)).map(c => `<button class="clip ${c.kind === 'music' ? 'mus' : 'sfx'} ${c.state === 'a gerar' ? 'gen' : ''} ${c.state === 'erro' ? 'err' : ''} ${ST.sel === c.id ? 'sel' : ''}" style="left:${pct(c.start)}%;width:${c.dur / span * 100}%" data-clip="${c.id}"><span class="nm">${esc(c.label)}${c.state === 'a gerar' ? ', a gerar…' : c.state === 'erro' ? ', erro' : ''}</span><span class="bars">${bars(c.peaks, 8)}</span></button>`).join('');
+  const row = (k, name, sub, h) => `<div class="tl-row" style="height:${h}px"><div class="tl-lbl">${name}<small>${sub}</small></div><div class="tl-lane">${lane(k)}</div></div>`;
+  const scnRow = ST.scene === 0 ? `<div class="tl-row" style="height:36px"><div class="tl-lbl">Cenas<small>Estrutura</small></div><div class="tl-lane">${tl.scenes.map(x => `<button class="clip scn" style="left:${pct(x.start)}%;width:${(x.end - x.start) / span * 100}%" data-scene="${x.n}">${esc(x.title)}</button>`).join('')}</div></div>` : '';
+  const chips = `<button class="sc-chip ${ST.scene === 0 ? 'on' : ''}" data-scene="0">Todas</button>` + tl.scenes.map(x => `<button class="sc-chip ${ST.scene === x.n ? 'on' : ''}" data-scene="${x.n}">${esc(x.title)}${sceneClips(x.n).length ? I.check : ''}</button>`).join('');
+  const epOpts = S.list.map(e => `<option value="${e.id}" ${e.id === ST.id ? 'selected' : ''} ${e.state?.status === 'pronto' ? '' : 'disabled'}>${esc(e.title)}${e.state?.status === 'pronto' ? '' : ' (a processar)'}</option>`).join('');
+  const busy = running(st), n = st.clips.length, mySc = scene ? sceneClips(scene.n).length : 0;
+  const status = d.missing.length ? `Falta a chave no servidor: ${d.missing.join(', ')}.`
+    : st.status === 'a planear' ? `A ler o guião da cena ${st.scene}…`
+    : st.status === 'a gerar' ? `A gerar sons da cena ${st.scene}, ${st.done} de ${st.total}…`
+    : scene ? (mySc ? `${sceneClips(scene.n).filter(c => c.state === 'gerado').length} de ${mySc} sons gerados nesta cena` : `${scene.title} ainda não tem sound design. Carrega em Create.`)
+    : `${n} sons em ${tl.scenes.filter(x => sceneClips(x.n).length).length} de ${tl.scenes.length} cenas`;
+  const info = scene ? `${scene.title}, blocos ${scene.blocks[0]} a ${scene.blocks[scene.blocks.length - 1]}, ${clock(scene.start)} a ${clock(scene.end)}` : '';
 
   $app.innerHTML = shell('estrutura', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios e não há áudio nem geração.</div>' : ''}
     <div class="wrap">
       <div class="ep-head"><div><h1 class="page-t">Estrutura Plus</h1>
-        <p class="page-s">Cria a estrutura de sound design do episódio a partir do guião: efeitos e música em faixas por baixo dos takes.</p></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <p class="page-s">Cria o sound design do episódio cena a cena: efeitos e música em faixas por baixo dos takes.</p></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <select class="epsel" id="epsel" aria-label="Episódio">${epOpts}</select>
           <button class="btn" id="exp" ${S.demo || !n ? 'disabled' : ''}>${I.dl}Exportar Reaper</button>
-          <button class="btn blue" id="create" ${S.demo || busy || d.missing.length ? 'disabled' : ''}>${I.spark}${busy ? 'A criar…' : 'Create'}</button>
+          ${scene ? `<button class="btn blue" id="create" ${S.demo || busy || d.missing.length ? 'disabled' : ''}>${I.spark}${busy ? 'A criar…' : `Create · ${esc(scene.title)}`}</button>` : ''}
         </div></div>
       ${st.status === 'erro' ? `<div class="errbox" style="margin:0 0 16px">${esc(st.message)}</div>` : ''}
+      <div class="scn-bar">${chips}</div>
       <div class="card tl">
         <div class="tl-bar"><button class="play" id="tplay" aria-label="Ouvir" ${S.demo ? 'disabled' : ''}>${ST.playing ? I.stop : I.play}</button>
-          <span class="tl-time" id="ttime">${fmtT(ST.t)}</span><span style="flex:1"></span><span class="st-note" id="stnote">${esc(status)}</span>
+          <span class="tl-time" id="ttime">${fmtT(ST.t)}</span><span class="st-note">${esc(info)}</span><span style="flex:1"></span><span class="st-note" id="stnote">${esc(status)}</span>
           <button class="chip" id="zout" aria-label="Menos zoom">−</button><span class="st-note" id="zlbl" style="min-width:38px;text-align:center">${Math.round(ST.zoom * 100)}%</span><button class="chip" id="zin" aria-label="Mais zoom">+</button></div>
         <div class="tl-scroll" id="tlscroll"><div class="tl-inner" id="tlinner" style="width:calc(170px + (100% - 170px) * ${ST.zoom})">
-        <div class="tl-row"><div class="tl-lbl rl" style="height:30px"></div><div class="tl-lane tl-ruler" id="ruler">${ticks}</div></div>
+        <div class="tl-row"><div class="tl-lbl rl" style="height:30px"></div><div class="tl-lane tl-ruler" id="ruler">${ticksHTML()}</div></div>
         <div class="tl-wrap">
+          ${scnRow}
           <div class="tl-row" style="height:84px"><div class="tl-lbl">Narração<small>Takes</small></div><div class="tl-lane">${nar}</div></div>
-          <div class="tl-row" style="height:56px"><div class="tl-lbl">Efeitos 1<small>Sound design</small></div><div class="tl-lane">${lane(0)}</div></div>
-          <div class="tl-row" style="height:56px"><div class="tl-lbl">Efeitos 2<small>Sound design</small></div><div class="tl-lane">${lane(1)}</div></div>
-          <div class="tl-row" style="height:56px"><div class="tl-lbl">Música<small>Sound design</small></div><div class="tl-lane">${lane(2)}</div></div>
+          ${Array.from({ length: SFX_LANES }, (_, k) => row(k, 'Efeitos ' + (k + 1), 'Sound design', 52)).join('')}
+          ${row(SFX_LANES, 'Música', 'Sound design', 52)}
           <div class="tl-ov"><div class="tl-ph" id="ph" style="left:${pct(ST.t)}%"></div></div>
         </div>
         </div></div>
@@ -474,20 +503,35 @@ function renderStructure() {
 
   $app.querySelectorAll('[data-clip]').forEach(el => el.onclick = () => { ST.sel = el.dataset.clip; renderStructure(); });
   $app.querySelectorAll('[data-seek]').forEach(el => el.onclick = () => seekStructure(+el.dataset.seek));
-  document.getElementById('ruler').onclick = e => { const r = e.currentTarget.getBoundingClientRect(); seekStructure((e.clientX - r.left) / r.width * ST.total); };
+  $app.querySelectorAll('[data-scene]').forEach(el => el.onclick = () => chooseScene(+el.dataset.scene));
+  document.getElementById('epsel').onchange = e => { stopStructure(true); location.hash = '#/estrutura/' + e.target.value; };
+  document.getElementById('ruler').onclick = e => { const r = e.currentTarget.getBoundingClientRect(); seekStructure(ST.v0 + (e.clientX - r.left) / r.width * span); };
   document.getElementById('tplay').onclick = playStructure;
   const sc = document.getElementById('tlscroll'); sc.scrollLeft = keepLeft;
   document.getElementById('zin').onclick = () => applyZoom(ST.zoom * 1.5);
   document.getElementById('zout').onclick = () => applyZoom(ST.zoom / 1.5);
   const card = sc.closest('.tl');
-  card.addEventListener('wheel', e => { if (e.ctrlKey) { e.preventDefault(); applyZoom(ST.zoom * Math.exp(-e.deltaY * 0.012), e.clientX); } }, { passive: false });
+  /* roda do rato: zoom; shift+roda ou deslize horizontal: mover; pinch: zoom */
+  card.addEventListener('wheel', e => {
+    if (e.ctrlKey || (!e.shiftKey && Math.abs(e.deltaY) > Math.abs(e.deltaX))) {
+      e.preventDefault(); applyZoom(ST.zoom * Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0035)), e.clientX);
+    }
+  }, { passive: false });
   card.addEventListener('gesturestart', e => { e.preventDefault(); ST.gz = ST.zoom; });
   card.addEventListener('gesturechange', e => { e.preventDefault(); applyZoom(ST.gz * e.scale, e.clientX); });
+  const cr = document.getElementById('create'); if (cr) cr.onclick = createStructure;
+  document.getElementById('exp').onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/structure`; };
   applyZoom(ST.zoom);
   sc.scrollLeft = keepLeft;
-  document.getElementById('create').onclick = createStructure;
-  document.getElementById('exp').onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/structure`; };
+  requestAnimationFrame(() => { const r = document.getElementById('ruler'); if (r) r.innerHTML = ticksHTML(); });
   renderSelected();
+}
+
+function chooseScene(n) {
+  stopStructure(true); ST.scene = n; ST.sel = null; ST.zoom = 1; ST.t = 0;
+  setView(); ST.t = ST.v0;
+  const sc = document.getElementById('tlscroll'); if (sc) sc.scrollLeft = 0;
+  renderStructure();
 }
 
 function renderSelected() {
@@ -497,7 +541,7 @@ function renderSelected() {
   el.innerHTML = `<div class="card sel-card">
     <div style="flex:1 1 320px;min-width:0"><p class="section-t" style="margin:0 0 4px">Clip selecionado</p>
       <b style="font-size:19px;font-weight:600">${esc(c.label)}</b>
-      <p class="note" style="margin:2px 0 14px">${c.kind === 'music' ? 'Música' : 'Efeito'}, ${c.dur.toFixed(1).replace('.', ',')} s, gerado a partir do bloco ${c.block} do guião${c.state === 'erro' ? `<br><span style="color:var(--warn)">${esc(c.message)}</span>` : ''}</p>
+      <p class="note" style="margin:2px 0 14px">${c.kind === 'music' ? 'Música' : 'Efeito'}, ${c.dur.toFixed(1).replace('.', ',')} s, cena ${c.scene}, bloco ${c.block} do guião${c.state === 'erro' ? `<br><span style="color:var(--warn)">${esc(c.message)}</span>` : ''}</p>
       <label class="field">Descrição do som (em inglês, é o que a ElevenLabs recebe)<textarea id="cprompt" rows="3" ${S.demo ? 'disabled' : ''}>${esc(c.prompt)}</textarea></label></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-self:flex-end">
       <button class="btn blue" id="cregen" ${S.demo || c.state === 'a gerar' ? 'disabled' : ''}>${I.spark}Regenerar</button>
@@ -516,28 +560,28 @@ function renderSelected() {
 }
 
 async function createStructure() {
-  const n = ST.data.structure.clips.length;
-  if (n && !confirm('Isto substitui os sons que já existem e gasta créditos da ElevenLabs (efeitos e música de fundo). Continuar?')) return;
-  stopStructure();
-  try { await api(`/api/episodes/${ST.id}/structure/create`, { method: 'POST' }); } catch (e) { alert(e.message); return; }
+  const sc = ST.data.timeline.scenes.find(x => x.n === ST.scene); if (!sc) return;
+  if (ST.data.structure.clips.some(c => c.scene === sc.n) && !confirm(`Isto substitui os sons da ${sc.title} e gasta créditos da ElevenLabs (efeitos e música de fundo). Continuar?`)) return;
+  stopStructure(true);
+  try { await api(`/api/episodes/${ST.id}/structure/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: sc.n }) }); } catch (e) { alert(e.message); return; }
   ST.sel = null; loadStructure();
 }
 
 /* transporte: narração (takes escolhidos) e sons, sincronizados pelo relógio */
 function seekStructure(t) {
-  ST.t = Math.max(0, Math.min(ST.total, t));
+  ST.t = Math.max(ST.v0, Math.min(ST.v1, t));
   if (ST.playing) { ST.tBase = ST.t; ST.t0 = performance.now(); stopClips(); }
   movePlayhead();
 }
 function movePlayhead() {
   const ph = document.getElementById('ph'), tt = document.getElementById('ttime');
-  if (ph) ph.style.left = (ST.t / ST.total * 100) + '%';
+  if (ph) ph.style.left = ((ST.t - ST.v0) / (ST.v1 - ST.v0) * 100) + '%';
   if (tt) tt.textContent = fmtT(ST.t);
 }
 function stopClips() { for (const k in ST.audios) ST.audios[k].pause(); ST.audios = {}; }
 function playStructure() {
   if (ST.playing) return stopStructure(true);
-  if (ST.t >= ST.total - 0.05) ST.t = 0;
+  if (ST.t >= ST.v1 - 0.05 || ST.t < ST.v0) ST.t = ST.v0;
   ST.playing = true; ST.tBase = ST.t; ST.t0 = performance.now(); ST.prev?.pause();
   document.getElementById('tplay').innerHTML = I.stop; loopStructure();
 }
@@ -550,7 +594,7 @@ function loopStructure() {
   ST.raf = requestAnimationFrame(() => {
     if (!ST.playing) return;
     const t = ST.t = ST.tBase + (performance.now() - ST.t0) / 1000;
-    if (t >= ST.total) { ST.t = ST.total; stopStructure(true); movePlayhead(); return; }
+    if (t >= ST.v1) { ST.t = ST.v1; stopStructure(true); movePlayhead(); return; }
     const seg = ST.data.timeline.segments.find(s => t >= s.start && t < s.end);
     if (seg) {
       const want = seg.src + (t - seg.start);
@@ -564,7 +608,7 @@ function loopStructure() {
     movePlayhead();
     const sc = document.getElementById('tlscroll');
     if (sc && ST.zoom > 1) {
-      const px = 170 + ST.t / ST.total * (sc.scrollWidth - 170);
+      const px = 170 + (ST.t - ST.v0) / (ST.v1 - ST.v0) * (sc.scrollWidth - 170);
       if (px > sc.scrollLeft + sc.clientWidth - 40 || px < sc.scrollLeft + 170) sc.scrollLeft = px - 170 - 60;
     }
     loopStructure();
@@ -873,11 +917,12 @@ const Demo = {
   },
   structure() {
     const pk = (seed, n) => Array.from({ length: n }, (_, i) => 18 + Math.round(Math.abs(Math.sin((i + seed) * .7) * Math.cos((i + seed) * .23 + 1)) * 78));
-    const bl = [[1, 0, 11.5], [2, 12.5, 26], [3, 27, 33.5], [4, 34.5, 43], [5, 44, 52.7]].map(([block, start, end], i) => ({ block, start, end, text: this.ep.result.blocks[i].text, peaks: pk(i * 5, Math.round((end - start) * 3)) }));
-    const cl = [[0, 2, 5, 'Sino de igreja', 'sfx', 1], [0, 12.5, 6.5, 'Terra a tremer', 'sfx', 2], [0, 19.5, 6, 'Edifícios a ruir', 'sfx', 2], [0, 35, 8, 'Fogo a crepitar', 'sfx', 4],
-      [1, 22, 6, 'Multidão a gritar', 'sfx', 2], [1, 28.5, 5.5, 'Ondas do mar', 'sfx', 3], [2, 0, 30, 'Tema de tensão', 'music', 1], [2, 43.5, 9.2, 'Tema final', 'music', 5]]
-      .map(([lane, start, dur, label, kind, block], i) => ({ id: 'c' + (i + 1), lane, start, dur, label, kind, block, prompt: 'Exemplo de descrição do som', state: 'gerado', message: '', peaks: pk(40 + i * 7, Math.round(dur * 3)) }));
-    return { meta: this.ep.meta, ready: true, missing: [], structure: { status: 'pronto', message: '', done: 8, total: 8, clips: cl }, timeline: { blocks: bl, segments: [], total: 52.7 } };
+    const bl = [[1, 0, 11.5], [2, 13, 26.5], [3, 28, 34.5], [4, 38.5, 47], [5, 48.5, 57.2]].map(([block, start, end], i) => ({ block, start, end, text: this.ep.result.blocks[i].text, peaks: pk(i * 5, Math.round((end - start) * 3)) }));
+    const scenes = [{ n: 1, title: 'Cena 1', blocks: [1, 2, 3], start: 0, end: 34.5 }, { n: 2, title: 'Cena 2', blocks: [4, 5], start: 38.5, end: 57.2 }];
+    const cl = [[0, 2, 5, 'Sino de igreja', 'sfx', 1, 1], [0, 14, 6.5, 'Terra a tremer', 'sfx', 2, 1], [1, 20.5, 6, 'Edifícios a ruir', 'sfx', 2, 1], [2, 23.5, 5, 'Multidão', 'sfx', 2, 1], [1, 28.5, 6, 'Ondas do mar', 'sfx', 3, 1],
+      [4, 0, 34.5, 'Música de fundo', 'music', 1, 1], [0, 40, 6, 'Fogo a crepitar', 'sfx', 4, 2], [4, 38.5, 18.7, 'Música de fundo', 'music', 4, 2]]
+      .map(([lane, start, dur, label, kind, block, scene], i) => ({ id: 'c' + (i + 1), lane, start, dur, label, kind, block, scene, prompt: 'Exemplo de descrição do som', state: 'gerado', message: '', peaks: pk(40 + i * 7, Math.round(dur * 3)) }));
+    return { meta: this.ep.meta, ready: true, missing: [], structure: { status: 'pronto', message: '', done: 8, total: 8, scene: null, clips: cl }, timeline: { blocks: bl, segments: [], total: 57.2, scenes } };
   },
   async api(path) {
     if (!this.ep) this.ep = this.build();

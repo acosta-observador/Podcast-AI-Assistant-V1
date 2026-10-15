@@ -117,7 +117,17 @@ def struct_path(d: Path) -> Path:
 
 
 def read_struct(d: Path) -> dict:
-    return read_json(struct_path(d), {"status": None, "message": "", "done": 0, "total": 0, "clips": []})
+    st = read_json(struct_path(d), {"status": None, "message": "", "done": 0, "total": 0, "scene": None, "clips": []})
+    for c in st["clips"]:
+        if c.get("kind") == "music":
+            c["lane"] = sounddesign.MUSIC_LANE    # versões antigas tinham a música na faixa 2
+        c.setdefault("scene", 1)
+    return st
+
+
+def scenes_of(d: Path, result: dict) -> list[dict]:
+    meta = read_json(d / "meta.json")
+    return sounddesign.scenes_for(d / meta["script_file"], len(result["blocks"]))
 
 
 def update_struct(d: Path, fn) -> None:
@@ -127,23 +137,36 @@ def update_struct(d: Path, fn) -> None:
         write_json(struct_path(d), st)
 
 
-def run_structure(d: Path) -> None:
-    """Estrutura Plus: as regras locais escolhem os sons a partir do guião e a ElevenLabs gera cada um."""
+def run_structure(d: Path, scene: int) -> None:
+    """Estrutura Plus, uma cena de cada vez: as regras locais escolhem os sons a partir do guião
+    e a ElevenLabs gera cada um. Só os sons desta cena são substituídos."""
     try:
-        update_struct(d, lambda st: st.update(status="a planear", message="", done=0, total=0))
+        update_struct(d, lambda st: st.update(status="a planear", message="", done=0, total=0, scene=scene))
         result, sel = read_json(d / "result.json"), read_json(d / "selections.json", {})
-        tl = sounddesign.timeline(result, sel)
-        cues = sounddesign.plan_local(tl)
+        scenes = scenes_of(d, result)
+        tl = sounddesign.timeline(result, sel, scenes)
+        sc = next((x for x in tl["scenes"] if x["n"] == scene), None)
+        if not sc:
+            raise RuntimeError("Cena não encontrada.")
+        part = {**tl, "blocks": [b for b in tl["blocks"] if b["block"] in sc["blocks"]]}
+        cues = sounddesign.plan_local(part, span=(sc["start"], sc["end"]))
         if not cues:
-            raise RuntimeError("Não encontrei momentos para sound design neste guião.")
+            raise RuntimeError("Não encontrei momentos para sound design nesta cena.")
         sounddesign.assign_lanes(cues)
-        sd = d / "sd"
-        shutil.rmtree(sd, ignore_errors=True)
-        sd.mkdir()
-        clips = [{**c, "id": f"c{i + 1}", "state": "a gerar", "peaks": [], "message": ""} for i, c in enumerate(cues)]
-        update_struct(d, lambda st: st.update(status="a gerar", clips=clips, total=len(clips), done=0))
-        for clip in clips:
-            gen_clip(d, clip["id"])
+        (d / "sd").mkdir(exist_ok=True)
+
+        def start(st):
+            for old in [c for c in st["clips"] if c.get("scene") == scene]:
+                (d / "sd" / f"{old['id']}.mp3").unlink(missing_ok=True)
+            st["clips"] = [c for c in st["clips"] if c.get("scene") != scene]
+            nxt = st.get("next", 1 + max([int(c["id"][1:]) for c in st["clips"]] or [0]))
+            for c in cues:
+                st["clips"].append({**c, "id": f"c{nxt}", "scene": scene, "state": "a gerar", "peaks": [], "message": ""})
+                nxt += 1
+            st.update(status="a gerar", next=nxt, total=len(cues), done=0)
+        update_struct(d, start)
+        for cid in [c["id"] for c in read_struct(d)["clips"] if c.get("scene") == scene and c["state"] == "a gerar"]:
+            gen_clip(d, cid)
             update_struct(d, lambda st: st.update(done=st["done"] + 1))
         update_struct(d, lambda st: st.update(status="pronto"))
     except Exception as e:
@@ -340,7 +363,7 @@ def get_structure(eid: str):
     result = read_json(d / "result.json")
     if not result:
         raise HTTPException(400, "O episódio ainda não foi processado")
-    tl = sounddesign.timeline(result, read_json(d / "selections.json", {}))
+    tl = sounddesign.timeline(result, read_json(d / "selections.json", {}), scenes_of(d, result))
     env_p = d / "work" / "envelope.npy"
     peaks = sounddesign.narration_peaks(np.load(env_p), tl["blocks"], tl["segments"]) if env_p.exists() else {}
     for b in tl["blocks"]:
@@ -350,16 +373,22 @@ def get_structure(eid: str):
 
 
 @app.post("/api/episodes/{eid}/structure/create")
-def create_structure(eid: str):
+async def create_structure(eid: str, request: Request):
+    """Corpo: {"scene": 1}. Cria o sound design só dessa cena."""
     d = ep_dir(eid)
-    if not (d / "result.json").exists():
+    result = read_json(d / "result.json")
+    if not result:
         raise HTTPException(400, "O episódio ainda não foi processado")
     if not API_KEY:
         raise HTTPException(400, "O servidor não tem a chave da ElevenLabs configurada (ELEVENLABS_API_KEY).")
+    body = await request.json() if (await request.body()) else {}
+    scene = int(body.get("scene") or 0)
+    if not any(sc["n"] == scene for sc in scenes_of(d, result)):
+        raise HTTPException(400, "Escolhe uma cena")
     if read_struct(d).get("status") in {"a planear", "a gerar"}:
-        raise HTTPException(409, "A estrutura já está a ser criada")
-    update_struct(d, lambda st: st.update(status="a planear", message="", done=0, total=0))
-    jobs.submit(run_structure, d)
+        raise HTTPException(409, "Já há sound design a ser criado")
+    update_struct(d, lambda st: st.update(status="a planear", message="", done=0, total=0, scene=scene))
+    jobs.submit(run_structure, d, scene)
     return {"ok": True}
 
 
@@ -409,7 +438,9 @@ def export_structure(eid: str):
     if not result:
         raise HTTPException(400, "O episódio ainda não foi processado")
     clips = [c for c in read_struct(d)["clips"] if c["state"] == "gerado"]
-    rpp = to_reaper(result, read_json(d / "selections.json", {}), meta["audio_file"], meta["title"], sound=clips)
+    tl = sounddesign.timeline(result, read_json(d / "selections.json", {}), scenes_of(d, result))
+    rpp = to_reaper(result, read_json(d / "selections.json", {}), meta["audio_file"], meta["title"],
+                    sound=clips, gaps=tl["gaps"], scenes=tl["scenes"])
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
         z.writestr(f"{slug(meta['title'])}-estrutura-plus.rpp", rpp)
