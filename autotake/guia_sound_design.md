@@ -121,16 +121,21 @@ Põe sons apenas de coisas que **acontecem de facto, no momento descrito**.
 - **Quantidades e ordem:** respeita-as ("duas vezes", "três tiros").
 - **Quando estiver em dúvida, não ponhas o som.**
 
-## 8. Densidade: a medida da folha de referência
+## 8. Densidade: a timeline tem de ficar bem preenchida
 
-A folha de referência tem cerca de 2 a 4 elementos por minuto de narração, contando ambientes, efeitos e música:
+O objetivo é uma timeline **cheia de som**, de ponta a ponta, não uma timeline com dois ou três efeitos. A folha de referência
+mostra onde e porquê pôr sons; aqui pintas a cena por inteiro, com as quatro camadas do ponto 1:
 
-- **1 ambiente** por cada lugar ou época (e quando o sítio muda, o ambiente muda).
-- **1 a 3 efeitos** por conjunto de parágrafos, ligados aos objetos e ações que o texto nomeia. Cada objeto ou ação que o texto nomeia merece o seu próprio efeito, separado.
-- **1 música ou silêncio decidido** por secção, com stingers nos fechos e nas viragens.
-- Passagens de análise, opinião e cronologia seca pedem só ambiente baixo e/ou cama de piano. Passagens de ação, objetos e
-  confronto pedem efeitos.
-- A cena tem de soar **viva e coerente**, não despida nem atulhada. Se hesitas entre pôr e não pôr, e o texto não nomeia o som, não pões.
+- **Ambiente contínuo:** cobre a cena do início ao fim (use "until_item" para o fazer), mudando quando o lugar ou a época mudam.
+  Só desaparece num silêncio decidido (uma revelação, uma emoção) ou nos excertos de entrevista.
+- **Efeitos:** todos os objetos e ações que o texto nomeia ou sugere fisicamente, cada um com o seu som. Passagens de ação, objetos,
+  deslocações e confronto levam um efeito a cada poucos segundos (alvo: um efeito por cada 5 a 8 segundos de narração de ação),
+  com foley subtil (passos, portas, papéis, cadeiras, chaves, copos, roupa, canetas, teclas, telefones).
+- **Música:** uma cama por baixo da maior parte das cenas narrativas, com cortes e silêncios decididos, stingers nos fechos e
+  nas viragens. Cenas de intimidade, emoção ou entrevista podem ficar só com ambiente.
+- **Pontuação e transições:** um impacto grave ou um riser discreto nas viragens; uma transição curta entre cenas.
+- Passagens de opinião, análise e cronologia seca levam só ambiente baixo (e cama de piano). Não inventes ações que o texto não tem.
+- Se o texto não nomeia o som e a frase é ambígua, não ponhas. Mas, quando houver ação, põe: prefere sons a mais do que a menos.
 
 ## 9. Como descrever cada som ao gerador (prompts em inglês, curtos)
 

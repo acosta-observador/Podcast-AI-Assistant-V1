@@ -434,6 +434,18 @@ async function loadAnalysis() {
   if (anRunning(AN.data.analysis)) AN.poll = setTimeout(loadAnalysis, 3000);
 }
 
+function scriptSummary(an) {
+  const it = an.items || [], n = t => it.filter(x => x.type === t).length;
+  if (!it.length) return `<div class="card empty">Não consegui ler o guião deste episódio.</div>`;
+  const tag = t => t === 'narracao' ? 'NARRAÇÃO' : t === 'entrevista' ? 'ENTREVISTA' : t === 'titulo' ? 'TÍTULO' : 'NOTA';
+  return `<div class="card" style="padding:20px 22px;margin-bottom:16px"><b style="font-size:17px">O guião do AutoTake já está aqui</b>
+    <p class="note" style="margin:6px 0 12px">${n('narracao')} parágrafos de narração, ${n('entrevista')} excertos de entrevista, ${n('titulo') + n('nota')} títulos e notas. Só a narração leva takes no AutoTake.
+      Carrega em <b>Analisar guião</b> quando quiseres: o Claude divide em cenas e propõe os sons, uma cena de cada vez (demora uns minutos).</p>
+    <details><summary style="cursor:pointer;font-weight:600;font-size:14px">Ver o guião lido (${it.length} itens)</summary>
+      ${it.map(x => `<div style="display:flex;gap:10px;margin-top:8px;align-items:flex-start"><span class="itag ${x.type}">${tag(x.type)}</span>
+        <span style="font-size:14px;min-width:0">${esc(x.text.length > 300 ? x.text.slice(0, 300) + '…' : x.text)}</span></div>`).join('')}</details></div>`;
+}
+
 function renderAnalysis() {
   const d = AN.data, an = d.analysis, busy = anRunning(an), scenes = an.scenes || [];
   const nCues = scenes.reduce((a, sc) => a + (sc.cues || []).length, 0);
@@ -477,7 +489,7 @@ function renderAnalysis() {
         </div></div>
       <p class="st-note" style="margin:0 0 16px">${esc(status)}</p>
       ${an.status === 'erro' ? `<div class="errbox" style="margin:0 0 16px">${esc(an.message)}</div>` : ''}
-      ${scenes.length ? `<p style="margin:0 0 16px"><a class="btn" href="#/estrutura/${AN.id}">${I.layers}Ir para a Estrutura Plus</a></p>` : `<div class="card empty">Carrega em <b>Analisar guião</b>. Demora uns minutos, porque o Claude analisa uma cena de cada vez.</div>`}
+      ${scenes.length ? `<p style="margin:0 0 16px"><a class="btn" href="#/estrutura/${AN.id}">${I.layers}Ir para a Estrutura Plus</a></p>` : scriptSummary(an)}
       ${scenes.map(card).join('')}
     </div>`);
 
@@ -503,7 +515,7 @@ function renderAnalysis() {
 const ST = { id: null, data: null, scene: 0, sel: null, t: 0, v0: 0, v1: 60, playing: false, raf: 0, t0: 0, tBase: 0, audios: {}, poll: null, prev: null, zoom: 1, gz: 1, draft: {}, add: null };
 const clock = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 const fmtT = s => { s = Math.max(0, s); const m = Math.floor(s / 60); return m + ':' + (s % 60).toFixed(1).padStart(4, '0'); };
-const running = st => st.status === 'a planear' || st.status === 'a gerar' || (st.clips || []).some(c => c.state === 'a gerar');
+const running = st => st.status === 'a planear' || st.status === 'a gerar' || st.batch > 0 || (st.clips || []).some(c => c.state === 'a gerar');
 const SFX_LANES = 5;
 
 async function estruturaPage(wanted) {
@@ -575,6 +587,8 @@ function renderStructure() {
   const epOpts = S.list.map(e => `<option value="${e.id}" ${e.id === ST.id ? 'selected' : ''} ${e.state?.status === 'pronto' ? '' : 'disabled'}>${esc(e.title)}${e.state?.status === 'pronto' ? '' : ' (a processar)'}</option>`).join('');
   const busy = running(st), n = st.clips.length, mySc = scene ? sceneClips(scene.n).length : 0;
   const status = d.missing.length ? `Falta a chave no servidor: ${d.missing.join(', ')}.`
+    : st.batch > 0 && st.status === 'a gerar' ? `A criar todas as cenas (faltam ${st.batch}): cena ${st.scene}, ${st.done} de ${st.total}…`
+    : st.batch > 0 ? `A criar todas as cenas (faltam ${st.batch}): a preparar a cena ${st.scene}…`
     : st.status === 'a planear' ? `A ler o guião da cena ${st.scene}…`
     : st.status === 'a gerar' ? `A gerar sons da cena ${st.scene}, ${st.done} de ${st.total}…`
     : scene ? (mySc ? `${sceneClips(scene.n).filter(c => c.state === 'gerado').length} de ${mySc} sons gerados nesta cena` : `${scene.title} ainda não tem sound design. Carrega em Create.`)
@@ -588,6 +602,7 @@ function renderStructure() {
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <select class="epsel" id="epsel" aria-label="Episódio">${epOpts}</select>
           <button class="btn" id="exp" ${S.demo || !n ? 'disabled' : ''}>${I.dl}Exportar Reaper</button>
+          <button class="btn" id="createall" ${S.demo || busy || d.missing.length ? 'disabled' : ''}>${I.spark}Create todas as cenas</button>
           ${scene ? `<button class="btn blue" id="create" ${S.demo || busy || d.missing.length ? 'disabled' : ''}>${I.spark}${busy ? 'A criar…' : `Create · ${esc(scene.title)}`}</button>` : ''}
         </div></div>
       ${st.status === 'erro' ? `<div class="errbox" style="margin:0 0 16px">${esc(st.message)}</div>` : ''}
@@ -638,6 +653,7 @@ function renderStructure() {
   card.addEventListener('gesturechange', e => { e.preventDefault(); applyZoom(ST.gz * e.scale, e.clientX); });
   const sn = document.getElementById('snote'); if (sn) sn.oninput = () => { ST.draft[scene.n] = sn.value; };
   const cr = document.getElementById('create'); if (cr) cr.onclick = createStructure;
+  document.getElementById('createall').onclick = createAll;
   renderGuide();
   $app.querySelectorAll('.tl-lane[data-lane]').forEach(el => el.onclick = e => {
     if (e.target.closest('.clip') || S.demo) return;
@@ -708,7 +724,7 @@ async function deleteSelected() {
 }
 
 document.addEventListener('keydown', e => {
-  if (location.hash.indexOf('#/estrutura') !== 0 || !ST.data || e.target.closest('input,textarea,select') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (location.hash.indexOf('#/estrutura') !== 0 || !ST.data || (e.target.closest && e.target.closest('input,textarea,select')) || e.metaKey || e.ctrlKey || e.altKey) return;
   if ((e.key === 'Delete' || e.key === 'Backspace') && ST.sel) { e.preventDefault(); deleteSelected(); }
   else if (e.key === 'Escape') { ST.sel = null; ST.add = null; renderStructure(); }
   else if (e.key === ' ') { e.preventDefault(); if (!S.demo) playStructure(); }
@@ -749,6 +765,16 @@ function renderSelected() {
     c.gain = g.value / 100;
     await api(`/api/episodes/${ST.id}/structure/clips/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gain: c.gain }) }).catch(showErr);
   };
+}
+
+async function createAll() {
+  const d = ST.data, scenes = d.timeline.scenes, missing = scenes.filter(x => !d.structure.clips.some(c => c.scene === x.n));
+  const target = missing.length ? missing : scenes, planned = target.reduce((a, x) => a + (d.planned[String(x.n)] || 0), 0);
+  const what = missing.length ? `${missing.length} cena(s) sem sons` : 'todas as cenas (substitui os sons que já existem)';
+  if (!confirm(`Criar o sound design de ${what}${planned ? `, cerca de ${planned} sons da análise` : ''}? Gasta créditos da ElevenLabs e pode demorar alguns minutos.`)) return;
+  stopStructure(true);
+  try { await api(`/api/episodes/${ST.id}/structure/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: 'all', missing_only: missing.length > 0 }) }); } catch (e) { alert(e.message); return; }
+  ST.sel = null; loadStructure();
 }
 
 async function createStructure() {
@@ -907,6 +933,10 @@ function renderProcessing(id, st) {
     </div></div>`);
   if (!err) S.poll = setTimeout(() => openEpisode(id), 3000);
 }
+function reprocessEp() {
+  if (!confirm('Volta a alinhar o episódio com o guião (usa a transcrição já feita, sem gastar Scribe). Os takes que escolheste e os blocos revistos mantêm-se nos blocos cujo texto não mudou. Se os blocos mudarem, os sons da Estrutura Plus têm de ser criados outra vez. Continuar?')) return;
+  reprocess(S.ep.meta.id);
+}
 async function reprocess(id) { await api(`/api/episodes/${id}/reprocess`, { method: 'POST' }); openEpisode(id); }
 
 /* ---------- revisão ---------- */
@@ -940,7 +970,8 @@ function renderEpisode() {
   <div class="wrap">
     <div class="ep-head">
       <div><h1>${esc(meta.title)}</h1>
-      <p id="statusTxt">${blocks.length} blocos, ${toReview ? `${toReview} por rever` : 'todos revistos'}, montagem com ${fmt(total)}</p></div>
+      <p id="statusTxt">${blocks.length} blocos, ${toReview ? `${toReview} por rever` : 'todos revistos'}, montagem com ${fmt(total)}</p>
+        <button class="link" style="margin-top:6px" onclick="reprocessEp()">Voltar a alinhar com o guião</button></div>
     </div>
     <div class="layout">
       <div class="card blocks" id="blocks">${list}</div>
@@ -1071,7 +1102,7 @@ async function pollRender() {
 
 /* ---------- teclado ---------- */
 document.addEventListener('keydown', e => {
-  if (!S.ep?.result || location.hash.indexOf('#/ep/') !== 0 || e.target.closest('input,textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (!S.ep?.result || location.hash.indexOf('#/ep/') !== 0 || (e.target.closest && e.target.closest('input,textarea')) || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); go(e.key === 'ArrowDown' ? 1 : -1); }
   else if (/^[1-9]$/.test(e.key)) choose(+e.key, true);
   else if (e.key === 'c' || e.key === 'C') choose('C', true);

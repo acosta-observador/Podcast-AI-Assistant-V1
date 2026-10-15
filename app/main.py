@@ -215,6 +215,16 @@ def run_structure(d: Path, scene: int) -> None:
         update_struct(d, lambda st: st.update(status="erro", message=str(e)))
 
 
+def run_structure_all(d: Path, scenes: list[int]) -> None:
+    """Todas as cenas, uma a seguir à outra. 'batch' diz quantas faltam, para a página continuar a atualizar."""
+    for i, n in enumerate(scenes):
+        update_struct(d, lambda st: st.update(batch=len(scenes) - i))
+        run_structure(d, n)
+        if read_struct(d).get("status") == "erro":
+            break
+    update_struct(d, lambda st: st.update(batch=0))
+
+
 def gen_clip(d: Path, cid: str) -> None:
     """Gera (ou volta a gerar) o áudio de um clip; os erros ficam no próprio clip."""
     clip = next(c for c in read_struct(d)["clips"] if c["id"] == cid)
@@ -249,7 +259,7 @@ def resume_unfinished():
             write_json(d / "analysis.json", aa)
         ss = read_json(struct_path(d), {})
         if ss.get("status") in {"a planear", "a gerar"}:
-            ss.update(status="erro", message="O servidor reiniciou a meio. Carrega em Create para tentar outra vez.")
+            ss.update(status="erro", message="O servidor reiniciou a meio. Carrega em Create para tentar outra vez.", batch=0)
             write_json(struct_path(d), ss)
         st = read_json(d / "state.json", {})
         if st.get("status") in {"na fila", "a preparar", "a transcrever", "a alinhar"}:
@@ -331,12 +341,37 @@ async def update_block(eid: str, bid: str, request: Request):
     return {"ok": True}
 
 
+def run_reprocess(d: Path) -> None:
+    """Volta a alinhar e mantém as escolhas dos blocos cujo texto não mudou."""
+    old = read_json(d / "result.json")
+    old_texts = {b["id"]: b["text"] for b in old["blocks"]} if old else {}
+    run_autotake(d)
+    new = read_json(d / "result.json")
+    if not old or not new:
+        return
+    key = lambda t: re.sub(r"\s+", " ", t).strip()
+    by_text: dict[str, str] = {}
+    for b in new["blocks"]:
+        by_text.setdefault(key(b["text"]), b["id"])
+    mapping = {oid: by_text.get(key(t)) for oid, t in old_texts.items()}
+    with _lock:
+        sel = read_json(d / "selections.json", {})
+        write_json(d / "selections.json", {mapping[k]: v for k, v in sel.items() if mapping.get(k)})
+        rev = read_json(d / "reviewed.json", [])
+        write_json(d / "reviewed.json", sorted({mapping[k] for k in rev if mapping.get(k)}))
+    if [key(b["text"]) for b in old["blocks"]] != [key(b["text"]) for b in new["blocks"]]:
+        # os blocos mudaram: as posições da Estrutura Plus deixam de bater certo
+        shutil.rmtree(d / "sd", ignore_errors=True)
+        update_struct(d, lambda st: st.update(clips=[], status=None, done=0, total=0, batch=0,
+                                              note="Os blocos do episódio mudaram ao voltar a alinhar o guião. Refaz o Create das cenas."))
+
+
 @app.post("/api/episodes/{eid}/reprocess")
 def reprocess(eid: str):
     """Volta a alinhar (usa a transcrição em cache, não gasta Scribe)."""
     d = ep_dir(eid)
     set_state(d, status="na fila", message="", attempts=0)
-    jobs.submit(run_autotake, d)
+    jobs.submit(run_reprocess, d)
     return {"ok": True}
 
 
@@ -462,8 +497,14 @@ def run_analysis(d: Path, only: int | None = None) -> None:
 @app.get("/api/episodes/{eid}/analysis")
 def get_analysis(eid: str):
     d = ep_dir(eid)
+    meta = read_json(d / "meta.json")
     an = read_json(analysis_path(d), {"status": None, "message": "", "done": 0, "total": 0, "items": [], "scenes": []})
-    return {"meta": read_json(d / "meta.json"), "analysis": an, "claude": bool(ANTHROPIC_KEY)}
+    if not an.get("items"):       # o guião do AutoTake já está aqui, mesmo antes de analisar
+        try:
+            an["items"] = analysis_tools.read_items(d / meta["script_file"])
+        except Exception:
+            an["items"] = []
+    return {"meta": meta, "analysis": an, "claude": bool(ANTHROPIC_KEY)}
 
 
 @app.post("/api/episodes/{eid}/analysis/run")
@@ -529,7 +570,9 @@ def get_structure(eid: str):
     peaks = sounddesign.narration_peaks(np.load(env_p), tl["blocks"], tl["segments"]) if env_p.exists() else {}
     for b in tl["blocks"]:
         b["peaks"] = peaks.get(b["block"], [])
-    return {"meta": read_json(d / "meta.json"), "structure": read_struct(d), "timeline": tl,
+    an = read_json(d / "analysis.json", {})
+    planned = {str(x["n"]): len(x.get("cues", [])) for x in an.get("scenes", [])}
+    return {"meta": read_json(d / "meta.json"), "structure": read_struct(d), "timeline": tl, "planned": planned,
             "ready": bool(API_KEY), "claude": bool(ANTHROPIC_KEY), "missing": [] if API_KEY else ["ELEVENLABS_API_KEY"]}
 
 
@@ -543,9 +586,20 @@ async def create_structure(eid: str, request: Request):
     if not API_KEY:
         raise HTTPException(400, "O servidor não tem a chave da ElevenLabs configurada (ELEVENLABS_API_KEY).")
     body = await request.json() if (await request.body()) else {}
-    scene = int(body.get("scene") or 0)
     notes = str(body.get("notes") or "")[:2000]
-    if not any(sc["n"] == scene for sc in scenes_of(d, result)):
+    all_scenes = scenes_of(d, result)
+    if body.get("scene") == "all":
+        have = {c.get("scene") for c in read_struct(d)["clips"]}
+        todo = [sc["n"] for sc in all_scenes if not (body.get("missing_only") and sc["n"] in have)]
+        if not todo:
+            raise HTTPException(400, "Todas as cenas já têm sons")
+        if read_struct(d).get("status") in {"a planear", "a gerar"} or read_struct(d).get("batch"):
+            raise HTTPException(409, "Já há sound design a ser criado")
+        update_struct(d, lambda st: st.update(status="a planear", message="", done=0, total=0, scene=todo[0], batch=len(todo)))
+        jobs.submit(run_structure_all, d, todo)
+        return {"ok": True, "scenes": todo}
+    scene = int(body.get("scene") or 0)
+    if not any(sc["n"] == scene for sc in all_scenes):
         raise HTTPException(400, "Escolhe uma cena")
     if read_struct(d).get("status") in {"a planear", "a gerar"}:
         raise HTTPException(409, "Já há sound design a ser criado")

@@ -16,12 +16,8 @@ from pathlib import Path
 import httpx
 
 from . import sounddesign as sd
-from .script_parser import _is_direction
-from .text import tokenize
+from .script_parser import classify_items
 
-ELLIPSIS = re.compile(r"^\s*(…|\.{3})\s*")
-INTERVIEW_MARK = re.compile(r"\bSOM\s*\.?\s*\d+|\bEP\.?\s*\d|ARQUIVO|\(\s*\d{1,2}:\d{2}", re.I)
-QUOTE_START = ("\"", "“", "«")
 TYPES = {"narracao": "NARRAÇÃO", "entrevista": "ENTREVISTA", "titulo": "TÍTULO", "nota": "NOTA"}
 MAX_ITEM_CHARS = 1500
 
@@ -31,50 +27,7 @@ def _norm(t: str) -> str:
 
 
 # ---------- 1. itens do guião ----------
-def read_items(script_path: Path) -> list[dict]:
-    """Guião → itens ordenados {id, type, text, speaker?}. Os títulos e notas orientam a gravação do narrador;
-    a narração e as entrevistas são o que se ouve."""
-    items: list[dict] = []
-    expecting, speaker = False, ""
-
-    def add(kind: str, text: str, **kw):
-        items.append({"id": len(items) + 1, "type": kind, "text": text, **kw})
-
-    for raw in sd._raw_items(script_path):
-        s = raw.strip()
-        if not s:
-            continue
-        if s.startswith("http") or (s[0] in "[(" and s[-1] in "])"):
-            if s[0] in "[(" and not s.lstrip("[(").startswith("http"):
-                add("nota", s)
-            continue
-        if sd.SCENE_RE.match(s) and len(s) < 140:
-            add("titulo", s)
-            expecting = False
-            continue
-        if ELLIPSIS.match(s):
-            body = ELLIPSIS.sub("", s).strip()
-            if INTERVIEW_MARK.search(body):
-                expecting, speaker = True, body
-                add("nota", s, marker="entrevista")
-            else:
-                add("nota", s)
-            continue
-        letters = [c for c in s if c.isalpha()]
-        words = [w for w in re.findall(r"[^\W\d_]+", s) if len(w) > 2][:2]
-        if len(s) < 90 and ((letters and all(c.isupper() for c in letters)) or (len(words) == 2 and all(w.isupper() for w in words))):
-            add("titulo", s)
-            continue
-        if not tokenize(s):
-            continue
-        if expecting:
-            add("entrevista", s, speaker=speaker)
-            expecting = False
-        elif s.startswith(QUOTE_START) and items and items[-1]["type"] == "entrevista":
-            add("entrevista", s, speaker=items[-1].get("speaker", ""))
-        else:
-            add("narracao", s)
-    return items
+read_items = classify_items
 
 
 def link_blocks(items: list[dict], blocks: list[dict]) -> None:
@@ -163,8 +116,10 @@ Cada elemento de "cues":
  "duration": segundos (sfx 0.5 a 8, ambience 5 a 40),
  "until_item": nº do item onde acaba (só ambience e music),
  "gain": volume relativo de 0.1 a 1 (ambiente 0.5 a 0.8, efeitos 0.6 a 1, música em cama 0.3 a 0.5)}.
-Cria mais sons, mas cada um simples: cada objeto ou ação que o texto nomeia merece o seu próprio som. A música é opcional e há
-cenas sem ela. Se uma frase for ambígua, não ponhas o som."""
+A timeline tem de ficar BEM PREENCHIDA: cobre a cena do início ao fim com um ambiente contínuo (usa "until_item" para o estender até ao
+fim; o sistema divide-o em partes), acrescenta um efeito para cada objeto ou ação que o texto nomeia ou sugere fisicamente (com foley
+subtil nas ações), uma cama de música na maior parte das cenas narrativas, e pontuação nas viragens. Cada som, simples. Prefere
+sons a mais do que a menos quando há ação; só te absténs onde o texto é ambíguo, nas entrevistas e nos silêncios decididos."""
 
 
 # ---------- 2. cenas ----------
@@ -210,7 +165,7 @@ def analyze_scene(items: list[dict], scenes: list[dict], n: int, key: str, guide
     if notes.strip():
         msg += f"\n\nNOTAS DO UTILIZADOR PARA ESTA CENA (têm prioridade):\n{notes.strip()}"
     system = ANALYSIS_SYSTEM + ("\n\n# GUIA DE ABORDAGEM\n\n" + guide if guide.strip() else "")
-    data = _call(system, msg, key, 8000)
+    data = _call(system, msg, key, 14000, timeout=420)
     by_id = {it["id"]: it for it in mine}
     reading = [{"item": int(x.get("item", 0)), "events": [str(e)[:200] for e in x.get("events", [])][:12],
                 "not_happening": [str(e)[:200] for e in x.get("not_happening", [])][:12]}

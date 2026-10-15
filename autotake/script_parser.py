@@ -4,6 +4,10 @@ from pathlib import Path
 
 from .text import tokenize
 
+SCENE_RE = re.compile(r"^[\[(#\s]*(cena|scene)\s*\d+", re.I)
+ELLIPSIS = re.compile(r"^\s*(…|\.{3})\s*")
+INTERVIEW_MARK = re.compile(r"\bSOM\s*\.?\s*\d+|\bEP\.?\s*\d|ARQUIVO|\(\s*\d{1,2}:\d{2}", re.I)
+QUOTE_START = ("\"", "“", "«")
 _SENT_SPLIT = re.compile(r"(?<=[.!?…])\s+(?=[\"«“(\wÀ-ÿ])")
 MIN_SENT_TOKENS = 4
 
@@ -21,20 +25,74 @@ def _is_direction(line: str) -> bool:
     return False
 
 
-def read_paragraphs(path: Path) -> list[str]:
-    suffix = path.suffix.lower()
-    if suffix == ".docx":
+def _raw_items(path: Path) -> list[str]:
+    """Parágrafos do ficheiro tal como estão (inclui linhas vazias)."""
+    if path.suffix.lower() == ".docx":
         import docx  # python-docx
-        doc = docx.Document(str(path))
-        lines = [p.text for p in doc.paragraphs]
-        return [l.strip() for l in lines if not _is_direction(l)]
+        return [p.text for p in docx.Document(str(path)).paragraphs]
     text = path.read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
     if re.search(r"\n\s*\n", text):
-        chunks = re.split(r"\n\s*\n", text)
-        paras = [" ".join(c.split("\n")) for c in chunks]
-    else:
-        paras = text.split("\n")
-    return [p.strip() for p in paras if not _is_direction(p)]
+        return [" ".join(c.split("\n")) for c in re.split(r"\n\s*\n", text)]
+    return text.split("\n")
+
+
+def classify_items(path: Path) -> list[dict]:
+    """Guião → itens ordenados {id, type, text, speaker?}.
+
+    narracao: o que o narrador lê. entrevista: excerto de entrevista ou arquivo (marcado por uma linha
+    '… NOME EP4 SOM 1 (01:52)'). titulo: títulos e avisos de produção (DISCLAIMERS, TEASER, CENA 1...).
+    nota: indicações da equipa. Só a narração tem takes no AutoTake.
+    """
+    items: list[dict] = []
+    expecting, speaker = False, ""
+
+    def add(kind: str, text: str, **kw):
+        items.append({"id": len(items) + 1, "type": kind, "text": text, **kw})
+
+    for raw in _raw_items(path):
+        s = raw.strip()
+        if not s:
+            continue
+        if s.startswith("http") or (s[0] in "[(" and s[-1] in "])"):
+            if s[0] in "[(" and not s.lstrip("[(").startswith("http"):
+                add("nota", s)
+            continue
+        if SCENE_RE.match(s) and len(s) < 140:
+            add("titulo", s)
+            expecting = False
+            continue
+        if ELLIPSIS.match(s):
+            body = ELLIPSIS.sub("", s).strip()
+            if INTERVIEW_MARK.search(body):
+                expecting, speaker = True, body
+                add("nota", s, marker="entrevista")
+            else:
+                add("nota", s)
+            continue
+        letters = [c for c in s if c.isalpha()]
+        words = [w for w in re.findall(r"[^\W\d_]+", s) if len(w) > 2][:2]
+        if s.startswith(("#", "//")) or (len(s) < 90 and ((letters and all(c.isupper() for c in letters))
+                                                          or (len(words) == 2 and all(w.isupper() for w in words)))):
+            add("titulo", s)
+            continue
+        if not tokenize(s):
+            continue
+        if expecting:
+            add("entrevista", s, speaker=speaker)
+            expecting = False
+        elif s.startswith(QUOTE_START) and items and items[-1]["type"] == "entrevista":
+            add("entrevista", s, speaker=items[-1].get("speaker", ""))
+        else:
+            add("narracao", s)
+    return items
+
+
+def read_paragraphs(path: Path) -> list[str]:
+    """Só a narração: títulos, notas e entrevistas não levam takes."""
+    paras = [it["text"] for it in classify_items(path) if it["type"] == "narracao"]
+    if paras:
+        return paras
+    return [p.strip() for p in _raw_items(path) if not _is_direction(p)]  # guião sem estrutura reconhecível
 
 
 def split_sentences(paragraph: str) -> list[str]:

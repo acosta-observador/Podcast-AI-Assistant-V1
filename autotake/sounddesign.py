@@ -16,8 +16,7 @@ import httpx
 import numpy as np
 
 from .pipeline import build_cuts
-from .script_parser import _is_direction
-from .text import tokenize
+from .script_parser import SCENE_RE, classify_items
 
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5-5")
@@ -34,29 +33,17 @@ DEFAULT_GAIN = {"sfx": 0.8, "ambience": 0.65, "music": 0.4}
 # pausas na linha do tempo da Estrutura Plus (a montagem do AutoTake continua com as suas)
 BLOCK_GAP = 1.5
 SCENE_GAP = 4.0
-SCENE_RE = re.compile(r"^[\[(#\s]*(cena|scene)\s*\d+", re.I)
 FALLBACK_SCENE_BLOCKS = 4
 
 # ---------- cenas ----------
-def _raw_items(path: Path) -> list[str]:
-    if path.suffix.lower() == ".docx":
-        import docx
-        return [p.text for p in docx.Document(str(path)).paragraphs]
-    text = path.read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
-    if re.search(r"\n\s*\n", text):
-        return [" ".join(c.split("\n")) for c in re.split(r"\n\s*\n", text)]
-    return text.split("\n")
-
-
 def scenes_for(script_path: Path, n_blocks: int) -> list[dict]:
     """Cenas do episódio: linhas 'CENA 1', 'CENA 2'... no guião; sem elas, grupos de 4 blocos."""
     starts, count = [], 0
     try:
-        for item in _raw_items(script_path):
-            s = item.strip()
-            if SCENE_RE.match(s) and len(s) < 60:
+        for it in classify_items(script_path):
+            if it["type"] == "titulo" and SCENE_RE.match(it["text"]) and len(it["text"]) < 60:
                 starts.append(count + 1)
-            elif not _is_direction(s) and tokenize(s):
+            elif it["type"] == "narracao":
                 count += 1
     except Exception:
         starts = []
@@ -200,8 +187,9 @@ Cada elemento de "cues":
  "duration": segundos (sfx 0.5 a 8, ambience 5 a 40),
  "until_block": nº do bloco onde acaba (só ambience e music),
  "gain": volume relativo de 0.1 a 1 (ambiente 0.5 a 0.8, efeitos 0.6 a 1, música em cama 0.3 a 0.5)}.
-Cria mais sons, mas cada um simples: cada objeto ou ação que o texto nomeia merece o seu próprio som. A música é opcional e há
-cenas sem ela. Se uma frase for ambígua, não ponhas o som."""
+A timeline tem de ficar BEM PREENCHIDA: ambiente contínuo por baixo da cena (usa "until_block"), um efeito para cada objeto ou
+ação que o texto nomeia (com foley subtil), cama de música na maior parte das cenas narrativas e pontuação nas viragens. Cada
+som, simples. Se uma frase for ambígua, não ponhas o som."""
 MUSIC_SUFFIX = ", instrumental, no vocals, subtle background"
 AMBIENCE_SUFFIX = ", no music"
 MUSIC_PROMPT = ("Subtle atmospheric instrumental underscore for a narrative documentary podcast, "
@@ -276,9 +264,9 @@ def plan_claude(tl: dict, scene: dict, key: str, guide: str = "", notes: str = "
     if notes.strip():
         msg += f"\n\nNOTAS DO UTILIZADOR PARA ESTA CENA (têm prioridade):\n{notes.strip()}"
     system = CLAUDE_SYSTEM + ("\n\n# GUIA DE ABORDAGEM\n\n" + guide if guide.strip() else "")
-    body = {"model": ANTHROPIC_MODEL, "max_tokens": 8000, "system": system,
+    body = {"model": ANTHROPIC_MODEL, "max_tokens": 14000, "system": system,
             "messages": [{"role": "user", "content": msg}]}
-    r = httpx.post(ANTHROPIC_URL, json=body, timeout=240,
+    r = httpx.post(ANTHROPIC_URL, json=body, timeout=420,
                    headers={"x-api-key": key, "anthropic-version": "2023-06-01"})
     if r.status_code != 200:
         raise RuntimeError(f"A Anthropic devolveu {r.status_code}: {r.text[:300]}")
