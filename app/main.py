@@ -162,7 +162,7 @@ def run_structure(d: Path, scene: int) -> None:
             try:
                 guide = sounddesign.load_guide(GUIDE_PATH)
                 notes = read_struct(d).get("notes", {}).get(str(scene), "")
-                plan = sounddesign.plan_claude(tl, sc, ANTHROPIC_KEY, guide, notes)
+                plan = sounddesign.plan_claude(tl, sc, ANTHROPIC_KEY, guide, notes, result["blocks"])
                 cues, mood, planner, reading = plan["cues"], plan["mood"], "claude", plan["reading"]
             except Exception as e:
                 traceback.print_exc()

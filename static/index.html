@@ -485,7 +485,7 @@ function renderStructure() {
       ${st.status === 'erro' ? `<div class="errbox" style="margin:0 0 16px">${esc(st.message)}</div>` : ''}
       <div class="scn-bar">${chips}</div>
       ${st.note ? `<div class="errbox" style="margin:0 0 16px">${esc(st.note)}</div>` : ''}
-      ${st.mood && st.planner === 'claude' ? `<p class="st-note" style="margin:0 0 12px">Claude, sobre a ${esc(st.scene ? 'cena ' + st.scene : 'cena')}: ${esc(st.mood)}</p>` : ''}
+      ${st.mood && st.planner === 'claude' ? `<p class="st-note" style="margin:0 0 12px">Direção sonora (Claude): ${esc(st.mood)}</p>` : ''}
       ${scene ? `<label class="field" style="margin:0 0 16px">Notas para o Claude sobre esta cena (opcional)
         <input type="text" id="snote" maxlength="2000" value="${esc(ST.draft[scene.n] ?? ((st.notes || {})[String(scene.n)] || ''))}" placeholder="Ex.: os polícias NÃO bateram à porta; a cena passa-se de noite" ${S.demo ? 'disabled' : ''}></label>` : ''}
       <div class="card tl">
@@ -571,7 +571,9 @@ function renderSelected() {
   el.innerHTML = `<div class="card sel-card">
     <div style="flex:1 1 320px;min-width:0"><p class="section-t" style="margin:0 0 4px">Clip selecionado</p>
       <b style="font-size:19px;font-weight:600">${esc(c.label)}</b>
-      <p class="note" style="margin:2px 0 14px">${c.kind === 'music' ? 'Música' : c.kind === 'ambience' ? 'Ambiente' : 'Efeito'}, ${c.dur.toFixed(1).replace('.', ',')} s, cena ${c.scene}, bloco ${c.block} do guião${c.state === 'erro' ? `<br><span style="color:var(--warn)">${esc(c.message)}</span>` : ''}</p>
+      <p class="note" style="margin:2px 0 8px">${c.kind === 'music' ? 'Música' : c.kind === 'ambience' ? 'Ambiente' : 'Efeito'}, ${c.dur.toFixed(1).replace('.', ',')} s, cena ${c.scene}, bloco ${c.block} do guião${c.state === 'erro' ? `<br><span style="color:var(--warn)">${esc(c.message)}</span>` : ''}</p>
+      ${c.desc ? `<p style="margin:0 0 6px;font-size:14px">${esc(c.desc)}</p>` : ''}
+      ${c.anchor ? `<p class="note" style="margin:0 0 12px">Entra em: “${esc(c.anchor)}”</p>` : ''}
       <label class="field">Descrição do som (em inglês, é o que a ElevenLabs recebe)<textarea id="cprompt" rows="3" ${S.demo ? 'disabled' : ''}>${esc(c.prompt)}</textarea></label></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-self:flex-end">
       <button class="btn blue" id="cregen" ${S.demo || c.state === 'a gerar' ? 'disabled' : ''}>${I.spark}Regenerar</button>

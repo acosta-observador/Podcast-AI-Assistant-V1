@@ -164,31 +164,38 @@ RULES = [
     (r"\b(janela|vidros?)\b", "Vidro a partir", "Glass breaking", 2),
     (r"\b(sussurro|sussurrou|segredo)\b", "Sussurros", "Quiet indistinct whispering in a room", 4),
 ]
-CLAUDE_SYSTEM = """És o sonoplasta de um podcast true crime em português (Podcast Plus, Observador).
-Tom: sombrio, misterioso, contido e realista. Recebes o guião de um episódio e trabalhas UMA cena de cada vez:
-os blocos marcados são a cena; os outros só dão contexto. Decide o sound design apenas dessa cena.
-Segue o GUIA DE ABORDAGEM no fim destas instruções: é o método de trabalho do utilizador e tem prioridade.
-Pinta a cena com várias camadas (ambiente, foley, efeitos de ação, pontuação, transições), não a deixes despida.
+CLAUDE_SYSTEM = """És o sonoplasta de um podcast true crime em português (Podcast Plus, Observador). Fazes a folha de sonoplastia
+de cada cena, como um sonoplasta profissional: ambientes, efeitos sonoros e música, ligados a pontos exatos do texto.
+Tom: sombrio, tenso, sóbrio e realista. O som serve a narração e nunca a compete.
+Trabalhas UMA cena de cada vez: os blocos marcados são a cena; os outros só dão contexto. Segue o GUIA DE ABORDAGEM no fim
+destas instruções: é o método do utilizador, com exemplos reais, e tem prioridade. Calibra a densidade e o estilo por ele.
 
-Faz o trabalho em dois passos, e devolve os dois.
+Faz o trabalho em passos, e devolve-os.
 
-PASSO 1, "reading": lê cada bloco literalmente, frase a frase, e escreve para cada bloco
+PASSO 1, "direction": a direção sonora da cena em 1 ou 2 frases (o arco e o que o som deve fazer).
+PASSO 2, "reading": lê cada bloco da cena literalmente, frase a frase, e escreve para cada bloco
   {"block": nº, "events": [coisas que ACONTECEM fisicamente e podem fazer som], "not_happening": [coisas negadas,
    hipotéticas, perguntadas, metafóricas ou só contadas de passagem, para as quais NÃO podes pôr som]}.
-  Atenção às negações: "não bateram à porta" vai para not_happening, nunca para events.
-PASSO 2, "cues": só podes criar sons a partir de "events". Nunca a partir de "not_happening".
+  Atenção às negações: "não bateu à porta" vai para not_happening, nunca para events.
+PASSO 3, "cues": só podes criar sons a partir de "events". Nunca a partir de "not_happening". Blocos sem take do narrador
+  são excertos de entrevista ou arquivo: não ponhas sons por cima deles.
 
 Responde APENAS com JSON:
-{"mood": "uma frase sobre o clima da cena", "reading": [ ... ], "cues": [ ... ]}
+{"direction": "...", "reading": [ ... ], "cues": [ ... ]}
 
 Cada elemento de "cues":
-{"block": nº do bloco onde começa, "kind": "sfx" | "ambience" | "music", "label": nome curto em português (2 a 4 palavras),
- "prompt": descrição EM INGLÊS para o gerador de áudio (concreta, física, com distância e espaço; para music: estilo,
- instrumentos, andamento, atmosfera; sem nomes de artistas), "anchor": 3 a 6 palavras EXATAS do texto do bloco onde o som
- deve começar (em ambience e music pode faltar: começa no início do bloco), "duration": segundos (sfx 0.5 a 8, ambience 5 a 40),
- "until_block": nº do bloco onde acaba (só ambience e music), "gain": volume relativo de 0.1 a 1}.
-A música é opcional: há cenas que pedem só ambiente e silêncio. Quando pões, é cama de fundo discreta.
-Se uma frase for ambígua, não ponhas o som."""
+{"block": nº do bloco onde começa, "kind": "sfx" | "ambience" | "music",
+ "label": nome curto em português (2 a 4 palavras),
+ "description": descrição em português como na folha de sonoplastia (detalhe físico, época, lugar, andamento e instrumentos
+   na música; diz também o que o som faz na cena),
+ "prompt": descrição EM INGLÊS para o gerador de áudio (concreta, física, com distância, espaço e época; para music: estilo,
+   instrumentos, andamento, atmosfera; sem nomes de artistas),
+ "anchor": 3 a 6 palavras EXATAS do texto do bloco onde o som entra ("Entra em"; em ambience e music pode faltar: entra no
+   início do bloco),
+ "duration": segundos (sfx 0.5 a 8, ambience 5 a 40),
+ "until_block": nº do bloco onde acaba (só ambience e music),
+ "gain": volume relativo de 0.1 a 1}.
+A música é opcional e há cenas sem ela. Se uma frase for ambígua, não ponhas o som."""
 MUSIC_SUFFIX = ", instrumental, no vocals, very subtle dark background underscore with low presence, leaves room for a spoken voice"
 AMBIENCE_SUFFIX = ", seamless ambient bed, no music, no speech"
 MUSIC_PROMPT = ("Subtle atmospheric instrumental underscore for a narrative documentary podcast, "
@@ -239,15 +246,25 @@ def load_guide(custom_path: Path | None = None) -> str:
     return GUIDE_FILE.read_text(encoding="utf-8")
 
 
-def plan_claude(tl: dict, scene: dict, key: str, guide: str = "", notes: str = "") -> dict:
+def plan_claude(tl: dict, scene: dict, key: str, guide: str = "", notes: str = "",
+                all_blocks: list | None = None) -> dict:
     """O Claude lê a cena (com o resto do episódio como contexto) e decide sons, ambiente e música."""
     ids = set(scene["blocks"])
+    timed = {b["block"]: b for b in tl["blocks"]}
+    order = sorted(set(timed) | {x["index"] for x in (all_blocks or [])})
+    texts = {x["index"]: x["text"] for x in (all_blocks or [])}
+    first, last = scene["blocks"][0], scene["blocks"][-1]
     parts = []
-    for b in tl["blocks"]:
-        if b["block"] in ids:
-            parts.append(f"[BLOCO {b['block']} | {b['start']:.1f}s a {b['end']:.1f}s | {b['end'] - b['start']:.1f}s]\n{b['text']}")
+    for i in order:
+        b = timed.get(i)
+        if b and i in ids:
+            parts.append(f"[BLOCO {i} | {b['start']:.1f}s a {b['end']:.1f}s | {b['end'] - b['start']:.1f}s]\n{b['text']}")
+        elif b:
+            parts.append(f"(bloco {i}, fora desta cena: {b['text'][:160]}...)")
+        elif first <= i <= last:
+            parts.append(f"[BLOCO {i} | sem take do narrador: provável excerto de entrevista ou arquivo, sem sons por cima]\n{texts.get(i, '')[:400]}")
         else:
-            parts.append(f"(bloco {b['block']}, fora desta cena: {b['text'][:160]}...)")
+            parts.append(f"(bloco {i}, fora desta cena, sem take do narrador: {texts.get(i, '')[:100]}...)")
     msg = (f"Cena a trabalhar: {scene['title']}, blocos {scene['blocks'][0]} a {scene['blocks'][-1]}, "
            f"de {scene['start']:.1f}s a {scene['end']:.1f}s.\n\n" + "\n\n".join(parts))
     if notes.strip():
@@ -267,7 +284,7 @@ def plan_claude(tl: dict, scene: dict, key: str, guide: str = "", notes: str = "
     reading = [{"block": int(x.get("block", 0)), "events": [str(e)[:200] for e in x.get("events", [])][:12],
                 "not_happening": [str(e)[:200] for e in x.get("not_happening", [])][:12]}
                for x in data.get("reading", []) if isinstance(x, dict)]
-    return {"mood": str(data.get("mood", ""))[:200], "reading": reading,
+    return {"mood": str(data.get("direction", data.get("mood", "")))[:400], "reading": reading,
             "cues": cues_from_claude(data.get("cues", []), tl, scene)}
 
 
@@ -276,9 +293,10 @@ def cues_from_claude(raw: list, tl: dict, scene: dict) -> list[dict]:
     ids = set(scene["blocks"])
     cues = []
 
-    def add(kind, label, prompt, block, start, dur, gain):
+    def add(kind, label, prompt, block, start, dur, gain, desc="", anchor=""):
         cues.append({"kind": kind, "label": label, "prompt": prompt, "block": block,
-                     "start": round(start, 2), "dur": round(dur, 2), "gain": round(gain, 2)})
+                     "start": round(start, 2), "dur": round(dur, 2), "gain": round(gain, 2),
+                     "desc": desc, "anchor": anchor})
 
     for c in raw[:MAX_CUES]:
         try:
@@ -290,6 +308,7 @@ def cues_from_claude(raw: list, tl: dict, scene: dict) -> list[dict]:
         if blk not in ids or not b or kind not in ("sfx", "ambience", "music") or not c.get("prompt"):
             continue
         label, prompt = str(c.get("label", "Som"))[:40], str(c["prompt"])[:400]
+        desc, anchor_raw = str(c.get("description", ""))[:500], str(c.get("anchor", ""))[:120]
         try:
             gain = max(0.05, min(1.0, float(c.get("gain", 0.8 if kind == "sfx" else 0.35))))
         except (TypeError, ValueError):
@@ -307,7 +326,7 @@ def cues_from_claude(raw: list, tl: dict, scene: dict) -> list[dict]:
                 dur = max(0.5, min(10.0, float(c.get("duration", 3))))
             except (TypeError, ValueError):
                 dur = 3.0
-            add("sfx", label, prompt, blk, start, dur, gain)
+            add("sfx", label, prompt, blk, start, dur, gain, desc, anchor_raw)
             continue
         end_b = by.get(int(c.get("until_block") or blk), b) if str(c.get("until_block") or blk).isdigit() else b
         end = min(scene["end"], max(end_b["end"], start + 5))
@@ -317,7 +336,7 @@ def cues_from_claude(raw: list, tl: dict, scene: dict) -> list[dict]:
         t, k = start, 1
         while t < end - 2:
             d = min(chunk, end - t)
-            add(kind, label if k == 1 else f"{label} ({k})", prompt, blk, t, max(5.0, d), gain)
+            add(kind, label if k == 1 else f"{label} ({k})", prompt, blk, t, max(5.0, d), gain, desc, anchor_raw)
             t += d
             k += 1
     return cues
