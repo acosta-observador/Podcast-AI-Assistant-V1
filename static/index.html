@@ -750,6 +750,7 @@ function renderDetail() {
     ${b.flags.length ? `<div class="flags">${b.flags.map(f => `<span>${esc(f)}</span>`).join('')}</div>` : ''}
     <div class="d-actions">
       <button class="btn ${reviewed ? '' : 'blue'}" onclick="toggleReviewed()">${reviewed ? 'Revisto' : 'Marcar como revisto'}</button>
+      <button class="btn" onclick="exportBlock()" ${S.demo || !segs.length ? 'disabled' : ''}>${I.dl}Descarregar take</button>
       ${manual ? '<button class="link" onclick="choose(null)">Repor escolha automática</button>' : ''}
     </div>
     ${b.takes.length ? `<div class="said">${b.takes.map(x => `<p><b>Take ${x.n}${x.complete ? '' : ', incompleto'}</b>${esc(x.text)}</p>`).join('')}</div>` : ''}
@@ -813,6 +814,7 @@ function stopAudio(render) { player.pause(); cancelAnimationFrame(raf); if (S.pl
 function togglePlay() { S.playing ? stopAudio(true) : playCurrent(); }
 
 /* ---------- exportações ---------- */
+function exportBlock() { if (!S.demo) location.href = `/api/episodes/${S.ep.meta.id}/blocks/${S.ep.result.blocks[S.cur].id}/export`; }
 function exportReaper() { if (!S.demo) location.href = `/api/episodes/${S.ep.meta.id}/export/reaper`; }
 async function exportWav() {
   if (S.ep.state.render === 'pronto') { location.href = `/api/episodes/${S.ep.meta.id}/export/wav`; return; }

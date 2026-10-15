@@ -9,6 +9,7 @@ import threading
 import time
 import traceback
 import unicodedata
+import tempfile
 import zipfile
 import io
 from concurrent.futures import ThreadPoolExecutor
@@ -19,9 +20,9 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Res
 
 import numpy as np
 
-from autotake import sounddesign
+from autotake import audio as audio_tools, sounddesign
 from autotake.export import to_reaper
-from autotake.pipeline import process, render_episode
+from autotake.pipeline import build_cuts, process, render_episode
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.getenv("DATA_DIR", ROOT / "data")) / "episodes"
@@ -296,6 +297,29 @@ def export_wav(eid: str):
     if not p.exists():
         raise HTTPException(404, "Ainda não há montagem")
     return FileResponse(p, media_type="audio/wav", filename=f"{slug(read_json(d / 'meta.json')['title'])}-autotake.wav")
+
+
+@app.get("/api/episodes/{eid}/blocks/{bid}/export")
+def export_block(eid: str, bid: str):
+    """WAV só com o take escolhido (ou a montagem composta) de um bloco."""
+    d = ep_dir(eid)
+    meta, result = read_json(d / "meta.json"), read_json(d / "result.json")
+    if not result:
+        raise HTTPException(400, "O episódio ainda não foi processado")
+    block = next((b for b in result["blocks"] if b["id"] == bid), None)
+    if not block:
+        raise HTTPException(404, "Bloco não encontrado")
+    cuts = [dict(c) for c in build_cuts(result, read_json(d / "selections.json", {})) if c["block"] == block["index"]]
+    if not cuts:
+        raise HTTPException(400, "Este bloco não tem take escolhido")
+    cuts[-1]["gap_after"] = 0
+    which = "composta" if len({c["take"] for c in cuts}) > 1 or len(cuts) > 1 else f"take-{cuts[0]['take']}"
+    with tempfile.TemporaryDirectory() as tmp:
+        dst = Path(tmp) / "bloco.wav"
+        audio_tools.render(d / meta["audio_file"], cuts, dst)
+        data = dst.read_bytes()
+    name = f"{slug(meta['title'])}-bloco-{block['index']}-{which}.wav"
+    return Response(data, media_type="audio/wav", headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 @app.get("/api/episodes/{eid}/export/reaper")
