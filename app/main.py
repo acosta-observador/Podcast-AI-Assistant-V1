@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Res
 
 import numpy as np
 
-from autotake import audio as audio_tools, sounddesign
+from autotake import analysis as analysis_tools, audio as audio_tools, sounddesign
 from autotake.export import to_reaper
 from autotake.pipeline import build_cuts, process, render_episode
 
@@ -134,6 +134,12 @@ def read_struct(d: Path) -> dict:
 
 
 def scenes_of(d: Path, result: dict) -> list[dict]:
+    """Cenas da Estrutura Plus: as da Análise de Guião (se existir) ou as do guião (CENA n)."""
+    an = read_json(d / "analysis.json")
+    if an and an.get("scenes"):
+        sc = analysis_tools.scenes_for_structure(an, result["blocks"])
+        if sc:
+            return sc
     meta = read_json(d / "meta.json")
     return sounddesign.scenes_for(d / meta["script_file"], len(result["blocks"]))
 
@@ -158,7 +164,16 @@ def run_structure(d: Path, scene: int) -> None:
             raise RuntimeError("Cena não encontrada.")
         planner, mood, note, reading = "local", "", "", []
         cues = []
-        if ANTHROPIC_KEY:
+        an = read_json(d / "analysis.json")
+        if an and any(x["n"] == scene and x.get("cues") for x in an.get("scenes", [])):
+            analysis_tools.link_blocks(an["items"], result["blocks"])
+            cues, skipped = analysis_tools.cues_for_scene(an, scene, tl, sc)
+            if cues:
+                asc = next(x for x in an["scenes"] if x["n"] == scene)
+                planner, mood, reading = "analysis", asc.get("direction", ""), []
+                if skipped:
+                    note = f"{skipped} sons da análise não entraram: ficam sobre entrevistas ou texto sem narração."
+        if not cues and ANTHROPIC_KEY:
             try:
                 guide = sounddesign.load_guide(GUIDE_PATH)
                 notes = read_struct(d).get("notes", {}).get(str(scene), "")
@@ -228,6 +243,10 @@ def run_clip(d: Path, cid: str) -> None:
 def resume_unfinished():
     # jobs interrompidos por um reinício do servidor voltam para a fila
     for d in DATA.iterdir():
+        aa = read_json(d / "analysis.json", {})
+        if aa.get("status") in {"a dividir em cenas", "a analisar cenas"}:
+            aa.update(status="erro", message="O servidor reiniciou a meio. Carrega em Analisar para tentar outra vez.")
+            write_json(d / "analysis.json", aa)
         ss = read_json(struct_path(d), {})
         if ss.get("status") in {"a planear", "a gerar"}:
             ss.update(status="erro", message="O servidor reiniciou a meio. Carrega em Create para tentar outra vez.")
@@ -380,6 +399,100 @@ def export_reaper(eid: str):
     rpp = to_reaper(result, read_json(d / "selections.json", {}), meta["audio_file"], meta["title"])
     name = f"{slug(meta['title'])}-autotake.rpp"
     return PlainTextResponse(rpp, headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+# ---------- Análise de Guião ----------
+def analysis_path(d: Path) -> Path:
+    return d / "analysis.json"
+
+
+def update_analysis(d: Path, fn) -> None:
+    with _lock:
+        an = read_json(analysis_path(d), {"status": None, "message": "", "done": 0, "total": 0, "items": [], "scenes": []})
+        fn(an)
+        write_json(analysis_path(d), an)
+
+
+analysis_jobs = ThreadPoolExecutor(max_workers=1)
+
+
+def run_analysis(d: Path, only: int | None = None) -> None:
+    """Fase 1: itens e cenas. Fase 2: uma chamada ao Claude por cena (3 de cada vez)."""
+    try:
+        meta = read_json(d / "meta.json")
+        guide = sounddesign.load_guide(GUIDE_PATH)
+        if only is None:
+            update_analysis(d, lambda an: an.update(status="a dividir em cenas", message="", done=0, total=0))
+            items = analysis_tools.read_items(d / meta["script_file"])
+            if not items:
+                raise RuntimeError("Não consegui ler texto no guião.")
+            scenes = analysis_tools.segment(items, ANTHROPIC_KEY)
+            for sc in scenes:
+                sc.update(cues=[], reading=[])
+            update_analysis(d, lambda an: an.update(items=items, scenes=scenes, status="a analisar cenas", total=len(scenes), done=0))
+            todo = [sc["n"] for sc in scenes]
+        else:
+            update_analysis(d, lambda an: an.update(status="a analisar cenas", message="", total=1, done=0))
+            todo = [only]
+
+        def work(n):
+            an = read_json(analysis_path(d))
+            notes = (an.get("notes") or {}).get(str(n), "")
+            try:
+                res = analysis_tools.analyze_scene(an["items"], an["scenes"], n, ANTHROPIC_KEY, guide, notes)
+                err = ""
+            except Exception as e:
+                traceback.print_exc()
+                res, err = {"reading": [], "cues": []}, str(e)
+
+            def apply(a):
+                for sc in a["scenes"]:
+                    if sc["n"] == n:
+                        sc.update(cues=res["cues"], reading=res["reading"], error=err)
+                a["done"] += 1
+            update_analysis(d, apply)
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            list(pool.map(work, todo))
+        update_analysis(d, lambda an: an.update(status="pronto"))
+    except Exception as e:
+        traceback.print_exc()
+        update_analysis(d, lambda an: an.update(status="erro", message=str(e)))
+
+
+@app.get("/api/episodes/{eid}/analysis")
+def get_analysis(eid: str):
+    d = ep_dir(eid)
+    an = read_json(analysis_path(d), {"status": None, "message": "", "done": 0, "total": 0, "items": [], "scenes": []})
+    return {"meta": read_json(d / "meta.json"), "analysis": an, "claude": bool(ANTHROPIC_KEY)}
+
+
+@app.post("/api/episodes/{eid}/analysis/run")
+def run_analysis_endpoint(eid: str, body: dict = Body(default={})):
+    d = ep_dir(eid)
+    if not ANTHROPIC_KEY:
+        raise HTTPException(400, "O servidor não tem a chave da Anthropic configurada (ANTHROPIC_API_KEY).")
+    an = read_json(analysis_path(d), {})
+    if an.get("status") in {"a dividir em cenas", "a analisar cenas"}:
+        raise HTTPException(409, "A análise já está a decorrer")
+    only = int(body["scene"]) if body.get("scene") else None
+    if only and not any(s["n"] == only for s in an.get("scenes", [])):
+        raise HTTPException(400, "Cena não encontrada")
+    if only and "notes" in body:
+        update_analysis(d, lambda a: a.setdefault("notes", {}).__setitem__(str(only), str(body["notes"])[:2000]))
+    update_analysis(d, lambda a: a.update(status="a dividir em cenas" if only is None else "a analisar cenas", message=""))
+    analysis_jobs.submit(run_analysis, d, only)
+    return {"ok": True}
+
+
+@app.delete("/api/episodes/{eid}/analysis/cues/{cid}")
+def delete_analysis_cue(eid: str, cid: str):
+    d = ep_dir(eid)
+
+    def apply(a):
+        for sc in a["scenes"]:
+            sc["cues"] = [c for c in sc.get("cues", []) if c["id"] != cid]
+    update_analysis(d, apply)
+    return {"ok": True}
 
 
 # ---------- guia de sound design (editável) ----------

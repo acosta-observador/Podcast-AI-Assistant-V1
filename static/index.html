@@ -122,6 +122,16 @@ a{color:var(--accent);text-decoration:none}
 .tl-pop input[type=text]{height:38px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font:inherit;font-size:15px;color:var(--text);width:100%}
 .tl-pop input[type=number]{height:30px;width:64px;border-radius:8px;border:1px solid var(--line);background:var(--bg);padding:0 8px;font:inherit;color:var(--text)}
 .tl-lane[data-lane]{cursor:crosshair}
+.an-sc{padding:20px 22px;margin-bottom:16px}
+.an-sc h3{margin:0;font-size:19px;font-weight:600;letter-spacing:-.02em}
+.an-cue{display:grid;grid-template-columns:auto 1fr auto;gap:10px 14px;align-items:start;padding:12px 0;border-top:1px solid var(--line)}
+.an-cue .del{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:var(--faint)}
+.an-cue .del:hover{background:var(--warn-soft);color:#d70015}
+.an-cue .del svg{width:16px;height:16px}
+.kchip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:980px;white-space:nowrap;letter-spacing:.02em}
+.kchip.sfx{background:rgba(255,159,10,.16);color:#c77700}.kchip.amb{background:rgba(48,176,199,.16);color:#1d8a9c}.kchip.mus{background:rgba(125,92,255,.14);color:#6b4cf0}
+.itag{font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:6px;background:var(--panel);color:var(--muted);white-space:nowrap}
+.itag.narracao{background:var(--accent-soft);color:var(--accent)}.itag.entrevista{background:rgba(255,159,10,.16);color:#c77700}
 .st-note{font-size:13px;color:var(--muted)}
 
 /* barra de topo */
@@ -311,11 +321,13 @@ async function api(path, opts = {}) {
 /* ---------- navegação ---------- */
 window.addEventListener('hashchange', route);
 async function route() {
-  stopAudio(); clearTimeout(S.poll); stopStructure(); clearTimeout(ST.poll); player.onloadedmetadata = player.ontimeupdate = player.onpause = player.onplay = null; if (!player.paused) player.pause();
+  stopAudio(); clearTimeout(S.poll); stopStructure(); clearTimeout(ST.poll); clearTimeout(AN.poll); player.onloadedmetadata = player.ontimeupdate = player.onpause = player.onplay = null; if (!player.paused) player.pause();
   const m = location.hash.match(/^#\/ep\/([\w-]+)/);
   if (m) return openEpisode(m[1]);
   if (location.hash === '#/projeto') return projectPage();
   if (location.hash === '#/autotake') return home();
+  const ma = location.hash.match(/^#\/analise(?:\/([\w-]+))?$/);
+  if (ma) return analisePage(ma[1]);
   const me = location.hash.match(/^#\/estrutura(?:\/([\w-]+))?$/);
   if (me) return estruturaPage(me[1]);
   return projectsPage();
@@ -337,7 +349,7 @@ function side(active) {
     <a class="back" href="#/">${I.chevL}Projetos</a>
     <div class="proj-n"><b>${esc(PROJECT.name)}</b><span>${PROJECT.ep}</span></div>
     <p class="sec">Episódio</p>${it('geral', '#/projeto', I.grid, 'Visão geral')}
-    <p class="sec">Funcionalidades</p>${it('autotake', '#/autotake', I.wave, 'AutoTake')}${it('estrutura', '#/estrutura', I.layers, 'Estrutura Plus')}
+    <p class="sec">Funcionalidades</p>${it('autotake', '#/autotake', I.wave, 'AutoTake')}${it('analise', '#/analise', I.doc, 'Análise de Guião')}${it('estrutura', '#/estrutura', I.layers, 'Estrutura Plus')}
   </aside>`;
 }
 const shell = (active, html) => `<div class="shell">${active ? side(active) : ''}<div class="main">${html}</div></div>`;
@@ -376,6 +388,7 @@ async function projectPage() {
       <p class="section-t">Funcionalidades</p>
       <div class="fgrid">
         <a class="card fcard" href="#/autotake"><span class="ico">${I.wave}</span><b>AutoTake</b><span>Encontra os takes de cada parágrafo e escolhe o melhor.</span></a>
+        <a class="card fcard" href="#/analise"><span class="ico">${I.doc}</span><b>Análise de Guião</b><span>O Claude lê o guião e propõe os sons de cada cena.</span></a>
         <a class="card fcard" href="#/estrutura"><span class="ico">${I.layers}</span><b>Estrutura Plus</b><span>Em preparação.</span></a>
       </div>
     </div>`);
@@ -393,6 +406,97 @@ async function projectPage() {
   document.getElementById('pBack').onclick = () => { player.currentTime = Math.max(0, player.currentTime - 15); };
   document.getElementById('pFwd').onclick = () => { player.currentTime = Math.min(player.duration || 0, player.currentTime + 15); };
   wave.onclick = e => { if (player.duration) { const r = wave.getBoundingClientRect(); player.currentTime = (e.clientX - r.left) / r.width * player.duration; } };
+}
+
+/* ---------- Análise de Guião ---------- */
+const AN = { id: null, data: null, poll: null };
+const KIND_CLS = { sfx: 'sfx', ambience: 'amb', music: 'mus' }, KIND_NAME = { sfx: 'EFEITO', ambience: 'AMBIENTE', music: 'MÚSICA' };
+const anRunning = a => a.status === 'a dividir em cenas' || a.status === 'a analisar cenas';
+
+async function analisePage(wanted) {
+  try { S.list = await api('/api/episodes'); } catch { S.list = []; }
+  if (!S.list.length) {
+    $app.innerHTML = shell('analise', `<div class="wrap"><h1 class="page-t">Análise de Guião</h1>
+      <p class="page-s" style="margin-bottom:32px">O Claude lê o guião e propõe os sons de cada cena.</p>
+      <div class="card empty">Ainda não há episódios. Carrega a gravação e o guião no <a href="#/autotake">AutoTake</a> primeiro.</div></div>`);
+    return;
+  }
+  const pick = S.list.find(e => e.id === wanted) || S.list.find(e => e.id === AN.id) || S.list.find(e => e.state?.status === 'pronto') || S.list[0];
+  AN.id = pick.id;
+  await loadAnalysis();
+}
+
+async function loadAnalysis() {
+  clearTimeout(AN.poll);
+  try { AN.data = await api(`/api/episodes/${AN.id}/analysis`); }
+  catch (e) { $app.innerHTML = shell('analise', `<div class="wrap"><div class="errbox">${esc(e.message)}</div></div>`); return; }
+  renderAnalysis();
+  if (anRunning(AN.data.analysis)) AN.poll = setTimeout(loadAnalysis, 3000);
+}
+
+function renderAnalysis() {
+  const d = AN.data, an = d.analysis, busy = anRunning(an), scenes = an.scenes || [];
+  const nCues = scenes.reduce((a, sc) => a + (sc.cues || []).length, 0);
+  const status = !d.claude ? 'Falta a chave da Anthropic no servidor (ANTHROPIC_API_KEY).'
+    : an.status === 'a dividir em cenas' ? 'A ler o guião e a dividir em cenas…'
+    : an.status === 'a analisar cenas' ? `A analisar cenas, ${an.done} de ${an.total}…`
+    : scenes.length ? `${scenes.length} cenas, ${nCues} sons propostos` : 'Ainda não há análise deste guião.';
+  const epOpts = S.list.map(e => `<option value="${e.id}" ${e.id === AN.id ? 'selected' : ''}>${esc(e.title)}</option>`).join('');
+  const itemsOf = sc => (an.items || []).filter(it => it.id >= sc.from && it.id <= sc.to);
+  const card = sc => `<div class="card an-sc">
+      <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
+        <div><h3>Cena ${sc.n} · ${esc(sc.title)}</h3><p class="note" style="margin:2px 0 0">${esc(sc.setting || '')}</p></div>
+        <button class="btn" data-rerun="${sc.n}" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}Analisar esta cena</button></div>
+      ${sc.direction ? `<p style="margin:12px 0 4px"><b style="font-size:12px;color:var(--muted);letter-spacing:.04em">DIREÇÃO SONORA</b><br>${esc(sc.direction)}</p>` : ''}
+      ${sc.error ? `<div class="errbox" style="margin:12px 0">${esc(sc.error)}</div>` : ''}
+      <label class="field" style="margin:10px 0 4px">Notas para o Claude sobre esta cena (opcional, usadas ao analisar esta cena)
+        <input type="text" data-note="${sc.n}" maxlength="2000" value="${esc((an.notes || {})[String(sc.n)] || '')}" ${S.demo ? 'disabled' : ''}></label>
+      <div style="margin-top:8px">${(sc.cues || []).length ? sc.cues.map(c => `<div class="an-cue">
+        <span class="kchip ${KIND_CLS[c.kind]}">${KIND_NAME[c.kind]}</span>
+        <div style="min-width:0"><b style="font-weight:600">${esc(c.label)}</b>
+          ${c.description ? `<div style="font-size:14px;margin-top:2px">${esc(c.description)}</div>` : ''}
+          ${c.anchor ? `<div class="note" style="margin-top:2px">Entra em: “${esc(c.anchor)}”</div>` : ''}
+          <div class="note" style="margin-top:2px;font-family:ui-monospace,Menlo,monospace;font-size:12px">${esc(c.prompt)}</div></div>
+        <button class="del" data-delcue="${c.id}" aria-label="Remover ${esc(c.label)}" ${S.demo ? 'disabled' : ''}>${I.trash}</button></div>`).join('') : `<p class="note">${busy ? 'A analisar…' : 'Sem sons propostos nesta cena.'}</p>`}</div>
+      ${(sc.reading || []).length ? `<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600;font-size:14px">O que o Claude percebeu</summary>
+        ${sc.reading.map(x => `<div style="margin-top:10px"><b class="note">ITEM ${x.item}</b>
+          ${x.events.length ? `<p class="note" style="margin:3px 0">Acontece: ${x.events.map(esc).join(' · ')}</p>` : ''}
+          ${x.not_happening.length ? `<p class="note" style="margin:3px 0;color:var(--warn)">Não acontece (sem som): ${x.not_happening.map(esc).join(' · ')}</p>` : ''}</div>`).join('')}</details>` : ''}
+      <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600;font-size:14px">Texto da cena (${itemsOf(sc).length} itens)</summary>
+        ${itemsOf(sc).map(it => `<div style="display:flex;gap:10px;margin-top:8px;align-items:flex-start"><span class="itag ${it.type}">${it.type === 'narracao' ? 'NARRAÇÃO' : it.type === 'entrevista' ? 'ENTREVISTA' : it.type === 'titulo' ? 'TÍTULO' : 'NOTA'}</span>
+          <span style="font-size:14px;min-width:0">${esc(it.text.length > 400 ? it.text.slice(0, 400) + '…' : it.text)}</span></div>`).join('')}</details>
+    </div>`;
+
+  $app.innerHTML = shell('analise', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios.</div>' : ''}
+    <div class="wrap">
+      <div class="ep-head"><div><h1 class="page-t">Análise de Guião</h1>
+        <p class="page-s">O Claude lê o guião, narração e entrevistas, divide o episódio em cenas e propõe os sons de cada uma. A Estrutura Plus usa esta análise para os pôr na linha do tempo.</p></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <select class="epsel" id="anep" aria-label="Episódio">${epOpts}</select>
+          <button class="btn blue" id="anrun" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${busy ? 'A analisar…' : scenes.length ? 'Analisar de novo' : 'Analisar guião'}</button>
+        </div></div>
+      <p class="st-note" style="margin:0 0 16px">${esc(status)}</p>
+      ${an.status === 'erro' ? `<div class="errbox" style="margin:0 0 16px">${esc(an.message)}</div>` : ''}
+      ${scenes.length ? `<p style="margin:0 0 16px"><a class="btn" href="#/estrutura/${AN.id}">${I.layers}Ir para a Estrutura Plus</a></p>` : `<div class="card empty">Carrega em <b>Analisar guião</b>. Demora uns minutos, porque o Claude analisa uma cena de cada vez.</div>`}
+      ${scenes.map(card).join('')}
+    </div>`);
+
+  document.getElementById('anep').onchange = e => { location.hash = '#/analise/' + e.target.value; };
+  document.getElementById('anrun').onclick = async () => {
+    if (scenes.length && !confirm('Isto volta a analisar o guião todo e substitui as cenas e os sons propostos. Continuar?')) return;
+    try { await api(`/api/episodes/${AN.id}/analysis/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch (e) { alert(e.message); return; }
+    loadAnalysis();
+  };
+  $app.querySelectorAll('[data-rerun]').forEach(b => b.onclick = async () => {
+    const n = +b.dataset.rerun, note = $app.querySelector(`[data-note="${n}"]`).value;
+    try { await api(`/api/episodes/${AN.id}/analysis/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: n, notes: note }) }); } catch (e) { alert(e.message); return; }
+    loadAnalysis();
+  });
+  $app.querySelectorAll('[data-delcue]').forEach(b => b.onclick = async () => {
+    for (const sc of scenes) sc.cues = (sc.cues || []).filter(c => c.id !== b.dataset.delcue);
+    renderAnalysis();
+    await api(`/api/episodes/${AN.id}/analysis/cues/${b.dataset.delcue}`, { method: 'DELETE' }).catch(e => { showErr(e); loadAnalysis(); });
+  });
 }
 
 /* ---------- Estrutura Plus ---------- */
@@ -467,7 +571,7 @@ function renderStructure() {
   const lane = k => st.clips.filter(c => c.lane === k && inView(c.start, c.start + c.dur)).map(c => `<button class="clip ${c.kind === 'music' ? 'mus' : c.kind === 'ambience' ? 'amb' : 'sfx'} ${c.state === 'a gerar' ? 'gen' : ''} ${c.state === 'erro' ? 'err' : ''} ${ST.sel === c.id ? 'sel' : ''}" style="left:${pct(c.start)}%;width:${c.dur / span * 100}%" data-clip="${c.id}"><span class="nm">${esc(c.label)}${c.state === 'a gerar' ? ', a gerar…' : c.state === 'erro' ? ', erro' : ''}</span><span class="bars">${bars(c.peaks, 8)}</span></button>`).join('');
   const row = (k, name, sub, h) => `<div class="tl-row" style="height:${h}px"><div class="tl-lbl">${name}<small>${sub}</small></div><div class="tl-lane" data-lane="${k}">${lane(k)}</div></div>`;
   const scnRow = ST.scene === 0 ? `<div class="tl-row" style="height:36px"><div class="tl-lbl">Cenas<small>Estrutura</small></div><div class="tl-lane">${tl.scenes.map(x => `<button class="clip scn" style="left:${pct(x.start)}%;width:${(x.end - x.start) / span * 100}%" data-scene="${x.n}">${esc(x.title)}</button>`).join('')}</div></div>` : '';
-  const chips = `<button class="sc-chip ${ST.scene === 0 ? 'on' : ''}" data-scene="0">Todas</button>` + tl.scenes.map(x => `<button class="sc-chip ${ST.scene === x.n ? 'on' : ''}" data-scene="${x.n}">${esc(x.title)}${sceneClips(x.n).length ? I.check : ''}</button>`).join('');
+  const chips = `<button class="sc-chip ${ST.scene === 0 ? 'on' : ''}" data-scene="0">Todas</button>` + tl.scenes.map(x => `<button class="sc-chip ${ST.scene === x.n ? 'on' : ''}" data-scene="${x.n}" title="${esc(x.subtitle || '')}">${esc(x.title)}${sceneClips(x.n).length ? I.check : ''}</button>`).join('');
   const epOpts = S.list.map(e => `<option value="${e.id}" ${e.id === ST.id ? 'selected' : ''} ${e.state?.status === 'pronto' ? '' : 'disabled'}>${esc(e.title)}${e.state?.status === 'pronto' ? '' : ' (a processar)'}</option>`).join('');
   const busy = running(st), n = st.clips.length, mySc = scene ? sceneClips(scene.n).length : 0;
   const status = d.missing.length ? `Falta a chave no servidor: ${d.missing.join(', ')}.`
@@ -475,7 +579,7 @@ function renderStructure() {
     : st.status === 'a gerar' ? `A gerar sons da cena ${st.scene}, ${st.done} de ${st.total}…`
     : scene ? (mySc ? `${sceneClips(scene.n).filter(c => c.state === 'gerado').length} de ${mySc} sons gerados nesta cena` : `${scene.title} ainda não tem sound design. Carrega em Create.`)
     : `${n} sons em ${tl.scenes.filter(x => sceneClips(x.n).length).length} de ${tl.scenes.length} cenas`;
-  const info = scene ? `${scene.title}, blocos ${scene.blocks[0]} a ${scene.blocks[scene.blocks.length - 1]}, ${clock(scene.start)} a ${clock(scene.end)}` : '';
+  const info = scene ? `${scene.title}${scene.subtitle ? ' · ' + scene.subtitle : ''}, blocos ${scene.blocks[0]} a ${scene.blocks[scene.blocks.length - 1]}, ${clock(scene.start)} a ${clock(scene.end)}` : '';
 
   $app.innerHTML = shell('estrutura', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios e não há áudio nem geração.</div>' : ''}
     <div class="wrap">
@@ -1003,6 +1107,16 @@ const Demo = {
       result: { duration: 140, blocks: B.map(([text, takes, auto, conf, flags, comp], i) => ({ id: 'b' + (i + 1), index: i + 1, text, takes, auto, confidence: conf, flags, composite: comp })) },
     };
   },
+  analysis() {
+    const items = [{ id: 1, type: 'titulo', text: 'TEASER INICIAL' }, { id: 2, type: 'narracao', text: this.ep.result.blocks[0].text }, { id: 3, type: 'nota', marker: 'entrevista', text: '… VÍTOR ALEXANDRE EP4 SOM 1 (01:52.27)' }, { id: 4, type: 'entrevista', speaker: 'VÍTOR ALEXANDRE', text: 'Houve contactos, efetivamente, entre o comissário e a Polícia Judiciária.' }, { id: 5, type: 'narracao', text: this.ep.result.blocks[1].text }];
+    const sc = [{ n: 1, title: 'Abertura', setting: 'Lisboa, 1755', direction: 'Passar do silêncio de estúdio à tensão do dia, deixando a voz dominar.', from: 1, to: 2, error: '',
+      reading: [{ item: 2, events: ['Lisboa acorda para um dia de festa', 'as igrejas estão cheias'], not_happening: ['ninguém imagina o que vai acontecer'] }],
+      cues: [{ id: 'a1', item: 2, kind: 'ambience', label: 'Lisboa de manhã', description: 'Rua de Lisboa ao amanhecer, 1755: vozes distantes, passos em calçada, ar de festa.', prompt: 'morning city street, distant voices', anchor: 'Lisboa acordou', gain: .65 },
+        { id: 'a2', item: 2, kind: 'sfx', label: 'Sino de igreja', description: 'Sino grave, longe, a marcar o Dia de Todos os Santos.', prompt: 'church bell tolling slowly', anchor: 'as igrejas estavam cheias', gain: .8 },
+        { id: 'a3', item: 2, kind: 'music', label: 'Cama de piano', description: 'Piano solo sóbrio, notas espaçadas, andamento lento.', prompt: 'sparse solo piano, slow, melancholic, instrumental', anchor: '', gain: .4 }] },
+      { n: 2, title: 'O sismo', setting: 'Lisboa, 9h30', direction: 'Tensão súbita, sem música; o ambiente conduz.', from: 3, to: 5, error: '', reading: [], cues: [{ id: 'a4', item: 5, kind: 'sfx', label: 'Terra a tremer', description: 'Estrondo grave e contínuo, com objetos a cair.', prompt: 'deep earthquake rumble', anchor: 'a terra começou a tremer', gain: .9 }] }];
+    return { meta: this.ep.meta, claude: true, analysis: { status: 'pronto', message: '', done: 2, total: 2, items, scenes: sc, notes: {} } };
+  },
   structure() {
     const pk = (seed, n) => Array.from({ length: n }, (_, i) => 18 + Math.round(Math.abs(Math.sin((i + seed) * .7) * Math.cos((i + seed) * .23 + 1)) * 78));
     const bl = [[1, 0, 11.5], [2, 13, 26.5], [3, 28, 34.5], [4, 38.5, 47], [5, 48.5, 57.2]].map(([block, start, end], i) => ({ block, start, end, text: this.ep.result.blocks[i].text, peaks: pk(i * 5, Math.round((end - start) * 3)) }));
@@ -1015,6 +1129,7 @@ const Demo = {
   async api(path) {
     if (!this.ep) this.ep = this.build();
     if (path === '/api/episodes') return [{ id: 'demo', title: this.ep.meta.title, created: Date.now() / 1000, state: { status: 'pronto' } }];
+    if (path === '/api/episodes/demo/analysis') return this.analysis();
     if (path === '/api/episodes/demo/structure') return this.structure();
     if (path.startsWith('/api/episodes/demo/')) return { ok: true };
     if (path === '/api/episodes/demo') return this.ep;

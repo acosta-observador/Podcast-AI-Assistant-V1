@@ -80,7 +80,8 @@ def timeline(result: dict, selections: dict, scenes: list[dict] | None = None) -
     """
     cuts = build_cuts(result, selections)
     texts = {b["index"]: b["text"] for b in result["blocks"]}
-    scene_first = {sc["blocks"][0] for sc in (scenes or [])}
+    has = {c["block"] for c in cuts}
+    scene_first = {next((b for b in sc["blocks"] if b in has), None) for sc in (scenes or [])}
     pos, spans, segs, gaps = 0.0, {}, [], {}
     for k, c in enumerate(cuts):
         length = c["end"] - c["start"]
@@ -104,8 +105,8 @@ def timeline(result: dict, selections: dict, scenes: list[dict] | None = None) -
     for sc in scenes or []:
         bs = [by_block[i] for i in sc["blocks"] if i in by_block]
         if bs:
-            sc_out.append({"n": sc["n"], "title": sc["title"], "blocks": [b["block"] for b in bs],
-                           "start": bs[0]["start"], "end": bs[-1]["end"]})
+            sc_out.append({"n": sc["n"], "title": sc["title"], "subtitle": sc.get("subtitle", ""), "setting": sc.get("setting", ""),
+                           "blocks": [b["block"] for b in bs], "start": bs[0]["start"], "end": bs[-1]["end"]})
     return {"blocks": blocks, "segments": segs, "total": round(pos, 3), "gaps": gaps, "scenes": sc_out}
 
 
