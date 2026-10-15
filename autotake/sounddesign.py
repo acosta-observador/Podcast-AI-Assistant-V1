@@ -21,6 +21,7 @@ from .text import tokenize
 
 ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5-5")
+ANTHROPIC_FAST_MODEL = os.getenv("ANTHROPIC_FAST_MODEL", "claude-haiku-4-5-20251001")
 SFX_URL = "https://api.elevenlabs.io/v1/sound-generation"
 MUSIC_URL = "https://api.elevenlabs.io/v1/music"
 N_SFX_LANES = 5
@@ -28,7 +29,8 @@ AMB_LANE = N_SFX_LANES
 MUSIC_LANE = N_SFX_LANES + 1
 LANE_NAMES = tuple(f"Efeitos {i + 1}" for i in range(N_SFX_LANES)) + ("Ambiente", "Música")
 GUIDE_FILE = Path(__file__).with_name("guia_sound_design.md")
-MAX_CUES = 120
+MAX_CUES = 150
+DEFAULT_GAIN = {"sfx": 0.8, "ambience": 0.65, "music": 0.4}
 # pausas na linha do tempo da Estrutura Plus (a montagem do AutoTake continua com as suas)
 BLOCK_GAP = 1.5
 SCENE_GAP = 4.0
@@ -188,16 +190,19 @@ Cada elemento de "cues":
  "label": nome curto em português (2 a 4 palavras),
  "description": descrição em português como na folha de sonoplastia (detalhe físico, época, lugar, andamento e instrumentos
    na música; diz também o que o som faz na cena),
- "prompt": descrição EM INGLÊS para o gerador de áudio (concreta, física, com distância, espaço e época; para music: estilo,
-   instrumentos, andamento, atmosfera; sem nomes de artistas),
+ "prompt": prompt CURTO em inglês para o gerador de áudio: 3 a 8 palavras, UM só som, simples e direto ("electric typewriter
+   typing", "desk phone ringing twice", "heavy office door closing"). NUNCA juntes dois sons num prompt ("X followed by Y",
+   "X and Y"): cria dois sons separados, cada um com o seu "anchor" e o seu momento. Para music: estilo, instrumentos e
+   andamento em poucas palavras; sem nomes de artistas,
  "anchor": 3 a 6 palavras EXATAS do texto do bloco onde o som entra ("Entra em"; em ambience e music pode faltar: entra no
    início do bloco),
  "duration": segundos (sfx 0.5 a 8, ambience 5 a 40),
  "until_block": nº do bloco onde acaba (só ambience e music),
- "gain": volume relativo de 0.1 a 1}.
-A música é opcional e há cenas sem ela. Se uma frase for ambígua, não ponhas o som."""
-MUSIC_SUFFIX = ", instrumental, no vocals, very subtle dark background underscore with low presence, leaves room for a spoken voice"
-AMBIENCE_SUFFIX = ", seamless ambient bed, no music, no speech"
+ "gain": volume relativo de 0.1 a 1 (ambiente 0.5 a 0.8, efeitos 0.6 a 1, música em cama 0.3 a 0.5)}.
+Cria mais sons, mas cada um simples: cada objeto ou ação que o texto nomeia merece o seu próprio som. A música é opcional e há
+cenas sem ela. Se uma frase for ambígua, não ponhas o som."""
+MUSIC_SUFFIX = ", instrumental, no vocals, subtle background"
+AMBIENCE_SUFFIX = ", no music"
 MUSIC_PROMPT = ("Subtle atmospheric instrumental underscore for a narrative documentary podcast, "
                 "low intensity, slow, understated, no vocals, leaves room for a spoken voice")
 MUSIC_PART = 120.0
@@ -288,6 +293,39 @@ def plan_claude(tl: dict, scene: dict, key: str, guide: str = "", notes: str = "
             "cues": cues_from_claude(data.get("cues", []), tl, scene)}
 
 
+def split_prompt(prompt: str) -> list[str]:
+    """Rede de segurança: 'X followed by Y' vira dois sons."""
+    parts = [p.strip(" ,.") for p in re.split(r"\s+(?:followed by|and then|then)\s+|;\s*", prompt) if p.strip(" ,.")]
+    parts = [p for p in parts if len(p.split()) >= 2]
+    return parts if len(parts) >= 2 else [prompt]
+
+
+def simple_prompt(text: str, key: str | None, kind: str = "sfx") -> dict:
+    """Pedido livre do utilizador → nome curto em português e prompt curto em inglês (um só som)."""
+    text = text.strip()
+    out = {"label": " ".join(text.split()[:3])[:40] or "Som", "prompt": text}
+    if key:
+        try:
+            r = httpx.post(ANTHROPIC_URL, timeout=30, headers={"x-api-key": key, "anthropic-version": "2023-06-01"}, json={
+                "model": ANTHROPIC_FAST_MODEL, "max_tokens": 200,
+                "system": "Converte o pedido de som num prompt curto em inglês para um gerador de áudio (3 a 8 palavras, UM só som, "
+                          "simples e direto) e num nome curto em português (2 a 3 palavras). Responde só com JSON: "
+                          '{"label": "...", "prompt": "..."}',
+                "messages": [{"role": "user", "content": text}]})
+            if r.status_code == 200:
+                m = re.search(r"\{.*\}", "".join(p.get("text", "") for p in r.json().get("content", [])), re.S)
+                if m:
+                    d = json.loads(m.group(0))
+                    out = {"label": str(d.get("label") or out["label"])[:40], "prompt": str(d.get("prompt") or text)[:300]}
+        except Exception:
+            pass
+    if kind == "music":
+        out["prompt"] += MUSIC_SUFFIX
+    elif kind == "ambience":
+        out["prompt"] += AMBIENCE_SUFFIX
+    return out
+
+
 def cues_from_claude(raw: list, tl: dict, scene: dict) -> list[dict]:
     by = {b["block"]: b for b in tl["blocks"]}
     ids = set(scene["blocks"])
@@ -310,9 +348,11 @@ def cues_from_claude(raw: list, tl: dict, scene: dict) -> list[dict]:
         label, prompt = str(c.get("label", "Som"))[:40], str(c["prompt"])[:400]
         desc, anchor_raw = str(c.get("description", ""))[:500], str(c.get("anchor", ""))[:120]
         try:
-            gain = max(0.05, min(1.0, float(c.get("gain", 0.8 if kind == "sfx" else 0.35))))
+            gain = max(0.05, min(1.0, float(c.get("gain", DEFAULT_GAIN[kind]))))
         except (TypeError, ValueError):
-            gain = 0.8 if kind == "sfx" else 0.35
+            gain = DEFAULT_GAIN[kind]
+        if kind == "ambience":
+            gain = max(gain, 0.55)      # os ambientes não devem ficar quase inaudíveis
         start, anchor = b["start"], _norm(str(c.get("anchor", "")).strip())
         if anchor:
             text = _norm(b["text"])
@@ -326,7 +366,10 @@ def cues_from_claude(raw: list, tl: dict, scene: dict) -> list[dict]:
                 dur = max(0.5, min(10.0, float(c.get("duration", 3))))
             except (TypeError, ValueError):
                 dur = 3.0
-            add("sfx", label, prompt, blk, start, dur, gain, desc, anchor_raw)
+            parts = split_prompt(prompt)
+            for j, part in enumerate(parts):
+                add("sfx", label if j == 0 else f"{label} ({j + 1})", part, blk,
+                    min(start + j * dur / len(parts), b["end"] - 0.3), max(0.8, dur / len(parts)), gain, desc, anchor_raw)
             continue
         end_b = by.get(int(c.get("until_block") or blk), b) if str(c.get("until_block") or blk).isdigit() else b
         end = min(scene["end"], max(end_b["end"], start + 5))

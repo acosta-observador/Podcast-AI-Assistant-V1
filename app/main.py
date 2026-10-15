@@ -15,7 +15,7 @@ import io
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
 import numpy as np
@@ -439,6 +439,59 @@ async def create_structure(eid: str, request: Request):
     update_struct(d, lambda st: (st.update(status="a planear", message="", done=0, total=0, scene=scene),
                                  st.setdefault("notes", {}).__setitem__(str(scene), notes)))
     jobs.submit(run_structure, d, scene)
+    return {"ok": True}
+
+
+@app.post("/api/episodes/{eid}/structure/clips")
+def add_clip(eid: str, body: dict = Body(...)):
+    """Som criado à mão: {"prompt": "...", "kind": "sfx|ambience|music", "start": s, "dur": s, "lane": n}."""
+    d = ep_dir(eid)
+    result = read_json(d / "result.json")
+    if not result:
+        raise HTTPException(400, "O episódio ainda não foi processado")
+    if not API_KEY:
+        raise HTTPException(400, "O servidor não tem a chave da ElevenLabs configurada (ELEVENLABS_API_KEY).")
+    text = str(body.get("prompt", "")).strip()[:300]
+    if not text:
+        raise HTTPException(400, "Escreve o que queres ouvir")
+    kind = body.get("kind") if body.get("kind") in ("sfx", "ambience", "music") else "sfx"
+    try:
+        start = max(0.0, float(body.get("start", 0)))
+        dur = float(body.get("dur", 3))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Tempo inválido")
+    dur = max(0.5, min(dur, {"sfx": 22.0, "ambience": 60.0, "music": 120.0}[kind]))
+    tl = sounddesign.timeline(result, read_json(d / "selections.json", {}), scenes_of(d, result))
+    blk = next((b["block"] for b in tl["blocks"] if b["start"] <= start <= b["end"] + sounddesign.BLOCK_GAP),
+               max([b["block"] for b in tl["blocks"] if b["start"] <= start] or [1]))
+    scene = next((x["n"] for x in tl["scenes"] if x["start"] - 1 <= start <= x["end"] + 3), 1)
+    lane = {"ambience": sounddesign.AMB_LANE, "music": sounddesign.MUSIC_LANE}.get(
+        kind, min(max(int(body.get("lane", 0)), 0), sounddesign.N_SFX_LANES - 1))
+    sp = sounddesign.simple_prompt(text, ANTHROPIC_KEY, kind)
+    made = {}
+
+    def apply(st):
+        nxt = st.get("next", 1 + max([int(c["id"][1:]) for c in st["clips"]] or [0]))
+        clip = {"id": f"c{nxt}", "kind": kind, "label": sp["label"], "prompt": sp["prompt"], "block": blk, "scene": scene,
+                "lane": lane, "start": round(start, 2), "dur": round(dur, 2), "gain": sounddesign.DEFAULT_GAIN[kind],
+                "desc": text, "anchor": "", "state": "a gerar", "peaks": [], "message": ""}
+        st["clips"].append(clip)
+        st["next"] = nxt + 1
+        made.update(clip)
+    update_struct(d, apply)
+    jobs.submit(run_clip, d, made["id"])
+    return made
+
+
+@app.patch("/api/episodes/{eid}/structure/clips/{cid}")
+def patch_clip(eid: str, cid: str, body: dict = Body(...)):
+    d = ep_dir(eid)
+
+    def apply(st):
+        for c in st["clips"]:
+            if c["id"] == cid and "gain" in body:
+                c["gain"] = max(0.05, min(1.0, float(body["gain"])))
+    update_struct(d, apply)
     return {"ok": True}
 
 

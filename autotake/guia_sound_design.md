@@ -126,25 +126,31 @@ Põe sons apenas de coisas que **acontecem de facto, no momento descrito**.
 A folha de referência tem cerca de 2 a 4 elementos por minuto de narração, contando ambientes, efeitos e música:
 
 - **1 ambiente** por cada lugar ou época (e quando o sítio muda, o ambiente muda).
-- **1 a 3 efeitos** por conjunto de parágrafos, ligados aos objetos e ações que o texto nomeia. Nem todos os parágrafos pedem efeito.
+- **1 a 3 efeitos** por conjunto de parágrafos, ligados aos objetos e ações que o texto nomeia. Cada objeto ou ação que o texto nomeia merece o seu próprio efeito, separado.
 - **1 música ou silêncio decidido** por secção, com stingers nos fechos e nas viragens.
 - Passagens de análise, opinião e cronologia seca pedem só ambiente baixo e/ou cama de piano. Passagens de ação, objetos e
   confronto pedem efeitos.
 - A cena tem de soar **viva e coerente**, não despida nem atulhada. Se hesitas entre pôr e não pôr, e o texto não nomeia o som, não pões.
 
-## 9. Como descrever cada som ao gerador (prompts em inglês)
+## 9. Como descrever cada som ao gerador (prompts em inglês, curtos)
 
-Concreto e físico: material, distância, espaço acústico e época. Os termos de pesquisa da folha de referência mostram o tom certo:
-"heavy office door close footsteps", "international phone ring landline", "fax machine receiving", "newspaper printing press running",
-"newspaper pages rustle close", "fist slam table chair scrape", "rubber stamp heavy paper", "press camera flashes crowd 90s",
-"church organ low sustained chord stinger", "sparse piano drone documentary underscore", "low double bass pulse tension stinger".
+**Curtos e simples: 3 a 8 palavras e UM só som por prompt.** O gerador responde melhor a pedidos diretos do que a descrições longas.
 
-- Indica a época quando importa ("1990s", "analog").
-- Para ambiente: "seamless", sem música e sem vozes. Para música: sem vozes (a menos que seja coro sacro), cama discreta.
-- Não peças vozes humanas a falar. Murmúrio indistinto de multidão ou de plenário é aceitável.
+- Bom: "electric typewriter typing", "desk phone ringing twice", "heavy office door closing", "newspaper pages rustling",
+  "fax machine receiving", "camera flashes crowd", "pen writing on paper", "rubber stamp on paper".
+- Mau: "electric typewriter in an office followed by a distant rotary desk phone ringing twice".
+- **Nunca juntes dois sons** ("X followed by Y", "X and Y"). Cria dois sons separados, cada um com o seu momento. Onde o texto
+  nomeia dois objetos ("máquina de escrever e telefone de escritório"), são dois efeitos: a máquina de escrever entra primeiro e
+  o telefone um pouco depois, em faixas diferentes.
+- Se a época ou a distância importam, uma palavra chega ("1990s", "distant").
+- Para ambiente: "office ambience", "rainy night street", "quiet church interior". Sem vozes a falar. Murmúrio indistinto é aceitável.
+- Para música: estilo, instrumentos e andamento em poucas palavras ("sparse solo piano, slow, melancholic").
+
+A descrição em português (campo "description") é que leva o detalhe, a época e o que o som faz na cena. O prompt em inglês só diz o som.
 
 ## 10. Volumes (campo gain, de 0.1 a 1)
 
-- Ambiente e música em cama: 0.2 a 0.5.
+- Ambiente: 0.5 a 0.8 (tem de se ouvir, mas sob a voz).
+- Música em cama: 0.3 a 0.5.
 - Efeitos de pontuação em primeiro plano: 0.6 a 1.
 - Stingers e pancadas: 0.5 a 0.9.

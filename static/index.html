@@ -118,6 +118,10 @@ a{color:var(--accent);text-decoration:none}
 .sc-chip svg{width:12px;height:12px;color:var(--ok)}.sc-chip.on svg{color:#fff}
 .clip.scn{background:var(--panel);color:var(--text);justify-content:center;align-items:center;text-align:center;top:4px;bottom:4px}
 .epsel{height:34px;border-radius:980px;border:1px solid var(--line);background:var(--card);padding:0 12px;font:inherit;font-size:14px;color:var(--text);max-width:100%}
+.tl-pop{position:fixed;z-index:50;width:310px;padding:14px;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.18);display:flex;flex-direction:column;gap:10px}
+.tl-pop input[type=text]{height:38px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font:inherit;font-size:15px;color:var(--text);width:100%}
+.tl-pop input[type=number]{height:30px;width:64px;border-radius:8px;border:1px solid var(--line);background:var(--bg);padding:0 8px;font:inherit;color:var(--text)}
+.tl-lane[data-lane]{cursor:crosshair}
 .st-note{font-size:13px;color:var(--muted)}
 
 /* barra de topo */
@@ -392,7 +396,7 @@ async function projectPage() {
 }
 
 /* ---------- Estrutura Plus ---------- */
-const ST = { id: null, data: null, scene: 0, sel: null, t: 0, v0: 0, v1: 60, playing: false, raf: 0, t0: 0, tBase: 0, audios: {}, poll: null, prev: null, zoom: 1, gz: 1, draft: {} };
+const ST = { id: null, data: null, scene: 0, sel: null, t: 0, v0: 0, v1: 60, playing: false, raf: 0, t0: 0, tBase: 0, audios: {}, poll: null, prev: null, zoom: 1, gz: 1, draft: {}, add: null };
 const clock = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 const fmtT = s => { s = Math.max(0, s); const m = Math.floor(s / 60); return m + ':' + (s % 60).toFixed(1).padStart(4, '0'); };
 const running = st => st.status === 'a planear' || st.status === 'a gerar' || (st.clips || []).some(c => c.state === 'a gerar');
@@ -461,7 +465,7 @@ function renderStructure() {
   const bars = (arr, n) => (arr && arr.length ? arr : Array(n).fill(30)).map(h => `<i style="height:${h}%"></i>`).join('');
   const nar = tl.blocks.filter(b => inView(b.start, b.end)).map(b => `<button class="clip nar" style="left:${pct(b.start)}%;width:${(b.end - b.start) / span * 100}%" data-seek="${b.start}" title="${esc(b.text)}"><span class="nm">Bloco ${b.block}</span><span class="bars">${bars(b.peaks, 8)}</span></button>`).join('');
   const lane = k => st.clips.filter(c => c.lane === k && inView(c.start, c.start + c.dur)).map(c => `<button class="clip ${c.kind === 'music' ? 'mus' : c.kind === 'ambience' ? 'amb' : 'sfx'} ${c.state === 'a gerar' ? 'gen' : ''} ${c.state === 'erro' ? 'err' : ''} ${ST.sel === c.id ? 'sel' : ''}" style="left:${pct(c.start)}%;width:${c.dur / span * 100}%" data-clip="${c.id}"><span class="nm">${esc(c.label)}${c.state === 'a gerar' ? ', a gerar…' : c.state === 'erro' ? ', erro' : ''}</span><span class="bars">${bars(c.peaks, 8)}</span></button>`).join('');
-  const row = (k, name, sub, h) => `<div class="tl-row" style="height:${h}px"><div class="tl-lbl">${name}<small>${sub}</small></div><div class="tl-lane">${lane(k)}</div></div>`;
+  const row = (k, name, sub, h) => `<div class="tl-row" style="height:${h}px"><div class="tl-lbl">${name}<small>${sub}</small></div><div class="tl-lane" data-lane="${k}">${lane(k)}</div></div>`;
   const scnRow = ST.scene === 0 ? `<div class="tl-row" style="height:36px"><div class="tl-lbl">Cenas<small>Estrutura</small></div><div class="tl-lane">${tl.scenes.map(x => `<button class="clip scn" style="left:${pct(x.start)}%;width:${(x.end - x.start) / span * 100}%" data-scene="${x.n}">${esc(x.title)}</button>`).join('')}</div></div>` : '';
   const chips = `<button class="sc-chip ${ST.scene === 0 ? 'on' : ''}" data-scene="0">Todas</button>` + tl.scenes.map(x => `<button class="sc-chip ${ST.scene === x.n ? 'on' : ''}" data-scene="${x.n}">${esc(x.title)}${sceneClips(x.n).length ? I.check : ''}</button>`).join('');
   const epOpts = S.list.map(e => `<option value="${e.id}" ${e.id === ST.id ? 'selected' : ''} ${e.state?.status === 'pronto' ? '' : 'disabled'}>${esc(e.title)}${e.state?.status === 'pronto' ? '' : ' (a processar)'}</option>`).join('');
@@ -505,6 +509,7 @@ function renderStructure() {
         </div></div>
       </div>
       <div id="selcard"></div>
+      <div id="pop"></div>
       ${readingHTML(st, scene)}
       <div id="guidebox"></div>
     </div>`);
@@ -530,6 +535,13 @@ function renderStructure() {
   const sn = document.getElementById('snote'); if (sn) sn.oninput = () => { ST.draft[scene.n] = sn.value; };
   const cr = document.getElementById('create'); if (cr) cr.onclick = createStructure;
   renderGuide();
+  $app.querySelectorAll('.tl-lane[data-lane]').forEach(el => el.onclick = e => {
+    if (e.target.closest('.clip') || S.demo) return;
+    const r = el.getBoundingClientRect(), t = ST.v0 + (e.clientX - r.left) / r.width * (ST.v1 - ST.v0);
+    seekStructure(t);
+    ST.add = { lane: +el.dataset.lane, t, x: e.clientX, y: e.clientY }; renderPop();
+  });
+  renderPop();
   document.getElementById('exp').onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/structure`; };
   applyZoom(ST.zoom);
   sc.scrollLeft = keepLeft;
@@ -557,6 +569,47 @@ async function renderGuide() {
   document.getElementById('greset').onclick = async () => { if (!confirm('Repor o guia original? As tuas alterações perdem-se.')) return; await api('/api/sound-guide', { method: 'DELETE' }).catch(showErr); renderGuide(); };
 }
 
+const LANE_LABEL = k => k < SFX_LANES ? 'Efeitos ' + (k + 1) : k === SFX_LANES ? 'Ambiente' : 'Música';
+function renderPop() {
+  const el = document.getElementById('pop'); if (!el) return;
+  const a = ST.add;
+  if (!a) { el.innerHTML = ''; return; }
+  const kind = a.lane < SFX_LANES ? 'sfx' : a.lane === SFX_LANES ? 'ambience' : 'music', dur = { sfx: 3, ambience: 20, music: 30 }[kind];
+  const left = Math.max(8, Math.min(a.x - 20, window.innerWidth - 330)), top = Math.max(8, Math.min(a.y + 12, window.innerHeight - 190));
+  el.innerHTML = `<div class="tl-pop" style="left:${left}px;top:${top}px" role="dialog" aria-label="Novo som">
+    <b style="font-size:14px">Novo som · ${LANE_LABEL(a.lane)} · ${fmtT(a.t)}</b>
+    <input type="text" id="padd" maxlength="300" placeholder="${kind === 'music' ? 'Ex.: piano solo, lento, melancólico' : kind === 'ambience' ? 'Ex.: escritório, chuva na rua' : 'Ex.: máquina de escrever, porta a fechar'}">
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)">Duração <input type="number" id="pdur" min="1" max="${kind === 'music' ? 120 : kind === 'ambience' ? 60 : 22}" value="${dur}"> s</label>
+    <div style="display:flex;gap:8px"><button class="btn blue" id="pok">${I.spark}Criar</button><button class="btn" id="pcancel">Cancelar</button></div></div>`;
+  const inp = document.getElementById('padd'); inp.focus();
+  const go = async () => {
+    const text = inp.value.trim(); if (!text) return;
+    ST.add = null; renderPop();
+    try {
+      const c = await api(`/api/episodes/${ST.id}/structure/clips`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: text, kind, start: a.t, dur: +document.getElementById('pdur').value || dur, lane: a.lane }) });
+      ST.sel = c.id;
+    } catch (e) { alert(e.message); }
+    loadStructure();
+  };
+  inp.onkeydown = e => { if (e.key === 'Enter') go(); else if (e.key === 'Escape') { ST.add = null; renderPop(); } };
+  document.getElementById('pok').onclick = go;
+  document.getElementById('pcancel').onclick = () => { ST.add = null; renderPop(); };
+}
+
+async function deleteSelected() {
+  const c = ST.data && ST.data.structure.clips.find(x => x.id === ST.sel); if (!c) return;
+  ST.data.structure.clips = ST.data.structure.clips.filter(x => x.id !== c.id); ST.sel = null; renderStructure();
+  await api(`/api/episodes/${ST.id}/structure/clips/${c.id}`, { method: 'DELETE' }).catch(e => { showErr(e); loadStructure(); });
+}
+
+document.addEventListener('keydown', e => {
+  if (location.hash.indexOf('#/estrutura') !== 0 || !ST.data || e.target.closest('input,textarea,select') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if ((e.key === 'Delete' || e.key === 'Backspace') && ST.sel) { e.preventDefault(); deleteSelected(); }
+  else if (e.key === 'Escape') { ST.sel = null; ST.add = null; renderStructure(); }
+  else if (e.key === ' ') { e.preventDefault(); if (!S.demo) playStructure(); }
+});
+
 function chooseScene(n) {
   stopStructure(true); ST.scene = n; ST.sel = null; ST.zoom = 1; ST.t = 0;
   setView(); ST.t = ST.v0;
@@ -574,20 +627,23 @@ function renderSelected() {
       <p class="note" style="margin:2px 0 8px">${c.kind === 'music' ? 'Música' : c.kind === 'ambience' ? 'Ambiente' : 'Efeito'}, ${c.dur.toFixed(1).replace('.', ',')} s, cena ${c.scene}, bloco ${c.block} do guião${c.state === 'erro' ? `<br><span style="color:var(--warn)">${esc(c.message)}</span>` : ''}</p>
       ${c.desc ? `<p style="margin:0 0 6px;font-size:14px">${esc(c.desc)}</p>` : ''}
       ${c.anchor ? `<p class="note" style="margin:0 0 12px">Entra em: “${esc(c.anchor)}”</p>` : ''}
+      <label class="field" style="margin-bottom:12px">Volume <span style="display:flex;align-items:center;gap:10px"><input type="range" id="cgain" min="5" max="100" value="${Math.round((c.gain ?? (c.kind === 'sfx' ? .8 : c.kind === 'ambience' ? .65 : .4)) * 100)}" ${S.demo ? 'disabled' : ''} style="flex:1"><span id="cgl" style="min-width:38px">${Math.round((c.gain ?? .8) * 100)}%</span></span></label>
       <label class="field">Descrição do som (em inglês, é o que a ElevenLabs recebe)<textarea id="cprompt" rows="3" ${S.demo ? 'disabled' : ''}>${esc(c.prompt)}</textarea></label></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-self:flex-end">
       <button class="btn blue" id="cregen" ${S.demo || c.state === 'a gerar' ? 'disabled' : ''}>${I.spark}Regenerar</button>
       <button class="btn" id="clisten" ${S.demo || c.state !== 'gerado' ? 'disabled' : ''}>Ouvir</button>
-      <button class="btn" id="cdel" ${S.demo ? 'disabled' : ''}>Remover</button></div></div>`;
+      <button class="btn" id="cdel" ${S.demo ? 'disabled' : ''} title="Tecla Delete">Remover</button></div></div>`;
   document.getElementById('cregen').onclick = async () => {
     await api(`/api/episodes/${ST.id}/structure/clips/${c.id}/regenerate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: document.getElementById('cprompt').value }) }).catch(showErr);
     loadStructure();
   };
   document.getElementById('clisten').onclick = () => { ST.prev?.pause(); ST.prev = new Audio(`/api/episodes/${ST.id}/structure/clips/${c.id}/audio?v=${Date.now()}`); ST.prev.play().catch(showErr); };
-  document.getElementById('cdel').onclick = async () => {
-    if (!confirm(`Remover "${c.label}"?`)) return;
-    await api(`/api/episodes/${ST.id}/structure/clips/${c.id}`, { method: 'DELETE' }).catch(showErr);
-    ST.sel = null; loadStructure();
+  document.getElementById('cdel').onclick = deleteSelected;
+  const g = document.getElementById('cgain');
+  g.oninput = () => { document.getElementById('cgl').textContent = g.value + '%'; };
+  g.onchange = async () => {
+    c.gain = g.value / 100;
+    await api(`/api/episodes/${ST.id}/structure/clips/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gain: c.gain }) }).catch(showErr);
   };
 }
 
@@ -634,7 +690,7 @@ function loopStructure() {
     } else if (!player.paused) player.pause();
     for (const c of ST.data.structure.clips) {
       const on = c.state === 'gerado' && t >= c.start && t < c.start + c.dur, a = ST.audios[c.id];
-      if (on && !a) { const x = ST.audios[c.id] = new Audio(`/api/episodes/${ST.id}/structure/clips/${c.id}/audio`); x.currentTime = t - c.start; x.volume = Math.min(1, c.gain ?? (c.kind === 'sfx' ? .8 : .4)); x.play().catch(() => {}); }
+      if (on && !a) { const x = ST.audios[c.id] = new Audio(`/api/episodes/${ST.id}/structure/clips/${c.id}/audio`); x.currentTime = t - c.start; x.volume = Math.min(1, c.gain ?? (c.kind === 'sfx' ? .8 : c.kind === 'ambience' ? .65 : .4)); x.play().catch(() => {}); }
       else if (!on && a) { a.pause(); delete ST.audios[c.id]; }
     }
     movePlayhead();
