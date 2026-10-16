@@ -143,6 +143,15 @@ a{color:var(--accent);text-decoration:none}
 .cue-e .pr input{flex:1;min-width:0;border:0;background:transparent;font:inherit;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted);padding:2px 4px}
 .cue-e select{border:0;background:transparent;font:inherit;font-size:11px;font-weight:700;letter-spacing:.02em;border-radius:980px;padding:3px 6px;cursor:pointer}
 .cue-e select.sfx{background:rgba(255,159,10,.16);color:#c77700}.cue-e select.ambience{background:rgba(48,176,199,.16);color:#1d8a9c}.cue-e select.music{background:rgba(125,92,255,.14);color:#6b4cf0}
+.mp{padding:18px 20px;margin-top:14px}
+.mp .hd{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.mp textarea{width:100%;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:10px 12px;font:inherit;font-size:14px;line-height:1.45;color:var(--text);resize:vertical;min-height:64px;box-sizing:border-box;margin-top:10px}
+.mp textarea:focus,.mp input[type=number]:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.mp .row2{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--muted)}
+.mp input[type=number]{height:30px;width:70px;border-radius:8px;border:1px solid var(--line);background:var(--bg);padding:0 8px;font:inherit;color:var(--text)}
+.mp audio{width:100%;max-width:520px;height:36px}
+.rchip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:980px;letter-spacing:.03em;background:rgba(125,92,255,.14);color:#6b4cf0}
+.rchip.stem{background:rgba(48,176,199,.16);color:#1d8a9c}.rchip.stinger{background:rgba(255,159,10,.16);color:#c77700}.rchip.transition{background:var(--panel);color:var(--muted)}
 .snd-wrap{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .snd{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:5px 6px 5px 12px;border-radius:980px;background:var(--panel);border:1px solid var(--line);font-size:14px;line-height:1.3}
 .snd.music{background:rgba(125,92,255,.12);border-color:rgba(125,92,255,.3);color:#6b4cf0}
@@ -335,6 +344,7 @@ const I = {
   layers:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>',
   logo:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 10v4M9 6v12M13 9v6M17 4v16M21 11v2"/></svg>',
   spark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>',
+  music:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>',
   dl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
 };
 
@@ -357,11 +367,13 @@ async function api(path, opts = {}) {
 /* ---------- navegação ---------- */
 window.addEventListener('hashchange', route);
 async function route() {
-  stopAudio(); clearTimeout(S.poll); stopStructure(); clearTimeout(ST.poll); clearTimeout(AN.poll); player.onloadedmetadata = player.ontimeupdate = player.onpause = player.onplay = null; if (!player.paused) player.pause();
+  stopAudio(); clearTimeout(S.poll); stopStructure(); clearTimeout(ST.poll); clearTimeout(AN.poll); clearTimeout(MA.poll); player.onloadedmetadata = player.ontimeupdate = player.onpause = player.onplay = null; if (!player.paused) player.pause();
   const m = location.hash.match(/^#\/ep\/([\w-]+)/);
   if (m) return openEpisode(m[1]);
   if (location.hash === '#/projeto') return projectPage();
   if (location.hash === '#/autotake') return home();
+  const mm = location.hash.match(/^#\/maestro(?:\/([\w-]+))?(?:\/(\d+))?$/);
+  if (mm) return maestroPage(mm[1], mm[2] ? +mm[2] : null);
   const ma = location.hash.match(/^#\/analise(?:\/([\w-]+))?(?:\/(\d+))?$/);
   if (ma) return analisePage(ma[1], ma[2] ? +ma[2] : null);
   const me = location.hash.match(/^#\/estrutura(?:\/([\w-]+))?(?:\/(\d+))?$/);
@@ -385,7 +397,7 @@ function side(active) {
     <a class="back" href="#/">${I.chevL}Projetos</a>
     <div class="proj-n"><b>${esc(PROJECT.name)}</b><span>${PROJECT.ep}</span></div>
     <p class="sec">Episódio</p>${it('geral', '#/projeto', I.grid, 'Visão geral')}
-    <p class="sec">Funcionalidades</p>${it('autotake', '#/autotake', I.wave, 'AutoTake')}${it('analise', '#/analise', I.doc, 'Análise de Guião')}${it('estrutura', '#/estrutura', I.layers, 'Estrutura Plus')}
+    <p class="sec">Funcionalidades</p>${it('autotake', '#/autotake', I.wave, 'AutoTake')}${it('analise', '#/analise', I.doc, 'Análise de Guião')}${it('maestro', '#/maestro', I.music, 'Maestro')}${it('estrutura', '#/estrutura', I.layers, 'Estrutura Plus')}
   </aside>`;
 }
 const shell = (active, html) => `<div class="shell">${active ? side(active) : ''}<div class="main">${html}</div></div>`;
@@ -425,6 +437,7 @@ async function projectPage() {
       <div class="fgrid">
         <a class="card fcard" href="#/autotake"><span class="ico">${I.wave}</span><b>AutoTake</b><span>Encontra os takes de cada parágrafo e escolhe o melhor.</span></a>
         <a class="card fcard" href="#/analise"><span class="ico">${I.doc}</span><b>Análise de Guião</b><span>As cenas do guião e os sons de cada parágrafo.</span></a>
+        <a class="card fcard" href="#/maestro"><span class="ico">${I.music}</span><b>Maestro</b><span>Músicas e stems para cada cena, criados a partir do texto.</span></a>
         <a class="card fcard" href="#/estrutura"><span class="ico">${I.layers}</span><b>Estrutura Plus</b><span>Em preparação.</span></a>
       </div>
     </div>`);
@@ -580,6 +593,146 @@ function renderAnalysis() {
   document.getElementById('anep').onchange = e => { location.hash = '#/analise/' + e.target.value + (sc ? '/' + sc.n : ''); };
 }
 
+/* ---------- Maestro: músicas e stems por cena ---------- */
+const MA = { id: null, data: null, poll: null, scene: null, wasRunning: false };
+const maBusy = m => m.status === 'a planear' || m.status === 'a gerar';
+const ROLE_PT = { bed: 'CAMA', stem: 'STEM', stinger: 'STINGER', transition: 'TRANSIÇÃO' };
+
+async function maestroPage(wanted, scene) {
+  try { S.list = await api('/api/episodes'); } catch { S.list = []; }
+  if (!S.list.length) {
+    $app.innerHTML = shell('maestro', `<div class="wrap"><h1 class="page-t">Maestro</h1><p class="page-s" style="margin-bottom:32px">Músicas e stems para cada cena.</p>
+      <div class="card empty">Ainda não há episódios. Carrega a gravação e o guião no <a href="#/autotake">AutoTake</a> primeiro.</div></div>`);
+    return;
+  }
+  const pick = S.list.find(e => e.id === wanted) || S.list.find(e => e.id === MA.id) || S.list.find(e => e.state?.status === 'pronto') || S.list[0];
+  MA.id = pick.id; MA.scene = scene || null;
+  await loadMaestro();
+}
+
+async function loadMaestro() {
+  clearTimeout(MA.poll);
+  try { MA.data = await api(`/api/episodes/${MA.id}/maestro`); }
+  catch (e) { $app.innerHTML = shell('maestro', `<div class="wrap"><div class="errbox">${esc(e.message)}</div></div>`); return; }
+  const running = maBusy(MA.data.maestro), a = document.activeElement;
+  const typing = a && a.matches && a.matches('textarea, input[type=number], input[type=text]');
+  if (!typing || (MA.wasRunning && !running)) renderMaestro();
+  MA.wasRunning = running;
+  if (running) MA.poll = setTimeout(loadMaestro, 3000);
+}
+
+function renderMaestro() {
+  const d = MA.data, mo = d.maestro, an = d.analysis, scenes = an.scenes || [], busy = maBusy(mo);
+  const sc = MA.scene ? scenes.find(x => x.n === MA.scene) : null;
+  const piecesOf = n => (mo.scenes[String(n)] || {}).pieces || [];
+  const epOpts = S.list.map(e => `<option value="${e.id}" ${e.id === MA.id ? 'selected' : ''}>${esc(e.title)}</option>`).join('');
+  const status = !d.claude ? 'Falta a chave da Anthropic no servidor: o Claude não pode planear as músicas.'
+    : !d.eleven ? 'Falta a chave da ElevenLabs no servidor: não é possível gerar as músicas.'
+    : mo.status === 'a planear' ? `O Claude está a planear as músicas, ${mo.done} de ${mo.total} cenas…`
+    : mo.status === 'a gerar' ? `A gerar músicas na ElevenLabs, ${mo.done} de ${mo.total}… cada uma pode demorar um minuto.` : '';
+  const errs = Object.entries(mo.errors || {}).map(([n, m]) => `<div class="errbox" style="margin:0 0 12px">Cena ${n}: ${esc(m)}</div>`).join('');
+  const post = (path, body) => api(`/api/episodes/${MA.id}/maestro/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  const head = `<div class="ep-head"><div><h1 class="page-t">Maestro</h1>
+      <p class="page-s">${sc ? `Cena ${sc.n}: ${esc(sc.title)}` : 'O Claude lê cada cena e decide as músicas e os stems (3 a 5 por cena), todos diferentes. A ElevenLabs gera-os e podes enviá-los para a Estrutura Plus.'}</p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select class="epsel" id="maep" aria-label="Episódio">${epOpts}</select>
+        ${sc ? '' : `<button class="btn blue" id="maplanall" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${busy ? 'A trabalhar…' : 'Planear as cenas'}</button>
+        <button class="btn" id="magenall" ${S.demo || busy || !d.eleven ? 'disabled' : ''}>${I.music}Gerar todas as músicas</button>`}</div></div>
+      ${status ? `<p class="st-note" style="margin:0 0 16px">${esc(status)}</p>` : ''}${errs}
+      ${mo.status === 'erro' ? `<div class="errbox" style="margin:0 0 16px">${esc(mo.message)}</div>` : ''}`;
+
+  if (!sc) {
+    $app.innerHTML = shell('maestro', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios.</div>' : ''}<div class="wrap">${head}
+      <div class="projs" style="margin-top:0">${scenes.map(s => { const ps = piecesOf(s.n), g = ps.filter(p => p.state === 'gerado').length; return `
+        <a class="card fcard" href="#/maestro/${MA.id}/${s.n}"><b style="font-size:13px;color:var(--muted);letter-spacing:.04em">CENA ${s.n}</b>
+          <b style="font-size:17px;line-height:1.3">${esc(s.title)}</b>
+          <span>${ps.length ? `<b style="color:var(--accent)">${ps.length} peças</b> · ${g} geradas` : 'sem músicas planeadas'}</span></a>`; }).join('')}</div></div>`);
+    document.getElementById('maplanall').onclick = async () => {
+      const replace = scenes.every(s => piecesOf(s.n).length);
+      if (replace && !confirm('Todas as cenas já têm músicas planeadas. Voltar a planear substitui-as, incluindo as geradas. Continuar?')) return;
+      try { await post('plan', { scene: 'all', replace }); } catch (e) { alert(e.message); return; }
+      loadMaestro();
+    };
+    document.getElementById('magenall').onclick = async () => {
+      const n = scenes.reduce((a, s) => a + piecesOf(s.n).filter(p => p.state === 'novo' || p.state === 'erro').length, 0);
+      if (!n) { alert('Não há músicas por gerar. Planeia primeiro as cenas.'); return; }
+      if (!confirm(`Gerar ${n} músicas na ElevenLabs? Gasta créditos e pode demorar alguns minutos.`)) return;
+      try { await post('generate', { scene: 'all' }); } catch (e) { alert(e.message); return; }
+      loadMaestro();
+    };
+  } else {
+    const ps = piecesOf(sc.n), info = mo.scenes[String(sc.n)] || {}, items = (an.items || []).filter(it => it.id >= sc.from && it.id <= sc.to && (it.type === 'narracao' || it.type === 'entrevista'));
+    const byId = Object.fromEntries((an.items || []).map(it => [it.id, it]));
+    const card = p => `<div class="card mp" data-p="${p.id}">
+      <div class="hd"><span class="rchip ${p.role}">${ROLE_PT[p.role] || p.role}</span><div style="flex:1;min-width:200px"><b style="font-size:16px">${esc(p.label)}</b>
+        ${p.description ? `<div class="note" style="margin-top:2px">${esc(p.description)}</div>` : ''}</div>
+        <button class="del" data-del="${p.id}" aria-label="Remover ${esc(p.label)}" ${S.demo ? 'disabled' : ''} style="width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:var(--faint)">${I.trash}</button></div>
+      <textarea data-prompt="${p.id}" rows="3" aria-label="Prompt para a ElevenLabs" ${S.demo ? 'disabled' : ''}>${esc(p.prompt)}</textarea>
+      <div class="row2"><span>Duração <input type="number" data-dur="${p.id}" min="3" max="120" value="${p.duration}" ${S.demo ? 'disabled' : ''}> s</span>
+        ${p.item && byId[p.item] ? `<span>Entra em: “${esc(byId[p.item].text.slice(0, 48))}…”</span>` : ''}</div>
+      <div class="row2" style="gap:10px">
+        ${p.state === 'gerado' ? `<audio controls preload="none" src="/api/episodes/${MA.id}/maestro/pieces/${p.id}/audio?v=${p.length || ''}"></audio>` : ''}
+        ${p.state === 'a gerar' ? '<span>A gerar na ElevenLabs…</span>' : p.state === 'erro' ? `<span style="color:var(--warn)">${esc(p.message)}</span>` : p.state === 'novo' ? '<span>Por gerar</span>' : ''}
+        <button class="btn blue" data-gen="${p.id}" ${S.demo || busy || !d.eleven || p.state === 'a gerar' ? 'disabled' : ''}>${I.spark}${p.state === 'gerado' ? 'Regenerar' : 'Gerar'}</button>
+        ${p.state === 'gerado' ? `<a class="btn" href="/api/episodes/${MA.id}/maestro/pieces/${p.id}/audio" download>${I.dl}Descarregar</a>
+          <button class="btn" data-stems="${p.id}" ${S.demo || busy ? 'disabled' : ''} title="Separa a música em stems (bateria, baixo, outros…) na ElevenLabs">Separar stems</button>
+          ${p.stems ? `<a class="btn" href="/api/episodes/${MA.id}/maestro/pieces/${p.id}/stems.zip">${I.dl}Stems (zip)</a>` : ''}` : ''}</div></div>`;
+    $app.innerHTML = shell('maestro', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios.</div>' : ''}<div class="wrap">
+      <p style="margin:0 0 12px"><a class="back" href="#/maestro/${MA.id}">${I.chevL}Todas as cenas</a></p>${head}
+      <div class="card an-sc">
+        <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <label class="field" style="flex:1 1 320px;margin:0">Notas para o Claude sobre as músicas desta cena (opcional)
+            <input type="text" id="manote" maxlength="2000" placeholder="Ex.: mais piano e menos sintetizadores; tensão a crescer até ao fim" ${S.demo ? 'disabled' : ''}></label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" id="maplan" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${ps.length ? 'Planear de novo' : 'Planear com o Claude'}</button>
+            <button class="btn blue" id="magen" ${S.demo || busy || !d.eleven || !ps.some(p => p.state === 'novo' || p.state === 'erro') ? 'disabled' : ''}>${I.music}Gerar tudo</button>
+            <button class="btn" id="masend" ${S.demo || busy || !ps.some(p => p.state === 'gerado') ? 'disabled' : ''} title="Copia as músicas geradas para a faixa de Música da Estrutura Plus">${I.layers}Enviar para a Estrutura Plus</button></div></div>
+        ${info.direction ? `<p style="margin:14px 0 0"><b style="font-size:12px;color:var(--muted);letter-spacing:.04em">ARCO MUSICAL</b><br>${esc(info.direction)}</p>` : ''}
+      </div>
+      ${ps.length ? ps.map(card).join('') : `<div class="card empty" style="margin-top:14px">Esta cena ainda não tem músicas. Carrega em <b>Planear com o Claude</b>, ou acrescenta uma à mão abaixo.</div>`}
+      <div class="card mp"><b>Acrescentar uma música</b>
+        <textarea id="mnew" rows="2" placeholder="Descreve a música ou o stem (português ou inglês). Ex.: percussão suave de tique-taque, misteriosa, só esse elemento" ${S.demo ? 'disabled' : ''}></textarea>
+        <div class="row2"><select class="epsel" id="mnrole"><option value="bed">Cama</option><option value="stem">Stem</option><option value="stinger">Stinger</option><option value="transition">Transição</option></select>
+          <span>Duração <input type="number" id="mndur" min="3" max="120" value="40"> s</span><button class="btn blue" id="mnadd" ${S.demo ? 'disabled' : ''}>Adicionar</button></div></div>
+      <details style="margin-top:14px"><summary style="cursor:pointer;font-weight:600;font-size:14px">Texto da cena (${items.length} parágrafos)</summary>
+        ${items.map(it => `<div style="display:flex;gap:10px;margin-top:8px;align-items:flex-start"><span class="itag ${it.type}">${it.type === 'narracao' ? 'NARRAÇÃO' : 'ENTREVISTA'}</span><span style="font-size:14px">${esc(it.text.length > 400 ? it.text.slice(0, 400) + '…' : it.text)}</span></div>`).join('')}</details></div>`);
+
+    document.getElementById('maplan').onclick = async () => {
+      if (ps.length && !confirm('Isto substitui as músicas desta cena, incluindo as já geradas. Continuar?')) return;
+      try { await post('plan', { scene: sc.n, notes: document.getElementById('manote').value }); } catch (e) { alert(e.message); return; }
+      loadMaestro();
+    };
+    document.getElementById('magen').onclick = async () => {
+      const n = ps.filter(p => p.state === 'novo' || p.state === 'erro').length;
+      if (!confirm(`Gerar ${n} música(s) na ElevenLabs? Gasta créditos.`)) return;
+      try { await post('generate', { scene: sc.n }); } catch (e) { alert(e.message); return; }
+      loadMaestro();
+    };
+    document.getElementById('masend').onclick = async () => {
+      try { const r = await post('send', { scene: sc.n }); alert(`${r.sent} músicas enviadas para a Estrutura Plus (faixas Música e Música 2).`); location.hash = `#/estrutura/${MA.id}/${sc.n}`; }
+      catch (e) { alert(e.message); }
+    };
+    document.getElementById('mnadd').onclick = async () => {
+      const text = document.getElementById('mnew').value.trim(); if (!text) return;
+      try { await post('pieces', { scene: sc.n, text, role: document.getElementById('mnrole').value, duration: +document.getElementById('mndur').value }); } catch (e) { alert(e.message); return; }
+      loadMaestro();
+    };
+    $app.querySelectorAll('[data-gen]').forEach(b => b.onclick = async () => { try { await post('generate', { ids: [b.dataset.gen] }); } catch (e) { alert(e.message); return; } loadMaestro(); });
+    $app.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+      if (!confirm('Remover esta música?')) return;
+      await api(`/api/episodes/${MA.id}/maestro/pieces/${b.dataset.del}`, { method: 'DELETE' }).catch(showErr); loadMaestro();
+    });
+    $app.querySelectorAll('[data-prompt]').forEach(t => t.onchange = async () => { await api(`/api/episodes/${MA.id}/maestro/pieces/${t.dataset.prompt}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: t.value }) }).catch(showErr); loadMaestro(); });
+    $app.querySelectorAll('[data-dur]').forEach(i => i.onchange = async () => { await api(`/api/episodes/${MA.id}/maestro/pieces/${i.dataset.dur}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ duration: +i.value }) }).catch(showErr); });
+    $app.querySelectorAll('[data-stems]').forEach(b => b.onclick = async () => {
+      if (!confirm('Separar esta música em stems na ElevenLabs? Gasta créditos e pode demorar.')) return;
+      b.disabled = true; b.textContent = 'A separar…';
+      try { await post(`pieces/${b.dataset.stems}/stems`, {}); } catch (e) { alert(e.message); }
+      loadMaestro();
+    });
+  }
+  document.getElementById('maep').onchange = e => { location.hash = '#/maestro/' + e.target.value + (sc ? '/' + sc.n : ''); };
+}
+
 /* ---------- Estrutura Plus ---------- */
 const ST = { id: null, data: null, scene: 0, sel: null, t: 0, v0: 0, v1: 60, playing: false, raf: 0, t0: 0, tBase: 0, audios: {}, poll: null, prev: null, zoom: 1, gz: 1, draft: {}, add: null };
 const clock = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
@@ -705,6 +858,7 @@ function renderStructure() {
           ${Array.from({ length: SFX_LANES }, (_, k) => row(k, 'Efeitos ' + (k + 1), 'Sound design', 44)).join('')}
           ${st.clips.some(c => c.lane === SFX_LANES) ? row(SFX_LANES, 'Ambiente', 'Sound design', 44) : ''}
           ${row(SFX_LANES + 1, 'Música', 'Sound design', 44)}
+          ${st.clips.some(c => c.lane === SFX_LANES + 2) ? row(SFX_LANES + 2, 'Música 2', 'Maestro', 44) : ''}
           <div class="tl-ov"><div class="tl-ph" id="ph" style="left:${pct(ST.t)}%"></div></div>
         </div>
         </div></div>
@@ -776,7 +930,7 @@ async function renderGuide() {
   document.getElementById('greset').onclick = async () => { if (!confirm('Repor o guia original? As tuas alterações perdem-se.')) return; await api('/api/sound-guide', { method: 'DELETE' }).catch(showErr); renderGuide(); };
 }
 
-const LANE_LABEL = k => k < SFX_LANES ? 'Efeitos ' + (k + 1) : k === SFX_LANES ? 'Ambiente' : 'Música';
+const LANE_LABEL = k => k < SFX_LANES ? 'Efeitos ' + (k + 1) : k === SFX_LANES ? 'Ambiente' : k === SFX_LANES + 1 ? 'Música' : 'Música 2';
 function renderPop() {
   const el = document.getElementById('pop'); if (!el) return;
   const a = ST.add;
@@ -1255,6 +1409,14 @@ const Demo = {
       result: { duration: 140, blocks: B.map(([text, takes, auto, conf, flags, comp], i) => ({ id: 'b' + (i + 1), index: i + 1, text, takes, auto, confidence: conf, flags, composite: comp })) },
     };
   },
+  maestro() {
+    const a = this.analysis().analysis;
+    return { meta: this.ep.meta, claude: true, eleven: true, analysis: { scenes: a.scenes, items: a.items, notes: {} },
+      maestro: { status: null, message: '', done: 0, total: 0, errors: {}, scenes: { '2': { direction: 'Tensão súbita que se abre num vazio, sem épico: piano e texturas eletrónicas, com o tique-taque a marcar o tempo.', pieces: [
+        { id: 'p1', role: 'bed', label: 'Piano de feltro', description: 'Abre a cena com contenção.', prompt: 'felt piano with soft analog pads, slow and restrained, dark detective TV show underscore, a muted electric guitar far away', item: 6, duration: 60, gain: .4, state: 'gerado', length: 60 },
+        { id: 'p2', role: 'stem', label: 'Tique-taque', description: 'Relógio mental a marcar a tensão.', prompt: 'soft ticking mysterious percussion only, dry and quiet, no other instruments, no melody', item: 6, duration: 45, gain: .35, state: 'novo' },
+        { id: 'p3', role: 'stinger', label: 'Acorde grave', description: 'Viragem no maremoto.', prompt: 'single low piano chord with a long metallic tail, dark, tense and restrained', item: 7, duration: 6, gain: .5, state: 'novo' }] } } } };
+  },
   analysis() {
     const T = i => this.ep.result.blocks[i].text;
     const items = [{ id: 1, type: 'titulo', text: 'CENA 1 - Lisboa acorda' }, { id: 2, type: 'narracao', text: T(0) }, { id: 3, type: 'nota', marker: 'entrevista', text: '… VÍTOR ALEXANDRE EP4 SOM 1' },
@@ -1275,6 +1437,7 @@ const Demo = {
   async api(path) {
     if (!this.ep) this.ep = this.build();
     if (path === '/api/episodes') return [{ id: 'demo', title: this.ep.meta.title, created: Date.now() / 1000, state: { status: 'pronto' } }];
+    if (path === '/api/episodes/demo/maestro') return this.maestro();
     if (path === '/api/episodes/demo/analysis') return this.analysis();
     if (path === '/api/episodes/demo/structure') return this.structure();
     if (path.startsWith('/api/episodes/demo/')) return { ok: true };

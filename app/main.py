@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Res
 
 import numpy as np
 
-from autotake import analysis as analysis_tools, audio as audio_tools, sounddesign
+from autotake import analysis as analysis_tools, audio as audio_tools, maestro as maestro_tools, sounddesign
 from autotake.export import to_reaper
 from autotake.pipeline import GAP_BETWEEN_BLOCKS, build_cuts, process, render_episode
 
@@ -126,7 +126,8 @@ def read_struct(d: Path) -> dict:
     st = read_json(struct_path(d), {"status": None, "message": "", "done": 0, "total": 0, "scene": None, "clips": []})
     for c in st["clips"]:
         if c.get("kind") == "music":
-            c["lane"] = sounddesign.MUSIC_LANE    # versões antigas tinham menos faixas
+            if c.get("lane") not in (sounddesign.MUSIC_LANE, sounddesign.MUSIC_LANE2):
+                c["lane"] = sounddesign.MUSIC_LANE    # versões antigas tinham menos faixas
         elif c.get("kind") == "ambience":
             c["lane"] = sounddesign.AMB_LANE
         else:
@@ -263,6 +264,14 @@ def run_clip(d: Path, cid: str) -> None:
 def resume_unfinished():
     # jobs interrompidos por um reinício do servidor voltam para a fila
     for d in DATA.iterdir():
+        mo = read_json(d / "maestro.json", {})
+        if mo.get("status") in {"a planear", "a gerar"}:
+            mo["status"], mo["message"] = "erro", "O servidor reiniciou a meio. Carrega outra vez para continuar."
+            for sc in mo.get("scenes", {}).values():
+                for p in sc.get("pieces", []):
+                    if p.get("state") == "a gerar":
+                        p["state"], p["message"] = "erro", "Interrompido pelo reinício do servidor."
+            write_json(d / "maestro.json", mo)
         aa = read_json(d / "analysis.json", {})
         if aa.get("status") == "a sugerir sons":
             aa.update(status="erro", message="O servidor reiniciou a meio. Carrega em Sugerir sons para tentar outra vez.")
@@ -587,6 +596,324 @@ def suggest_endpoint(eid: str, body: dict = Body(default={})):
     update_analysis(d, lambda a: a.update(status="a sugerir sons", message="", done=0, total=len(todo)))
     analysis_jobs.submit(run_suggest, d, todo, notes)
     return {"ok": True, "scenes": todo}
+
+
+# ---------- Maestro: músicas e stems por cena ----------
+def maestro_path(d: Path) -> Path:
+    return d / "maestro.json"
+
+
+def read_maestro(d: Path) -> dict:
+    return read_json(maestro_path(d), {"status": None, "message": "", "done": 0, "total": 0, "errors": {}, "next": 1, "scenes": {}})
+
+
+def update_maestro(d: Path, fn) -> None:
+    with _lock:
+        mm = read_maestro(d)
+        fn(mm)
+        mm["ts"] = time.time()
+        write_json(maestro_path(d), mm)
+
+
+def maestro_busy(d: Path) -> bool:
+    mm = read_maestro(d)
+    return bool(mm.get("status") in {"a planear", "a gerar"} and time.time() - mm.get("ts", 0) < 900)
+
+
+def _find_piece(mm: dict, pid: str):
+    for n, sc in mm["scenes"].items():
+        for p in sc["pieces"]:
+            if p["id"] == pid:
+                return n, p
+    return None, None
+
+
+def run_maestro_plan(d: Path, todo: list[int], notes: dict) -> None:
+    """O Claude planeia as músicas de cada cena (3 de cada vez). Substitui as peças da cena."""
+    try:
+        update_maestro(d, lambda mm: mm.update(status="a planear", message="", done=0, total=len(todo), errors={}))
+        an = load_analysis(d)
+
+        def work(n):
+            try:
+                plan, err = maestro_tools.plan_scene(an, n, ANTHROPIC_KEY, notes.get(str(n), "")), ""
+            except Exception as e:
+                traceback.print_exc()
+                plan, err = None, str(e)
+
+            def apply(mm):
+                if plan is not None:
+                    for old in mm["scenes"].get(str(n), {}).get("pieces", []):
+                        (d / "maestro" / f"{old['id']}.mp3").unlink(missing_ok=True)
+                    nxt, pieces = mm.get("next", 1), []
+                    for p in plan["pieces"]:
+                        pieces.append({**p, "id": f"p{nxt}", "state": "novo", "message": "", "length": None})
+                        nxt += 1
+                    mm["next"] = nxt
+                    mm["scenes"][str(n)] = {"direction": plan["direction"], "pieces": pieces}
+                else:
+                    mm["errors"][str(n)] = err
+                mm["done"] += 1
+            update_maestro(d, apply)
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            list(pool.map(work, todo))
+        update_maestro(d, lambda mm: mm.update(status="pronto"))
+    except Exception as e:
+        traceback.print_exc()
+        update_maestro(d, lambda mm: mm.update(status="erro", message=str(e)))
+
+
+def run_maestro_generate(d: Path, ids: list[str]) -> None:
+    """A ElevenLabs gera as músicas (3 de cada vez)."""
+    try:
+        (d / "maestro").mkdir(exist_ok=True)
+        update_maestro(d, lambda mm: mm.update(status="a gerar", message="", done=0, total=len(ids)))
+
+        def work(pid):
+            piece = _find_piece(read_maestro(d), pid)[1]
+            dst = d / "maestro" / f"{pid}.mp3"
+            try:
+                maestro_tools.generate_piece(piece, API_KEY, dst)
+                try:
+                    length = round(audio_tools.probe(dst)["duration"], 1)
+                except Exception:
+                    length = piece.get("duration")
+                patch = {"state": "gerado", "message": "", "length": length}
+            except Exception as e:
+                traceback.print_exc()
+                patch = {"state": "erro", "message": str(e)}
+
+            def apply(mm):
+                p = _find_piece(mm, pid)[1]
+                if p:
+                    p.update(patch)
+                mm["done"] += 1
+            update_maestro(d, apply)
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            list(pool.map(work, ids))
+        update_maestro(d, lambda mm: mm.update(status="pronto"))
+    except Exception as e:
+        traceback.print_exc()
+        update_maestro(d, lambda mm: mm.update(status="erro", message=str(e)))
+
+
+@app.get("/api/episodes/{eid}/maestro")
+def get_maestro(eid: str):
+    d = ep_dir(eid)
+    an = load_analysis(d)
+    return {"meta": read_json(d / "meta.json"), "analysis": {"scenes": an["scenes"], "items": an["items"], "notes": an.get("notes", {})},
+            "maestro": read_maestro(d), "claude": bool(ANTHROPIC_KEY), "eleven": bool(API_KEY)}
+
+
+@app.post("/api/episodes/{eid}/maestro/plan")
+def maestro_plan(eid: str, body: dict = Body(default={})):
+    """{"scene": n | "all", "notes": "..."}: o Claude propõe as músicas. Substitui as peças das cenas pedidas."""
+    d = ep_dir(eid)
+    if not ANTHROPIC_KEY:
+        raise HTTPException(400, "O servidor não tem a chave da Anthropic configurada (ANTHROPIC_API_KEY).")
+    if maestro_busy(d):
+        raise HTTPException(409, "O Maestro já está a trabalhar")
+    an = load_analysis(d)
+    if body.get("scene") == "all":
+        mm = read_maestro(d)
+        todo = [s["n"] for s in an["scenes"] if body.get("replace") or not mm["scenes"].get(str(s["n"]), {}).get("pieces")]
+    else:
+        todo = [int(body.get("scene") or 0)]
+        if not any(s["n"] == todo[0] for s in an["scenes"]):
+            raise HTTPException(400, "Cena não encontrada")
+    if not todo:
+        raise HTTPException(400, "Todas as cenas já têm músicas planeadas")
+    notes = {str(todo[0]): str(body.get("notes", ""))[:2000]} if body.get("scene") != "all" else {}
+    update_maestro(d, lambda mm: mm.update(status="a planear", message="", done=0, total=len(todo)))
+    structure_jobs.submit(run_maestro_plan, d, todo, notes)
+    return {"ok": True, "scenes": todo}
+
+
+@app.post("/api/episodes/{eid}/maestro/generate")
+def maestro_generate(eid: str, body: dict = Body(default={})):
+    """{"scene": n | "all"} gera as peças ainda não geradas (ou com erro); {"ids": [...]} gera/regenera essas."""
+    d = ep_dir(eid)
+    if not API_KEY:
+        raise HTTPException(400, "O servidor não tem a chave da ElevenLabs configurada (ELEVENLABS_API_KEY).")
+    if maestro_busy(d):
+        raise HTTPException(409, "O Maestro já está a trabalhar")
+    mm = read_maestro(d)
+    if body.get("ids"):
+        ids = [i for i in body["ids"] if _find_piece(mm, i)[1]]
+    else:
+        scenes = mm["scenes"].keys() if body.get("scene") == "all" else [str(int(body.get("scene") or 0))]
+        ids = [p["id"] for n in scenes for p in mm["scenes"].get(n, {}).get("pieces", []) if p["state"] in ("novo", "erro")]
+    if not ids:
+        raise HTTPException(400, "Não há músicas por gerar")
+
+    def mark(m2):
+        for i in ids:
+            p = _find_piece(m2, i)[1]
+            if p:
+                p["state"], p["message"] = "a gerar", ""
+        m2.update(status="a gerar", message="", done=0, total=len(ids))
+    update_maestro(d, mark)
+    structure_jobs.submit(run_maestro_generate, d, ids)
+    return {"ok": True, "ids": ids}
+
+
+@app.post("/api/episodes/{eid}/maestro/pieces")
+def maestro_add_piece(eid: str, body: dict = Body(...)):
+    """Peça acrescentada à mão: {"scene": n, "text": "...", "role": "bed|stem|stinger|transition", "duration": s}."""
+    d = ep_dir(eid)
+    an = load_analysis(d)
+    n = int(body.get("scene") or 0)
+    sc = next((s for s in an["scenes"] if s["n"] == n), None)
+    text = str(body.get("text", "")).strip()[:500]
+    if not sc or not text:
+        raise HTTPException(400, "Escreve a música que queres")
+    role = body.get("role") if body.get("role") in maestro_tools.ROLES else "bed"
+    lo, hi = maestro_tools.DUR_LIMITS[role]
+    try:
+        dur = max(lo, min(hi, float(body.get("duration") or (lo + hi) / 2)))
+    except (TypeError, ValueError):
+        dur = (lo + hi) / 2
+    nm = analysis_tools.normalize_lines([{"text": text, "kind": "music", "anchor": ""}], ANTHROPIC_KEY)[0]
+    first = next((it["id"] for it in an["items"] if sc["from"] <= it["id"] <= sc["to"] and it["type"] == "narracao"), None)
+    made = {}
+
+    def apply(mm):
+        nxt = mm.get("next", 1)
+        piece = {"id": f"p{nxt}", "role": role, "label": nm["label"] or "Música", "description": text, "prompt": nm["prompt"], "item": first,
+                 "duration": round(dur, 1), "gain": 0.4, "state": "novo", "message": "", "length": None}
+        mm["next"] = nxt + 1
+        mm["scenes"].setdefault(str(n), {"direction": "", "pieces": []})["pieces"].append(piece)
+        made.update(piece)
+    update_maestro(d, apply)
+    return made
+
+
+@app.patch("/api/episodes/{eid}/maestro/pieces/{pid}")
+def maestro_patch_piece(eid: str, pid: str, body: dict = Body(...)):
+    d = ep_dir(eid)
+    out = {}
+
+    def apply(mm):
+        p = _find_piece(mm, pid)[1]
+        if not p:
+            return
+        if "prompt" in body:
+            p["prompt"] = str(body["prompt"])[:500]
+            if p["state"] == "gerado":
+                p["state"] = "novo"           # o prompt mudou: a música gerada já não corresponde
+        if "label" in body:
+            p["label"] = str(body["label"])[:40]
+        if "duration" in body:
+            lo, hi = maestro_tools.DUR_LIMITS[p["role"]]
+            p["duration"] = round(max(lo, min(hi, float(body["duration"]))), 1)
+        if "gain" in body:
+            p["gain"] = max(0.05, min(1.0, float(body["gain"])))
+        out.update(p)
+    update_maestro(d, apply)
+    if not out:
+        raise HTTPException(404)
+    return out
+
+
+@app.delete("/api/episodes/{eid}/maestro/pieces/{pid}")
+def maestro_delete_piece(eid: str, pid: str):
+    d = ep_dir(eid)
+    if not re.fullmatch(r"p\d+", pid):
+        raise HTTPException(404)
+
+    def apply(mm):
+        for sc in mm["scenes"].values():
+            sc["pieces"] = [p for p in sc["pieces"] if p["id"] != pid]
+    update_maestro(d, apply)
+    for suffix in (".mp3", "-stems.zip"):
+        (d / "maestro" / f"{pid}{suffix}").unlink(missing_ok=True)
+    return {"ok": True}
+
+
+@app.get("/api/episodes/{eid}/maestro/pieces/{pid}/audio")
+def maestro_audio(eid: str, pid: str):
+    if not re.fullmatch(r"p\d+", pid):
+        raise HTTPException(404)
+    p = ep_dir(eid) / "maestro" / f"{pid}.mp3"
+    if not p.exists():
+        raise HTTPException(404, "Ainda não foi gerada")
+    return FileResponse(p, media_type="audio/mpeg", filename=f"{pid}.mp3")
+
+
+@app.post("/api/episodes/{eid}/maestro/pieces/{pid}/stems")
+def maestro_stems(eid: str, pid: str, body: dict = Body(default={})):
+    """Separa a música gerada em stems (ElevenLabs). Pode demorar; guarda o ZIP."""
+    d = ep_dir(eid)
+    if not API_KEY:
+        raise HTTPException(400, "O servidor não tem a chave da ElevenLabs configurada (ELEVENLABS_API_KEY).")
+    if not re.fullmatch(r"p\d+", pid) or not (d / "maestro" / f"{pid}.mp3").exists():
+        raise HTTPException(400, "Gera a música primeiro")
+    variation = "two_stems_v1" if body.get("variation") == "two" else "six_stems_v1"
+    try:
+        maestro_tools.separate_stems(d / "maestro" / f"{pid}.mp3", API_KEY, d / "maestro" / f"{pid}-stems.zip", variation)
+    except Exception as e:
+        raise HTTPException(502, str(e))
+    update_maestro(d, lambda mm: (_find_piece(mm, pid)[1] or {}).update(stems=variation))
+    return {"ok": True}
+
+
+@app.get("/api/episodes/{eid}/maestro/pieces/{pid}/stems.zip")
+def maestro_stems_zip(eid: str, pid: str):
+    if not re.fullmatch(r"p\d+", pid):
+        raise HTTPException(404)
+    p = ep_dir(eid) / "maestro" / f"{pid}-stems.zip"
+    if not p.exists():
+        raise HTTPException(404, "Ainda não há stems")
+    return FileResponse(p, media_type="application/zip", filename=f"{pid}-stems.zip")
+
+
+@app.post("/api/episodes/{eid}/maestro/send")
+def maestro_send(eid: str, body: dict = Body(...)):
+    """Copia as músicas geradas de uma cena para a faixa de Música da Estrutura Plus (cada peça entra no parágrafo escolhido)."""
+    d = ep_dir(eid)
+    n = int(body.get("scene") or 0)
+    result = read_json(d / "result.json")
+    if not result:
+        raise HTTPException(400, "O episódio ainda não foi processado (AutoTake)")
+    mm = read_maestro(d)
+    pieces = [p for p in mm["scenes"].get(str(n), {}).get("pieces", []) if p["state"] == "gerado"]
+    if not pieces:
+        raise HTTPException(400, "Esta cena não tem músicas geradas")
+    an = load_analysis(d)
+    analysis_tools.link_blocks(an["items"], result["blocks"])
+    tl = sounddesign.timeline(result, read_json(d / "selections.json", {}), scenes_of(d, result))
+    tsc = next((x for x in tl["scenes"] if x["n"] == n), None)
+    if not tsc:
+        raise HTTPException(400, "Esta cena não tem takes escolhidos no AutoTake")
+    timed = {b["block"]: b for b in tl["blocks"]}
+    block_of = {it["id"]: it.get("block") for it in an["items"]}
+    (d / "sd").mkdir(exist_ok=True)
+    made = []
+
+    def apply(st):
+        for old in [c for c in st["clips"] if c.get("src") == "maestro" and c.get("scene") == n]:
+            (d / "sd" / f"{old['id']}.mp3").unlink(missing_ok=True)
+        st["clips"] = [c for c in st["clips"] if not (c.get("src") == "maestro" and c.get("scene") == n)]
+        nxt = st.get("next", 1 + max([int(c["id"][1:]) for c in st["clips"]] or [0]))
+        for p in pieces:
+            blk = block_of.get(p.get("item"))
+            b = timed.get(blk) or timed[tsc["blocks"][0]]
+            blk = b["block"]
+            length = float(p.get("length") or p.get("duration") or 30)
+            clip = {"id": f"c{nxt}", "kind": "music", "label": p["label"], "prompt": p["prompt"], "block": blk, "scene": n,
+                    "lane": sounddesign.MUSIC_LANE if p["role"] == "bed" else sounddesign.MUSIC_LANE2, "start": b["start"], "dur": round(length, 2), "gain": p.get("gain", 0.4), "rel": 0.0,
+                    "desc": p.get("description", ""), "anchor": "", "state": "gerado", "peaks": [], "message": "", "src": "maestro", "pid": p["id"]}
+            shutil.copyfile(d / "maestro" / f"{p['id']}.mp3", d / "sd" / f"{clip['id']}.mp3")
+            try:
+                clip["peaks"] = sounddesign.audio_peaks(d / "sd" / f"{clip['id']}.mp3", max(8, min(160, round(length * 3))))
+            except Exception:
+                clip["peaks"] = [30] * 20
+            st["clips"].append(clip)
+            made.append(clip["id"])
+            nxt += 1
+        st["next"] = nxt
+    update_struct(d, apply)
+    return {"ok": True, "sent": len(made)}
 
 
 # ---------- guia de sound design (editável) ----------

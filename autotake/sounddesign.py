@@ -26,7 +26,8 @@ MUSIC_URL = "https://api.elevenlabs.io/v1/music"
 N_SFX_LANES = 5
 AMB_LANE = N_SFX_LANES
 MUSIC_LANE = N_SFX_LANES + 1
-LANE_NAMES = tuple(f"Efeitos {i + 1}" for i in range(N_SFX_LANES)) + ("Ambiente", "Música")
+MUSIC_LANE2 = N_SFX_LANES + 2        # stems, stingers e transições do Maestro
+LANE_NAMES = tuple(f"Efeitos {i + 1}" for i in range(N_SFX_LANES)) + ("Ambiente", "Música", "Música 2")
 GUIDE_FILE = Path(__file__).with_name("guia_sound_design.md")
 MAX_CUES = 150
 DEFAULT_GAIN = {"sfx": 0.8, "ambience": 0.65, "music": 0.4}
@@ -348,7 +349,7 @@ def cues_from_claude(raw: list, tl: dict, scene: dict) -> list[dict]:
 
 
 def assign_lanes(cues: list[dict]) -> None:
-    busy: dict[int, list[tuple[float, float]]] = {k: [] for k in range(N_SFX_LANES + 2)}
+    busy: dict[int, list[tuple[float, float]]] = {k: [] for k in range(N_SFX_LANES + 3)}
     for c in sorted(cues, key=lambda x: x["start"]):
         if c["kind"] == "music":
             c["lane"] = MUSIC_LANE
