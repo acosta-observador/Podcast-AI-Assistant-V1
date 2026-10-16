@@ -110,11 +110,18 @@ def _call(system: str, user: str, key: str, max_tokens: int, timeout: int = 300,
                          "messages": [{"role": "user", "content": user}]})
     if r.status_code != 200:
         raise RuntimeError(f"A Anthropic devolveu {r.status_code}: {r.text[:300]}")
-    text = "".join(p.get("text", "") for p in r.json().get("content", []))
+    body = r.json()
+    stop = body.get("stop_reason")
+    text = "".join(p.get("text", "") for p in body.get("content", []))
+    if stop == "max_tokens":
+        raise RuntimeError("A resposta do Claude foi cortada por ser demasiado longa. Tenta outra vez ou divide a cena.")
     m = re.search(r"\{.*\}", text, re.S)
     if not m:
-        raise RuntimeError("O Claude não devolveu JSON.")
-    return json.loads(m.group(0))
+        raise RuntimeError(f"O Claude não devolveu JSON (fim: {stop}). Início da resposta: {text[:160]!r}")
+    try:
+        return json.loads(m.group(0))
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"O Claude devolveu JSON inválido ({e}). Início da resposta: {text[:160]!r}")
 
 
 SUGGEST_SYSTEM = """És o sonoplasta de um podcast true crime em português (Podcast Plus, Observador). Recebes o texto de UMA cena, parágrafo
@@ -137,11 +144,12 @@ no parágrafo onde entra, escrita assim: "música: piano solo lento, melancólic
 Quando há ação, objetos, deslocações ou confronto, sugere vários sons (cada objeto ou ação com o seu), para a cena ficar bem
 preenchida. Parágrafos de opinião, análise, datas e cronologia seca não levam sons.
 
-Faz o trabalho em dois passos e devolve-os.
-PASSO 1, "reading": para cada parágrafo de NARRAÇÃO, lê-o literalmente e escreve {"item": n, "events": [coisas que ACONTECEM
-  fisicamente e podem fazer som], "not_happening": [coisas negadas, hipotéticas, perguntadas, metafóricas ou só contadas de passagem]}.
-  "não bateu à porta" vai para not_happening: nunca ponhas som disso.
-PASSO 2, "paragraphs": {"item": n, "sounds": ["linha 1", "linha 2"]}, só com sons de "events".
+Lê cada parágrafo literalmente. Só podes sugerir sons de coisas que ACONTECEM fisicamente. Negações ("não bateu à porta"), hipóteses,
+perguntas, metáforas e factos só contados de passagem NÃO dão som.
+Faz dois passos e devolve-os.
+PASSO 1, "reading": só para os parágrafos que têm uma negação, hipótese, pergunta, metáfora ou facto contado de passagem que
+  poderia enganar, escreve {"item": n, "not_happening": ["o que NÃO acontece"]}. Os restantes não entram.
+PASSO 2, "paragraphs": {"item": n, "sounds": ["linha 1", "linha 2"]} para cada parágrafo de NARRAÇÃO com sons.
 
 Responde APENAS com JSON: {"reading": [...], "paragraphs": [...]}"""
 
@@ -158,18 +166,28 @@ def suggest_scene(an: dict, n: int, key: str, guide: str = "", notes: str = "") 
     system = SUGGEST_SYSTEM
     if guide.strip():
         system += ("\n\n# GUIA DE ABORDAGEM DO UTILIZADOR (ignora tudo o que fala de ambientes: não os sugiras)\n\n" + guide)
-    data = _call(system, msg, key, 12000, timeout=420)
+    data = _call(system, msg, key, 8000, timeout=420)
     valid = {it["id"] for it in mine if it["type"] == "narracao"}
     out: dict[int, str] = {}
-    for p in data.get("paragraphs", []):
+    paras = data.get("paragraphs", [])
+    if isinstance(paras, dict):                         # {"8": ["som", ...]}
+        paras = [{"item": k, "sounds": v} for k, v in paras.items()]
+    for p in paras:
+        if not isinstance(p, dict):
+            continue
         try:
             iid = int(p.get("item"))
         except (TypeError, ValueError):
             continue
         sounds = [str(s).strip() for s in p.get("sounds", []) if str(s).strip()]
         sounds = [s for s in sounds if not re.match(r"^(ambiente|ambience)\b", s, re.I)]
+        if isinstance(p.get("sounds"), str):
+            sounds = [s.strip() for s in p["sounds"].splitlines() if s.strip()]
         if iid in valid and sounds:
             out[iid] = "\n".join(sounds[:8])
+    if not out:
+        raise RuntimeError(f"O Claude leu a cena mas não sugeriu sons (devolveu {len(paras)} parágrafos, {len(valid)} de narração). "
+                           "Escreve uma nota para o Claude a pedir sons concretos, ou escreve os sons à mão.")
     return out
 
 

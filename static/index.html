@@ -139,6 +139,16 @@ a{color:var(--accent);text-decoration:none}
 .cue-e .pr input{flex:1;min-width:0;border:0;background:transparent;font:inherit;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted);padding:2px 4px}
 .cue-e select{border:0;background:transparent;font:inherit;font-size:11px;font-weight:700;letter-spacing:.02em;border-radius:980px;padding:3px 6px;cursor:pointer}
 .cue-e select.sfx{background:rgba(255,159,10,.16);color:#c77700}.cue-e select.ambience{background:rgba(48,176,199,.16);color:#1d8a9c}.cue-e select.music{background:rgba(125,92,255,.14);color:#6b4cf0}
+.snd-wrap{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.snd{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:5px 6px 5px 12px;border-radius:980px;background:var(--panel);border:1px solid var(--line);font-size:14px;line-height:1.3}
+.snd.music{background:rgba(125,92,255,.12);border-color:rgba(125,92,255,.3);color:#6b4cf0}
+.snd .st{outline:none;min-width:14px;overflow-wrap:anywhere}
+.snd .st:focus{background:var(--bg);border-radius:6px;padding:0 4px}
+.snd .x{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;color:var(--muted);flex:none}
+.snd .x:hover{background:var(--warn-soft);color:#d70015}
+.snd .x svg{width:12px;height:12px}
+.snd-add{height:32px;min-width:150px;flex:1 1 150px;border:1px dashed var(--line);border-radius:980px;background:transparent;padding:0 12px;font:inherit;font-size:14px;color:var(--text)}
+.snd-add:focus{outline:none;border-style:solid;border-color:var(--accent);background:var(--bg)}
 .an-lines{width:100%;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:10px 12px;font:inherit;font-size:14px;line-height:1.45;color:var(--text);resize:vertical;min-height:46px;box-sizing:border-box}
 .an-lines:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
 .an-lines.saving{opacity:.6}
@@ -452,8 +462,52 @@ async function loadAnalysis() {
   clearTimeout(AN.poll);
   try { AN.data = await api(`/api/episodes/${AN.id}/analysis`); }
   catch (e) { $app.innerHTML = shell('analise', `<div class="wrap"><div class="errbox">${esc(e.message)}</div></div>`); return; }
-  if (!document.activeElement || !document.activeElement.matches('textarea')) renderAnalysis();
-  if (anRunning(AN.data.analysis)) AN.poll = setTimeout(loadAnalysis, 3000);
+  const running = anRunning(AN.data.analysis), a = document.activeElement;
+  const typing = a && a.matches && a.matches('input.snd-add, [contenteditable], textarea');
+  if (!typing || (AN.wasRunning && !running)) renderAnalysis();
+  AN.wasRunning = running;
+  if (running) AN.poll = setTimeout(loadAnalysis, 3000);
+}
+
+const X_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+function lineParts(raw) {
+  let t = raw.trim().replace(/^[-•*·]\s*/, ''), kind = 'sfx';
+  const m = t.match(/^(m[úu]sica|music)\s*:\s*/i);
+  if (m) { kind = 'music'; t = t.slice(m[0].length); }
+  const i = t.indexOf('@');
+  return { kind, text: (i >= 0 ? t.slice(0, i) : t).trim(), anchor: i >= 0 ? t.slice(i + 1).trim() : '' };
+}
+const buildLine = p => (p.kind === 'music' ? 'música: ' : '') + p.text + (p.anchor ? ' @ ' + p.anchor : '');
+const linesOf = (an, id) => ((an.lines || {})[String(id)] || '').split('\n').filter(l => l.trim());
+function cellHTML(an, id) {
+  const chips = linesOf(an, id).map((raw, i) => { const p = lineParts(raw);
+    return `<span class="snd ${p.kind}" data-i="${i}" ${p.anchor ? `title="Entra em: ${esc(p.anchor)}"` : ''}>${p.kind === 'music' ? '♪' : ''}<span class="st" contenteditable="${S.demo ? 'false' : 'plaintext-only'}" spellcheck="false">${esc(p.text)}</span><button class="x" type="button" aria-label="Remover ${esc(p.text)}" ${S.demo ? 'disabled' : ''}>${X_SVG}</button></span>`; }).join('');
+  return chips + (S.demo ? '' : `<input class="snd-add" type="text" maxlength="300" placeholder="+ som (Enter)" aria-label="Acrescentar som">`);
+}
+async function saveLines(an, id, arr) {
+  (an.lines = an.lines || {})[String(id)] = arr.join('\n');
+  await api(`/api/episodes/${AN.id}/analysis/lines`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item: id, text: arr.join('\n') }) }).catch(showErr);
+}
+function bindCell(an, w) {
+  const id = +w.dataset.item, redraw = (focusAdd) => { w.innerHTML = cellHTML(an, id); bindCell(an, w); if (focusAdd) w.querySelector('.snd-add')?.focus(); };
+  w.querySelectorAll('.snd').forEach(chip => {
+    const i = +chip.dataset.i, st = chip.querySelector('.st');
+    chip.querySelector('.x').onclick = async () => { const arr = linesOf(an, id); arr.splice(i, 1); await saveLines(an, id, arr); redraw(); };
+    st.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); st.blur(); } };
+    st.onblur = async () => {
+      const arr = linesOf(an, id), p = lineParts(arr[i]), text = st.textContent.replace(/\s+/g, ' ').trim();
+      if (text === p.text) return;
+      if (!text) arr.splice(i, 1); else arr[i] = buildLine({ ...p, text });
+      await saveLines(an, id, arr); redraw();
+    };
+  });
+  const add = w.querySelector('.snd-add');
+  if (add) add.onkeydown = async e => {
+    if (e.key !== 'Enter' || !add.value.trim()) return;
+    e.preventDefault();
+    const arr = linesOf(an, id); arr.push(add.value.trim());
+    await saveLines(an, id, arr); redraw(true);
+  };
 }
 
 function renderAnalysis() {
@@ -494,7 +548,7 @@ function renderAnalysis() {
       ? `<div class="an-row"><div><span class="itag entrevista">ENTREVISTA${it.speaker ? ' · ' + esc(it.speaker.replace(/^[…. ]+/, '').slice(0, 40)) : ''}</span>
           <div class="an-txt entrevista" style="margin-top:6px">${esc(it.text.length > 600 ? it.text.slice(0, 600) + '…' : it.text)}</div></div><div><span class="note">Sem sons por cima da entrevista.</span></div></div>`
       : `<div class="an-row"><div><div class="an-txt">${esc(it.text)}</div></div>
-          <div><textarea class="an-lines" data-item="${it.id}" rows="2" ${S.demo ? 'disabled' : ''} placeholder="Um som por linha. Ex.: porta pesada a fechar">${esc((an.lines || {})[String(it.id)] || '')}</textarea></div></div>`).join('');
+          <div class="snd-wrap" data-item="${it.id}">${cellHTML(an, it.id)}</div></div>`).join('');
     $app.innerHTML = shell('analise', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios.</div>' : ''}<div class="wrap">
       <p style="margin:0 0 12px"><a class="back" href="#/analise/${AN.id}">${I.chevL}Todas as cenas</a></p>${head}
       <div class="card an-sc">
@@ -504,18 +558,10 @@ function renderAnalysis() {
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn" id="ansug" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}Sugerir sons</button>
             <a class="btn blue" href="#/estrutura/${AN.id}/${sc.n}">${I.layers}Montar na Estrutura Plus</a></div></div>
-        <p class="note" style="margin:12px 0 0">Escreve os sons de cada parágrafo, uma linha por som, em português ou inglês. Opcional: <b>@ palavras do texto</b> para escolher onde entra
-          (ex.: <i>porta pesada a fechar @ A sede da Polícia</i>) e <b>música:</b> no início para pedir música. Guarda sozinho.</p>
+        <p class="note" style="margin:12px 0 0">Em cada parágrafo escreve um som e carrega em <b>Enter</b> (português ou inglês). Clica num som para o editar; o <b>✕</b> apaga-o.
+          Opcional: <b>@ palavras do texto</b> no fim para escolher onde entra (ex.: <i>porta pesada a fechar @ A sede da Polícia</i>) e <b>música:</b> no início para pedir música. Guarda sozinho.</p>
         <div class="an-grid" style="margin-top:12px"><div class="an-head">PARÁGRAFOS</div><div class="an-head">SONS A IR BUSCAR À ELEVENLABS</div>${rows}</div></div></div>`);
-    $app.querySelectorAll('.an-lines').forEach(t => {
-      const fit = () => { t.style.height = 'auto'; t.style.height = Math.max(46, t.scrollHeight) + 'px'; }; fit(); t.oninput = fit;
-      t.onchange = async () => {
-        (an.lines = an.lines || {})[t.dataset.item] = t.value;
-        t.classList.add('saving');
-        await api(`/api/episodes/${AN.id}/analysis/lines`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item: +t.dataset.item, text: t.value }) }).catch(showErr);
-        t.classList.remove('saving');
-      };
-    });
+    $app.querySelectorAll('.snd-wrap').forEach(w => bindCell(an, w));
     document.getElementById('ansug').onclick = async () => {
       if (soundsIn(sc) && !confirm('Isto substitui os sons escritos nesta cena, incluindo as tuas edições. Continuar?')) return;
       try { await api(`/api/episodes/${AN.id}/analysis/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: sc.n, notes: document.getElementById('anote').value }) }); } catch (e) { alert(e.message); return; }
