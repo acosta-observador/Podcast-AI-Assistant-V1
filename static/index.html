@@ -700,7 +700,8 @@ function renderStructure() {
         <div class="tl-row"><div class="tl-lbl rl" style="height:30px"></div><div class="tl-lane tl-ruler" id="ruler">${ticksHTML()}</div></div>
         <div class="tl-wrap">
           ${scnRow}
-          <div class="tl-row" style="height:84px"><div class="tl-lbl"><span class="lt">Narração<small>Takes</small></span></div><div class="tl-lane">${nar}</div></div>
+          <div class="tl-row" style="height:84px"><div class="tl-lbl"><span class="lt">Narração<small>Takes</small></span>
+            <button class="trk-dl" type="button" data-dlnar title="${scene ? 'Descarregar a narração desta cena' : 'Descarregar a narração do episódio (áudio montado)'}" aria-label="Descarregar a narração" ${S.demo ? 'disabled' : ''}>${I.dl}</button></div><div class="tl-lane">${nar}</div></div>
           ${Array.from({ length: SFX_LANES }, (_, k) => row(k, 'Efeitos ' + (k + 1), 'Sound design', 44)).join('')}
           ${st.clips.some(c => c.lane === SFX_LANES) ? row(SFX_LANES, 'Ambiente', 'Sound design', 44) : ''}
           ${row(SFX_LANES + 1, 'Música', 'Sound design', 44)}
@@ -747,6 +748,7 @@ function renderStructure() {
   document.getElementById('exp').onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/structure`; };
   const q = scene ? `?scene=${scene.n}` : '';
   document.getElementById('exptr').onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/tracks${q}`; };
+  document.querySelector('[data-dlnar]').onclick = () => { if (S.demo) return; scene ? (location.href = `/api/episodes/${ST.id}/export/narration?scene=${scene.n}`) : downloadMontage(); };
   $app.querySelectorAll('[data-dl]').forEach(b => b.onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/track/${b.dataset.dl}${q}`; });
   applyZoom(ST.zoom);
   sc.scrollLeft = keepLeft;
@@ -850,6 +852,27 @@ function renderSelected() {
     c.gain = g.value / 100;
     await api(`/api/episodes/${ST.id}/structure/clips/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gain: c.gain }) }).catch(showErr);
   };
+}
+
+/* narração do episódio todo = áudio montado (o mesmo do AutoTake): monta se ainda não estiver feito */
+async function downloadMontage() {
+  const note = document.getElementById('stnote'), say = t => { if (note) note.textContent = t; };
+  try {
+    let ep = await api(`/api/episodes/${ST.id}`);
+    if (ep.state.render !== 'pronto') {
+      say('A montar a narração do episódio… pode demorar alguns minutos.');
+      await api(`/api/episodes/${ST.id}/render`, { method: 'POST' });
+      for (;;) {
+        await new Promise(r => setTimeout(r, 2500));
+        if (location.hash.indexOf('#/estrutura') !== 0) return;
+        ep = await api(`/api/episodes/${ST.id}`);
+        if (ep.state.render === 'pronto') break;
+        if (ep.state.render === 'erro') throw new Error(ep.state.render_message || 'a montagem falhou');
+      }
+    }
+    say('');
+    location.href = `/api/episodes/${ST.id}/export/wav`;
+  } catch (e) { say(''); showErr(e); alert(e.message); }
 }
 
 async function clearScene() {

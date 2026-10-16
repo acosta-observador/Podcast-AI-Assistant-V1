@@ -825,6 +825,27 @@ def export_track(eid: str, lane: int, scene: int | None = None):
                         background=BackgroundTask(shutil.rmtree, tmp.parent, ignore_errors=True))
 
 
+@app.get("/api/episodes/{eid}/export/narration")
+def export_narration(eid: str, scene: int):
+    """A narração (takes escolhidos, com as pausas) de uma cena, alinhada com as faixas de sons da mesma cena."""
+    d = ep_dir(eid)
+    meta, result = read_json(d / "meta.json"), read_json(d / "result.json")
+    tl = _structure_timeline(d)
+    sc = next((x for x in tl["scenes"] if x["n"] == scene), None)
+    if not sc:
+        raise HTTPException(404, "Cena não encontrada")
+    sel = read_json(d / "selections.json", {})
+    cuts = [dict(c) for c in build_cuts(result, sel, scenes_of(d, result)) if c["block"] in set(sc["blocks"])]
+    if not cuts:
+        raise HTTPException(400, "Esta cena não tem takes escolhidos")
+    cuts[-1]["gap_after"] = 1.0
+    t0 = max(0.0, sc["start"] - 1.0)
+    tmp = Path(tempfile.mkdtemp()) / "narracao.wav"
+    audio_tools.render(d / meta["audio_file"], cuts, tmp, lead=sc["start"] - t0)
+    return FileResponse(tmp, media_type="audio/wav", filename=f"{slug(meta['title'])}-narracao-cena-{scene}.wav",
+                        background=BackgroundTask(shutil.rmtree, tmp.parent, ignore_errors=True))
+
+
 @app.get("/api/episodes/{eid}/export/tracks")
 def export_tracks(eid: str, scene: int | None = None):
     """ZIP com uma WAV por faixa que tenha sons (episódio todo, ou só a cena escolhida)."""

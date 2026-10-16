@@ -87,13 +87,19 @@ def refine_cut(env, words, i0, i1, pre=0.35, post=0.45) -> tuple[float, float]:
     return round(start, 3), round(end, 3)
 
 
-def render(src: Path, cuts: list[dict], dst: Path, fade: float = 0.012) -> None:
+def render(src: Path, cuts: list[dict], dst: Path, fade: float = 0.012, lead: float = 0.0) -> None:
     """cuts: [{start, end, gap_after}] no tempo do ficheiro original. Saída WAV 24-bit."""
     info = probe(src)
     sr, ch = info["sample_rate"], info["channels"]
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         parts = []
+        if lead > 0:                      # silêncio inicial, para alinhar com as outras faixas
+            sil = tmp / "lead.wav"
+            run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i",
+                 f"anullsrc=r={sr}:cl={'mono' if ch == 1 else 'stereo'}", "-t", f"{lead:.3f}",
+                 "-ac", str(ch), "-c:a", "pcm_s24le", str(sil)])
+            parts.append(sil)
         for k, c in enumerate(cuts):
             dur = max(0.05, c["end"] - c["start"])
             out = tmp / f"p{k:04d}.wav"
