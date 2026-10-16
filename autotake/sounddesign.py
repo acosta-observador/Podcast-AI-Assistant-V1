@@ -30,9 +30,6 @@ LANE_NAMES = tuple(f"Efeitos {i + 1}" for i in range(N_SFX_LANES)) + ("Ambiente"
 GUIDE_FILE = Path(__file__).with_name("guia_sound_design.md")
 MAX_CUES = 150
 DEFAULT_GAIN = {"sfx": 0.8, "ambience": 0.65, "music": 0.4}
-# pausas na linha do tempo da Estrutura Plus (a montagem do AutoTake continua com as suas)
-BLOCK_GAP = 1.5
-SCENE_GAP = 4.0
 FALLBACK_SCENE_BLOCKS = 4
 
 # ---------- cenas ----------
@@ -61,30 +58,20 @@ def scenes_for(script_path: Path, n_blocks: int) -> list[dict]:
 
 # ---------- linha do tempo da montagem ----------
 def timeline(result: dict, selections: dict, scenes: list[dict] | None = None) -> dict:
-    """Posição de cada bloco e de cada corte na linha do tempo (segundos).
-
-    Entre blocos há uma pausa maior do que na montagem do AutoTake, e maior ainda entre cenas.
-    """
-    cuts = build_cuts(result, selections)
+    """Posição de cada bloco e de cada corte na linha do tempo (segundos), igual à da montagem do AutoTake:
+    pausa entre parágrafos e pausa maior entre cenas."""
+    cuts = build_cuts(result, selections, scenes)
     texts = {b["index"]: b["text"] for b in result["blocks"]}
-    has = {c["block"] for c in cuts}
-    scene_first = {next((b for b in sc["blocks"] if b in has), None) for sc in (scenes or [])}
     pos, spans, segs, gaps = 0.0, {}, [], {}
-    for k, c in enumerate(cuts):
+    for c in cuts:
         length = c["end"] - c["start"]
         sp = spans.setdefault(c["block"], [pos, pos])
         segs.append({"start": round(pos, 3), "end": round(pos + length, 3),
                      "src": round(c["start"], 3), "block": c["block"]})
         pos += length
         sp[1] = pos
-        last = k == len(cuts) - 1 or cuts[k + 1]["block"] != c["block"]
-        if last:
-            nxt = cuts[k + 1]["block"] if k + 1 < len(cuts) else None
-            gap = 0.0 if nxt is None else (SCENE_GAP if nxt in scene_first else BLOCK_GAP)
-            gaps[c["block"]] = gap
-            pos += gap
-        else:
-            pos += c["gap_after"]
+        gaps[c["block"]] = c["gap_after"]
+        pos += c["gap_after"]
     blocks = [{"block": i, "start": round(s, 3), "end": round(e, 3), "text": texts[i]}
               for i, (s, e) in sorted(spans.items())]
     by_block = {b["block"]: b for b in blocks}

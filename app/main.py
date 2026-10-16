@@ -22,7 +22,7 @@ import numpy as np
 
 from autotake import analysis as analysis_tools, audio as audio_tools, sounddesign
 from autotake.export import to_reaper
-from autotake.pipeline import build_cuts, process, render_episode
+from autotake.pipeline import GAP_BETWEEN_BLOCKS, build_cuts, process, render_episode
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = Path(os.getenv("DATA_DIR", ROOT / "data")) / "episodes"
@@ -109,7 +109,7 @@ def run_render(d: Path) -> None:
     try:
         set_state(d, render="a montar")
         result = read_json(d / "result.json")
-        render_episode(d, result, read_json(d / "selections.json", {}), d / "work" / "montagem.wav")
+        render_episode(d, result, read_json(d / "selections.json", {}), d / "work" / "montagem.wav", scenes_of(d, result))
         set_state(d, render="pronto")
     except Exception as e:
         traceback.print_exc()
@@ -143,6 +143,16 @@ def scenes_of(d: Path, result: dict) -> list[dict]:
     return sounddesign.scenes_for(d / meta["script_file"], len(result["blocks"]))
 
 
+def repositioned(clips: list[dict], tl: dict) -> list[dict]:
+    """Os sons seguem o bloco a que pertencem: se os takes ou as pausas mudarem, mudam de sítio com ele."""
+    by_block = {b["block"]: b for b in tl["blocks"]}
+    out = []
+    for c in clips:
+        b = by_block.get(c.get("block"))
+        out.append({**c, "start": round(b["start"] + c["rel"], 2)} if b and c.get("rel") is not None else c)
+    return out
+
+
 def run_structure(d: Path, scene: int) -> None:
     """Estrutura Plus, uma cena de cada vez: as regras locais escolhem os sons a partir do guião
     e a ElevenLabs gera cada um. Só os sons desta cena são substituídos."""
@@ -164,6 +174,10 @@ def run_structure(d: Path, scene: int) -> None:
         planner, mood, reading = "analysis", asc["title"] if asc else "", []
         sig = analysis_tools.lines_sig(an, asc)
         note = f"{skipped} linhas de som não entraram: o parágrafo não tem take do narrador." if skipped else ""
+        by_block = {b["block"]: b for b in tl["blocks"]}
+        for c in cues:
+            b = by_block.get(c["block"])
+            c["rel"] = round(c["start"] - b["start"], 2) if b else None
         sounddesign.assign_lanes(cues)
         (d / "sd").mkdir(exist_ok=True)
 
@@ -286,6 +300,14 @@ def create_episode(title: str = Form(...), audio: UploadFile = File(...), script
     return meta
 
 
+def _montage_total(d: Path):
+    try:
+        result = read_json(d / "result.json")
+        return sounddesign.timeline(result, read_json(d / "selections.json", {}), scenes_of(d, result))["total"] if result else None
+    except Exception:
+        return None
+
+
 @app.get("/api/episodes/{eid}")
 def get_episode(eid: str):
     d = ep_dir(eid)
@@ -295,6 +317,7 @@ def get_episode(eid: str):
         "result": read_json(d / "result.json"),
         "selections": read_json(d / "selections.json", {}),
         "reviewed": read_json(d / "reviewed.json", []),
+        "montage": _montage_total(d),
     }
 
 
@@ -410,7 +433,7 @@ def export_reaper(eid: str):
     meta, result = read_json(d / "meta.json"), read_json(d / "result.json")
     if not result:
         raise HTTPException(400, "O episódio ainda não foi processado")
-    rpp = to_reaper(result, read_json(d / "selections.json", {}), meta["audio_file"], meta["title"])
+    rpp = to_reaper(result, read_json(d / "selections.json", {}), meta["audio_file"], meta["title"], scenes=scenes_of(d, result))
     name = f"{slug(meta['title'])}-autotake.rpp"
     return PlainTextResponse(rpp, headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
@@ -569,7 +592,9 @@ def get_structure(eid: str):
     an = load_analysis(d)
     planned = {str(x["n"]): analysis_tools.count_lines(an, x) for x in an.get("scenes", [])}
     sigs = {str(x["n"]): analysis_tools.lines_sig(an, x) for x in an.get("scenes", [])}
-    return {"meta": read_json(d / "meta.json"), "structure": read_struct(d), "timeline": tl, "planned": planned, "sigs": sigs, "has_analysis": True,
+    structure = read_struct(d)
+    structure["clips"] = repositioned(structure["clips"], tl)
+    return {"meta": read_json(d / "meta.json"), "structure": structure, "timeline": tl, "planned": planned, "sigs": sigs, "has_analysis": True,
             "ready": bool(API_KEY), "claude": bool(ANTHROPIC_KEY), "missing": [] if API_KEY else ["ELEVENLABS_API_KEY"]}
 
 
@@ -626,7 +651,7 @@ def add_clip(eid: str, body: dict = Body(...)):
         raise HTTPException(400, "Tempo inválido")
     dur = max(0.5, min(dur, {"sfx": 22.0, "ambience": 60.0, "music": 120.0}[kind]))
     tl = sounddesign.timeline(result, read_json(d / "selections.json", {}), scenes_of(d, result))
-    blk = next((b["block"] for b in tl["blocks"] if b["start"] <= start <= b["end"] + sounddesign.BLOCK_GAP),
+    blk = next((b["block"] for b in tl["blocks"] if b["start"] <= start <= b["end"] + GAP_BETWEEN_BLOCKS),
                max([b["block"] for b in tl["blocks"] if b["start"] <= start] or [1]))
     scene = next((x["n"] for x in tl["scenes"] if x["start"] - 1 <= start <= x["end"] + 3), 1)
     lane = {"ambience": sounddesign.AMB_LANE, "music": sounddesign.MUSIC_LANE}.get(
@@ -638,6 +663,7 @@ def add_clip(eid: str, body: dict = Body(...)):
         nxt = st.get("next", 1 + max([int(c["id"][1:]) for c in st["clips"]] or [0]))
         clip = {"id": f"c{nxt}", "kind": kind, "label": sp["label"], "prompt": sp["prompt"], "block": blk, "scene": scene,
                 "lane": lane, "start": round(start, 2), "dur": round(dur, 2), "gain": sounddesign.DEFAULT_GAIN[kind],
+                "rel": round(start - next((b["start"] for b in tl["blocks"] if b["block"] == blk), start), 2),
                 "desc": text, "anchor": "", "state": "a gerar", "peaks": [], "message": ""}
         st["clips"].append(clip)
         st["next"] = nxt + 1
@@ -707,7 +733,7 @@ def export_structure(eid: str):
     clips = [c for c in read_struct(d)["clips"] if c["state"] == "gerado"]
     tl = sounddesign.timeline(result, read_json(d / "selections.json", {}), scenes_of(d, result))
     rpp = to_reaper(result, read_json(d / "selections.json", {}), meta["audio_file"], meta["title"],
-                    sound=clips, gaps=tl["gaps"], scenes=tl["scenes"])
+                    sound=repositioned(clips, tl), scenes=tl["scenes"])
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
         z.writestr(f"{slug(meta['title'])}-estrutura-plus.rpp", rpp)

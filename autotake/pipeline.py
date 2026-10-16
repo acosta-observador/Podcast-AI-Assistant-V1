@@ -1,4 +1,6 @@
 """Orquestração do AutoTake para um episódio guardado numa pasta."""
+from __future__ import annotations
+
 import json
 from pathlib import Path
 
@@ -10,7 +12,8 @@ from .script_parser import parse_script
 from .takes import build_takes
 from .transcribe import load_or_transcribe, words_from_scribe
 
-GAP_BETWEEN_BLOCKS = 0.6
+GAP_BETWEEN_BLOCKS = 2.0      # pausa entre parágrafos
+GAP_BETWEEN_SCENES = 10.0     # pausa entre cenas
 GAP_INSIDE_COMPOSITE = 0.25
 
 
@@ -73,9 +76,13 @@ def effective_choice(block: dict, selections: dict) -> dict | None:
     return selections.get(block["id"]) or block.get("auto")
 
 
-def build_cuts(result: dict, selections: dict) -> list[dict]:
-    """Converte as escolhas (auto ou do sonoplasta) em cortes no tempo do original."""
-    cuts = []
+def build_cuts(result: dict, selections: dict, scenes: list[dict] | None = None) -> list[dict]:
+    """Converte as escolhas (auto ou do sonoplasta) em cortes no tempo do original.
+
+    Entre parágrafos há GAP_BETWEEN_BLOCKS; antes do primeiro parágrafo de uma cena, GAP_BETWEEN_SCENES.
+    'scenes' é a lista de cenas ({"blocks": [índices]}); sem ela só há pausas entre parágrafos.
+    """
+    per_block: list[tuple[int, list[dict]]] = []
     for b in result["blocks"]:
         choice = effective_choice(b, selections)
         if not choice:
@@ -91,10 +98,16 @@ def build_cuts(result: dict, selections: dict) -> list[dict]:
                 continue
             block_cuts.append({"start": t["cut"][0], "end": t["cut"][1], "gap_after": 0,
                                "block": b["index"], "take": t["n"]})
-        block_cuts[-1]["gap_after"] = GAP_BETWEEN_BLOCKS
-        cuts.extend(block_cuts)
+        per_block.append((b["index"], block_cuts))
+    have = {i for i, _ in per_block}
+    firsts = {next((x for x in sc["blocks"] if x in have), None) for sc in (scenes or [])}
+    cuts = []
+    for k, (_, bc) in enumerate(per_block):
+        nxt = per_block[k + 1][0] if k + 1 < len(per_block) else None
+        bc[-1]["gap_after"] = 0 if nxt is None else (GAP_BETWEEN_SCENES if nxt in firsts else GAP_BETWEEN_BLOCKS)
+        cuts.extend(bc)
     return cuts
 
 
-def render_episode(ep: Path, result: dict, selections: dict, dst: Path) -> None:
-    audio.render(_files(ep)["raw"], build_cuts(result, selections), dst)
+def render_episode(ep: Path, result: dict, selections: dict, dst: Path, scenes: list[dict] | None = None) -> None:
+    audio.render(_files(ep)["raw"], build_cuts(result, selections, scenes), dst)

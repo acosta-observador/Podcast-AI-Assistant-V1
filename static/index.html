@@ -1021,7 +1021,7 @@ const segDur = segs => segs.reduce((a, [s, e]) => a + e - s, 0);
 
 function renderEpisode() {
   const { meta, result, state } = S.ep, blocks = result.blocks;
-  const total = blocks.reduce((a, b) => a + segDur(segsOf(b)), 0) + blocks.length * 0.6;
+  const total = S.ep.montage ?? (blocks.reduce((a, b) => a + segDur(segsOf(b)), 0) + blocks.length * 2);
   const toReview = blocks.filter(needsReview).length;
   const r = state.render, rendering = r === 'a montar' || r === 'na fila';
 

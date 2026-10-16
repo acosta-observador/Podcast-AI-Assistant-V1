@@ -21,12 +21,13 @@ def _item(pos, length, soffs, name, src_name, src_type, mute=False) -> str:
 def to_reaper(result: dict, selections: dict, audio_name: str, title: str, sound: list | None = None,
               gaps: dict | None = None, scenes: list | None = None) -> str:
     src_type = _SOURCE_TYPES.get(Path(audio_name).suffix.lower(), "WAVE")
-    cuts = build_cuts(result, selections)
+    cuts = build_cuts(result, selections, scenes)
     blocks = {b["index"]: b for b in result["blocks"]}
     main, markers = [], []
     alt_tracks: dict[int, list[str]] = {}
     pos, block_start, current = 0.0, {}, None
-    scene_at = {sc["blocks"][0]: sc for sc in (scenes or [])}
+    have = {c["block"] for c in cuts}
+    scene_at = {next((x for x in sc["blocks"] if x in have), None): sc for sc in (scenes or [])}
     n_reg = 0
     for ci, c in enumerate(cuts):
         if c["block"] != current:
