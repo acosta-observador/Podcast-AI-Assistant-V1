@@ -134,21 +134,13 @@ def read_struct(d: Path) -> dict:
 
 
 def scenes_of(d: Path, result: dict) -> list[dict]:
-    """Cenas da Estrutura Plus: as da Análise de Guião (se existir) ou as do guião (CENA n)."""
-    an = read_json(d / "analysis.json")
-    if an and an.get("scenes"):
-        sc = analysis_tools.scenes_for_structure(an, result["blocks"])
-        if sc:
-            return sc
+    """Cenas da Estrutura Plus: as da Análise de Guião (as 'CENA n' do guião)."""
+    an = load_analysis(d)
+    sc = analysis_tools.scenes_for_structure(an, result["blocks"])
+    if sc:
+        return sc
     meta = read_json(d / "meta.json")
     return sounddesign.scenes_for(d / meta["script_file"], len(result["blocks"]))
-
-
-def update_struct(d: Path, fn) -> None:
-    with _lock:
-        st = read_struct(d)
-        fn(st)
-        write_json(struct_path(d), st)
 
 
 def run_structure(d: Path, scene: int) -> None:
@@ -162,35 +154,16 @@ def run_structure(d: Path, scene: int) -> None:
         sc = next((x for x in tl["scenes"] if x["n"] == scene), None)
         if not sc:
             raise RuntimeError("Cena não encontrada.")
-        planner, mood, note, reading = "local", "", "", []
-        cues, sig = [], ""
-        an = read_json(d / "analysis.json")
-        asc = next((x for x in (an or {}).get("scenes", []) if x["n"] == scene), None)
-        if asc is not None and an.get("status") == "pronto":
-            analysis_tools.link_blocks(an["items"], result["blocks"])
-            cues, skipped = analysis_tools.cues_for_scene(an, scene, tl, sc)
-            if not cues:
-                raise RuntimeError("A Análise de Guião desta cena não tem sons que se possam pôr na linha do tempo. "
-                                   "Acrescenta sons na análise e volta a carregar em Create.")
-            planner, mood, reading = "analysis", asc.get("direction", ""), []
-            sig = analysis_tools.cues_sig(asc.get("cues", []))
-            if skipped:
-                note = f"{skipped} sons da análise não entraram: ficam sobre entrevistas ou texto sem narração."
-        if not cues and ANTHROPIC_KEY:
-            try:
-                guide = sounddesign.load_guide(GUIDE_PATH)
-                notes = read_struct(d).get("notes", {}).get(str(scene), "")
-                plan = sounddesign.plan_claude(tl, sc, ANTHROPIC_KEY, guide, notes, result["blocks"])
-                cues, mood, planner, reading = plan["cues"], plan["mood"], "claude", plan["reading"]
-            except Exception as e:
-                traceback.print_exc()
-                note = f"O Claude não conseguiu planear ({e}). Usei as regras simples."
+        an = load_analysis(d)
+        analysis_tools.link_blocks(an["items"], result["blocks"])
+        asc = next((x for x in an["scenes"] if x["n"] == scene), None)
+        cues, skipped = analysis_tools.cues_for_scene(an, scene, tl, ANTHROPIC_KEY)
         if not cues:
-            part = {**tl, "blocks": [b for b in tl["blocks"] if b["block"] in sc["blocks"]]}
-            cues = sounddesign.plan_local(part, span=(sc["start"], sc["end"]))
-            planner = "local"
-        if not cues:
-            raise RuntimeError("Não encontrei momentos para sound design nesta cena.")
+            raise RuntimeError("Esta cena não tem sons escritos na Análise de Guião. Escreve (ou pede ao Claude para sugerir) "
+                               "os sons de cada parágrafo e volta a carregar em Create.")
+        planner, mood, reading = "analysis", asc["title"] if asc else "", []
+        sig = analysis_tools.lines_sig(an, asc)
+        note = f"{skipped} linhas de som não entraram: o parágrafo não tem take do narrador." if skipped else ""
         sounddesign.assign_lanes(cues)
         (d / "sd").mkdir(exist_ok=True)
 
@@ -260,8 +233,8 @@ def resume_unfinished():
     # jobs interrompidos por um reinício do servidor voltam para a fila
     for d in DATA.iterdir():
         aa = read_json(d / "analysis.json", {})
-        if aa.get("status") in {"a dividir em cenas", "a analisar cenas"}:
-            aa.update(status="erro", message="O servidor reiniciou a meio. Carrega em Analisar para tentar outra vez.")
+        if aa.get("status") == "a sugerir sons":
+            aa.update(status="erro", message="O servidor reiniciou a meio. Carrega em Sugerir sons para tentar outra vez.")
             write_json(d / "analysis.json", aa)
         ss = read_json(struct_path(d), {})
         if ss.get("status") in {"a planear", "a gerar"}:
@@ -448,16 +421,29 @@ def analysis_path(d: Path) -> Path:
 
 
 def load_analysis(d: Path) -> dict:
-    an = read_json(analysis_path(d), {"status": None, "message": "", "done": 0, "total": 0, "items": [], "scenes": []})
-    if analysis_tools.ensure_ids(an):
-        with _lock:
+    """Cenas e parágrafos do guião, sempre prontos (sem Claude). Migra análises antigas."""
+    with _lock:
+        an = read_json(analysis_path(d))
+        if not an or an.get("v") != 2:
+            meta = read_json(d / "meta.json")
+            items = analysis_tools.read_items(d / meta["script_file"])
+            lines: dict[str, str] = {}
+            for sc in (an or {}).get("scenes", []):
+                for c in sc.get("cues", []):                  # sons da versão anterior → linhas
+                    if c.get("kind") in ("sfx", "music"):
+                        txt = (c.get("label") or c.get("description") or "").strip()
+                        line = ("música: " if c["kind"] == "music" else "") + txt + (f" @ {c['anchor']}" if c.get("anchor") else "")
+                        lines[str(c["item"])] = (lines.get(str(c["item"]), "") + "\n" + line).strip()
+            an = {"v": 2, "status": None, "message": "", "done": 0, "total": 0, "items": items,
+                  "scenes": analysis_tools.local_scenes(items), "lines": lines, "notes": (an or {}).get("notes", {})}
             write_json(analysis_path(d), an)
-    return an
+        return an
 
 
 def update_analysis(d: Path, fn) -> None:
+    load_analysis(d)
     with _lock:
-        an = read_json(analysis_path(d), {"status": None, "message": "", "done": 0, "total": 0, "items": [], "scenes": []})
+        an = read_json(analysis_path(d))
         fn(an)
         write_json(analysis_path(d), an)
 
@@ -465,39 +451,29 @@ def update_analysis(d: Path, fn) -> None:
 analysis_jobs = ThreadPoolExecutor(max_workers=1)
 
 
-def run_analysis(d: Path, only: int | None = None) -> None:
-    """Fase 1: itens e cenas. Fase 2: uma chamada ao Claude por cena (3 de cada vez)."""
+def run_suggest(d: Path, todo: list[int], notes: dict) -> None:
+    """O Claude sugere as linhas de som de cada cena (3 de cada vez)."""
     try:
-        meta = read_json(d / "meta.json")
         guide = sounddesign.load_guide(GUIDE_PATH)
-        if only is None:
-            update_analysis(d, lambda an: an.update(status="a dividir em cenas", message="", done=0, total=0))
-            items = analysis_tools.read_items(d / meta["script_file"])
-            if not items:
-                raise RuntimeError("Não consegui ler texto no guião.")
-            scenes = analysis_tools.segment(items, ANTHROPIC_KEY)
-            for sc in scenes:
-                sc.update(cues=[], reading=[])
-            update_analysis(d, lambda an: an.update(items=items, scenes=scenes, status="a analisar cenas", total=len(scenes), done=0))
-            todo = [sc["n"] for sc in scenes]
-        else:
-            update_analysis(d, lambda an: an.update(status="a analisar cenas", message="", total=1, done=0))
-            todo = [only]
+        update_analysis(d, lambda an: an.update(status="a sugerir sons", message="", done=0, total=len(todo), errors={}))
 
         def work(n):
             an = read_json(analysis_path(d))
-            notes = (an.get("notes") or {}).get(str(n), "")
             try:
-                res = analysis_tools.analyze_scene(an["items"], an["scenes"], n, ANTHROPIC_KEY, guide, notes)
+                got = analysis_tools.suggest_scene(an, n, ANTHROPIC_KEY, guide, notes.get(str(n), ""))
                 err = ""
             except Exception as e:
                 traceback.print_exc()
-                res, err = {"reading": [], "cues": []}, str(e)
+                got, err = None, str(e)
 
             def apply(a):
-                for sc in a["scenes"]:
-                    if sc["n"] == n:
-                        sc.update(cues=res["cues"], reading=res["reading"], error=err)
+                sc = next(x for x in a["scenes"] if x["n"] == n)
+                if got is not None:
+                    for iid in range(sc["from"], sc["to"] + 1):
+                        a["lines"].pop(str(iid), None)
+                    a["lines"].update({str(k): v for k, v in got.items()})
+                else:
+                    a.setdefault("errors", {})[str(n)] = err
                 a["done"] += 1
             update_analysis(d, apply)
         with ThreadPoolExecutor(max_workers=3) as pool:
@@ -511,110 +487,49 @@ def run_analysis(d: Path, only: int | None = None) -> None:
 @app.get("/api/episodes/{eid}/analysis")
 def get_analysis(eid: str):
     d = ep_dir(eid)
-    meta = read_json(d / "meta.json")
-    an = load_analysis(d)
-    if not an.get("items"):       # o guião do AutoTake já está aqui, mesmo antes de analisar
-        try:
-            an["items"] = analysis_tools.read_items(d / meta["script_file"])
-        except Exception:
-            an["items"] = []
-    return {"meta": meta, "analysis": an, "claude": bool(ANTHROPIC_KEY)}
+    return {"meta": read_json(d / "meta.json"), "analysis": load_analysis(d), "claude": bool(ANTHROPIC_KEY)}
+
+
+@app.put("/api/episodes/{eid}/analysis/lines")
+def put_lines(eid: str, body: dict = Body(...)):
+    """Os sons de um parágrafo: texto livre, uma linha por som."""
+    d = ep_dir(eid)
+    text = str(body.get("text", ""))[:3000]
+    iid = str(int(body.get("item")))
+
+    def apply(an):
+        if text.strip():
+            an["lines"][iid] = text
+        else:
+            an["lines"].pop(iid, None)
+    update_analysis(d, apply)
+    return {"ok": True}
 
 
 @app.post("/api/episodes/{eid}/analysis/run")
-def run_analysis_endpoint(eid: str, body: dict = Body(default={})):
+def suggest_endpoint(eid: str, body: dict = Body(default={})):
+    """Corpo: {"scene": n | "all", "replace": bool, "notes": "..."}. Sugere sons (substitui o texto da cena)."""
     d = ep_dir(eid)
     if not ANTHROPIC_KEY:
         raise HTTPException(400, "O servidor não tem a chave da Anthropic configurada (ANTHROPIC_API_KEY).")
-    an = read_json(analysis_path(d), {})
-    if an.get("status") in {"a dividir em cenas", "a analisar cenas"}:
-        raise HTTPException(409, "A análise já está a decorrer")
-    only = int(body["scene"]) if body.get("scene") else None
-    if only and not any(s["n"] == only for s in an.get("scenes", [])):
-        raise HTTPException(400, "Cena não encontrada")
-    if only and "notes" in body:
-        update_analysis(d, lambda a: a.setdefault("notes", {}).__setitem__(str(only), str(body["notes"])[:2000]))
-    update_analysis(d, lambda a: a.update(status="a dividir em cenas" if only is None else "a analisar cenas", message=""))
-    analysis_jobs.submit(run_analysis, d, only)
-    return {"ok": True}
-
-
-@app.post("/api/episodes/{eid}/analysis/cues")
-def add_analysis_cue(eid: str, body: dict = Body(...)):
-    """Som acrescentado à mão ao lado de um parágrafo: {"item": n, "kind": ..., "text": "...", "anchor"?, "to_end"?}."""
-    d = ep_dir(eid)
     an = load_analysis(d)
-    try:
-        item = int(body.get("item"))
-    except (TypeError, ValueError):
-        raise HTTPException(400, "Escolhe um parágrafo")
-    sc = next((s for s in an.get("scenes", []) if s["from"] <= item <= s["to"]), None)
-    text = str(body.get("text", "")).strip()[:300]
-    if not sc or not text:
-        raise HTTPException(400, "Escreve o som que queres")
-    kind = body.get("kind") if body.get("kind") in ("sfx", "ambience", "music") else "sfx"
-    sp = sounddesign.simple_prompt(text, ANTHROPIC_KEY, "sfx")
-    made = {}
-
-    def apply(a):
-        scene = next(s for s in a["scenes"] if s["n"] == sc["n"])
-        k = 1 + max([int(c["id"].split("a")[-1]) for c in scene.get("cues", [])] or [0])
-        cue = {"id": f"s{scene['n']}a{k}", "item": item, "kind": kind, "label": sp["label"], "description": text,
-               "prompt": sp["prompt"], "anchor": str(body.get("anchor", ""))[:120],
-               "duration": 3.0 if kind == "sfx" else 20.0,
-               "until_item": scene["to"] if kind != "sfx" and body.get("to_end", True) else None,
-               "gain": sounddesign.DEFAULT_GAIN[kind]}
-        scene.setdefault("cues", []).append(cue)
-        made.update(cue)
-    update_analysis(d, apply)
-    return made
-
-
-@app.patch("/api/episodes/{eid}/analysis/cues/{cid}")
-def patch_analysis_cue(eid: str, cid: str, body: dict = Body(...)):
-    """Edita um som da análise. Se mudares a descrição sem mexer no prompt, o prompt em inglês é refeito."""
-    d = ep_dir(eid)
-    out = {}
-    pre = {}
-    if "description" in body and "prompt" not in body:
-        kind = body.get("kind") or next((c["kind"] for s in load_analysis(d)["scenes"] for c in s.get("cues", []) if c["id"] == cid), "sfx")
-        pre = sounddesign.simple_prompt(str(body["description"]).strip()[:300], ANTHROPIC_KEY, "sfx")
-
-    def apply(a):
-        for s in a["scenes"]:
-            for c in s.get("cues", []):
-                if c["id"] != cid:
-                    continue
-                if "description" in body:
-                    c["description"] = str(body["description"])[:500]
-                    if pre:
-                        c["prompt"], c["label"] = pre["prompt"], pre["label"]
-                if "prompt" in body:
-                    c["prompt"] = str(body["prompt"])[:300]
-                if body.get("kind") in ("sfx", "ambience", "music"):
-                    c["kind"] = body["kind"]
-                    if c["kind"] != "sfx" and not c.get("until_item"):
-                        c["until_item"] = s["to"]
-                if "anchor" in body:
-                    c["anchor"] = str(body["anchor"])[:120]
-                if "gain" in body:
-                    c["gain"] = max(0.05, min(1.0, float(body["gain"])))
-                out.update(c)
-    update_analysis(d, apply)
-    if not out:
-        raise HTTPException(404)
-    return out
-
-
-@app.delete("/api/episodes/{eid}/analysis/cues/{cid}")
-def delete_analysis_cue(eid: str, cid: str):
-    d = ep_dir(eid)
-
-    def apply(a):
-        for sc in a["scenes"]:
-            sc["cues"] = [c for c in sc.get("cues", []) if c["id"] != cid]
-    update_analysis(d, apply)
-    return {"ok": True}
+    if an.get("status") == "a sugerir sons":
+        raise HTTPException(409, "O Claude já está a sugerir sons")
+    if body.get("scene") == "all":
+        todo = [s["n"] for s in an["scenes"] if body.get("replace") or analysis_tools.count_lines(an, s) == 0]
+    else:
+        todo = [int(body.get("scene") or 0)]
+        if not any(s["n"] == todo[0] for s in an["scenes"]):
+            raise HTTPException(400, "Cena não encontrada")
+    if not todo:
+        raise HTTPException(400, "Todas as cenas já têm sons escritos")
+    notes = dict(an.get("notes") or {})
+    if body.get("scene") != "all" and "notes" in body:
+        notes[str(todo[0])] = str(body["notes"])[:2000]
+        update_analysis(d, lambda a: a.setdefault("notes", {}).__setitem__(str(todo[0]), notes[str(todo[0])]))
+    update_analysis(d, lambda a: a.update(status="a sugerir sons", message="", done=0, total=len(todo)))
+    analysis_jobs.submit(run_suggest, d, todo, notes)
+    return {"ok": True, "scenes": todo}
 
 
 # ---------- guia de sound design (editável) ----------
@@ -651,10 +566,10 @@ def get_structure(eid: str):
     peaks = sounddesign.narration_peaks(np.load(env_p), tl["blocks"], tl["segments"]) if env_p.exists() else {}
     for b in tl["blocks"]:
         b["peaks"] = peaks.get(b["block"], [])
-    an = read_json(d / "analysis.json", {})
-    planned = {str(x["n"]): len(x.get("cues", [])) for x in an.get("scenes", [])}
-    sigs = {str(x["n"]): analysis_tools.cues_sig(x.get("cues", [])) for x in an.get("scenes", [])}
-    return {"meta": read_json(d / "meta.json"), "structure": read_struct(d), "timeline": tl, "planned": planned, "sigs": sigs, "has_analysis": bool(an.get("scenes")),
+    an = load_analysis(d)
+    planned = {str(x["n"]): analysis_tools.count_lines(an, x) for x in an.get("scenes", [])}
+    sigs = {str(x["n"]): analysis_tools.lines_sig(an, x) for x in an.get("scenes", [])}
+    return {"meta": read_json(d / "meta.json"), "structure": read_struct(d), "timeline": tl, "planned": planned, "sigs": sigs, "has_analysis": True,
             "ready": bool(API_KEY), "claude": bool(ANTHROPIC_KEY), "missing": [] if API_KEY else ["ELEVENLABS_API_KEY"]}
 
 

@@ -139,6 +139,9 @@ a{color:var(--accent);text-decoration:none}
 .cue-e .pr input{flex:1;min-width:0;border:0;background:transparent;font:inherit;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--muted);padding:2px 4px}
 .cue-e select{border:0;background:transparent;font:inherit;font-size:11px;font-weight:700;letter-spacing:.02em;border-radius:980px;padding:3px 6px;cursor:pointer}
 .cue-e select.sfx{background:rgba(255,159,10,.16);color:#c77700}.cue-e select.ambience{background:rgba(48,176,199,.16);color:#1d8a9c}.cue-e select.music{background:rgba(125,92,255,.14);color:#6b4cf0}
+.an-lines{width:100%;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:10px 12px;font:inherit;font-size:14px;line-height:1.45;color:var(--text);resize:vertical;min-height:46px;box-sizing:border-box}
+.an-lines:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.an-lines.saving{opacity:.6}
 .cue-add{font-size:13px;color:var(--accent);padding:4px 0}
 .cue-form{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:12px;border:1px dashed var(--line);margin-top:4px}
 .cue-form input[type=text]{height:36px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 10px;font:inherit;font-size:14px;color:var(--text)}
@@ -345,8 +348,8 @@ async function route() {
   if (m) return openEpisode(m[1]);
   if (location.hash === '#/projeto') return projectPage();
   if (location.hash === '#/autotake') return home();
-  const ma = location.hash.match(/^#\/analise(?:\/([\w-]+))?$/);
-  if (ma) return analisePage(ma[1]);
+  const ma = location.hash.match(/^#\/analise(?:\/([\w-]+))?(?:\/(\d+))?$/);
+  if (ma) return analisePage(ma[1], ma[2] ? +ma[2] : null);
   const me = location.hash.match(/^#\/estrutura(?:\/([\w-]+))?(?:\/(\d+))?$/);
   if (me) return estruturaPage(me[1], me[2] ? +me[2] : null);
   return projectsPage();
@@ -407,7 +410,7 @@ async function projectPage() {
       <p class="section-t">Funcionalidades</p>
       <div class="fgrid">
         <a class="card fcard" href="#/autotake"><span class="ico">${I.wave}</span><b>AutoTake</b><span>Encontra os takes de cada parágrafo e escolhe o melhor.</span></a>
-        <a class="card fcard" href="#/analise"><span class="ico">${I.doc}</span><b>Análise de Guião</b><span>O Claude lê o guião e propõe os sons de cada cena.</span></a>
+        <a class="card fcard" href="#/analise"><span class="ico">${I.doc}</span><b>Análise de Guião</b><span>As cenas do guião e os sons de cada parágrafo.</span></a>
         <a class="card fcard" href="#/estrutura"><span class="ico">${I.layers}</span><b>Estrutura Plus</b><span>Em preparação.</span></a>
       </div>
     </div>`);
@@ -428,20 +431,20 @@ async function projectPage() {
 }
 
 /* ---------- Análise de Guião ---------- */
-const AN = { id: null, data: null, poll: null, adding: null };
-const KIND_CLS = { sfx: 'sfx', ambience: 'amb', music: 'mus' }, KIND_NAME = { sfx: 'EFEITO', ambience: 'AMBIENTE', music: 'MÚSICA' };
-const anRunning = a => a.status === 'a dividir em cenas' || a.status === 'a analisar cenas';
+const AN = { id: null, data: null, poll: null };
+const anRunning = a => a.status === 'a sugerir sons';
+const nLines = t => (t || '').split('\n').filter(l => l.trim()).length;
 
-async function analisePage(wanted) {
+async function analisePage(wanted, scene) {
   try { S.list = await api('/api/episodes'); } catch { S.list = []; }
   if (!S.list.length) {
     $app.innerHTML = shell('analise', `<div class="wrap"><h1 class="page-t">Análise de Guião</h1>
-      <p class="page-s" style="margin-bottom:32px">O Claude lê o guião e propõe os sons de cada cena.</p>
+      <p class="page-s" style="margin-bottom:32px">As cenas do guião e os sons de cada parágrafo.</p>
       <div class="card empty">Ainda não há episódios. Carrega a gravação e o guião no <a href="#/autotake">AutoTake</a> primeiro.</div></div>`);
     return;
   }
   const pick = S.list.find(e => e.id === wanted) || S.list.find(e => e.id === AN.id) || S.list.find(e => e.state?.status === 'pronto') || S.list[0];
-  AN.id = pick.id;
+  AN.id = pick.id; AN.scene = scene || null;
   await loadAnalysis();
 }
 
@@ -449,144 +452,77 @@ async function loadAnalysis() {
   clearTimeout(AN.poll);
   try { AN.data = await api(`/api/episodes/${AN.id}/analysis`); }
   catch (e) { $app.innerHTML = shell('analise', `<div class="wrap"><div class="errbox">${esc(e.message)}</div></div>`); return; }
-  renderAnalysis();
+  if (!document.activeElement || !document.activeElement.matches('textarea')) renderAnalysis();
   if (anRunning(AN.data.analysis)) AN.poll = setTimeout(loadAnalysis, 3000);
-}
-
-function scriptSummary(an) {
-  const it = an.items || [], n = t => it.filter(x => x.type === t).length;
-  if (!it.length) return `<div class="card empty">Não consegui ler o guião deste episódio.</div>`;
-  const tag = t => t === 'narracao' ? 'NARRAÇÃO' : t === 'entrevista' ? 'ENTREVISTA' : t === 'titulo' ? 'TÍTULO' : 'NOTA';
-  return `<div class="card" style="padding:20px 22px;margin-bottom:16px"><b style="font-size:17px">O guião do AutoTake já está aqui</b>
-    <p class="note" style="margin:6px 0 12px">${n('narracao')} parágrafos de narração, ${n('entrevista')} excertos de entrevista, ${n('titulo') + n('nota')} títulos e notas. Só a narração leva takes no AutoTake.
-      Carrega em <b>Analisar guião</b> quando quiseres: o Claude divide em cenas e propõe os sons, uma cena de cada vez (demora uns minutos).</p>
-    <details><summary style="cursor:pointer;font-weight:600;font-size:14px">Ver o guião lido (${it.length} itens)</summary>
-      ${it.map(x => `<div style="display:flex;gap:10px;margin-top:8px;align-items:flex-start"><span class="itag ${x.type}">${tag(x.type)}</span>
-        <span style="font-size:14px;min-width:0">${esc(x.text.length > 300 ? x.text.slice(0, 300) + '…' : x.text)}</span></div>`).join('')}</details></div>`;
 }
 
 function renderAnalysis() {
   const d = AN.data, an = d.analysis, busy = anRunning(an), scenes = an.scenes || [];
-  const nCues = scenes.reduce((a, sc) => a + (sc.cues || []).length, 0);
-  const status = !d.claude ? 'Falta a chave da Anthropic no servidor (ANTHROPIC_API_KEY): só podes editar à mão.'
-    : an.status === 'a dividir em cenas' ? 'A ler o guião e a dividir em cenas…'
-    : an.status === 'a analisar cenas' ? `A analisar cenas, ${an.done} de ${an.total}…`
-    : scenes.length ? `${scenes.length} cenas, ${nCues} sons. Podes editar tudo: a Estrutura Plus monta a partir daqui.` : 'Ainda não há análise deste guião.';
+  const sc = AN.scene ? scenes.find(x => x.n === AN.scene) : null;
+  const visible = s => (an.items || []).filter(it => it.id >= s.from && it.id <= s.to && (it.type === 'narracao' || it.type === 'entrevista'));
+  const soundsIn = s => visible(s).reduce((a, it) => a + nLines((an.lines || {})[String(it.id)]), 0);
   const epOpts = S.list.map(e => `<option value="${e.id}" ${e.id === AN.id ? 'selected' : ''}>${esc(e.title)}</option>`).join('');
-  const tagName = t => t === 'narracao' ? 'NARRAÇÃO' : t === 'entrevista' ? 'ENTREVISTA' : t === 'titulo' ? 'TÍTULO' : 'NOTA';
-  const cueHTML = c => `<div class="cue-e" data-cuebox="${c.id}">
-      <select class="${c.kind}" data-kind="${c.id}" aria-label="Tipo de som" ${S.demo ? 'disabled' : ''}>
-        <option value="sfx" ${c.kind === 'sfx' ? 'selected' : ''}>EFEITO</option><option value="ambience" ${c.kind === 'ambience' ? 'selected' : ''}>AMBIENTE</option><option value="music" ${c.kind === 'music' ? 'selected' : ''}>MÚSICA</option></select>
-      <textarea rows="2" data-desc="${c.id}" aria-label="Descrição do som" ${S.demo ? 'disabled' : ''}>${esc(c.description || c.label)}</textarea>
-      <button class="del" data-delcue="${c.id}" aria-label="Remover ${esc(c.label)}" ${S.demo ? 'disabled' : ''}>${I.trash}</button>
-      <div class="pr"><span>Prompt</span><input data-prompt="${c.id}" value="${esc(c.prompt)}" aria-label="Prompt em inglês" ${S.demo ? 'disabled' : ''}></div>
-      ${c.anchor ? `<div class="pr"><span>Entra em: “${esc(c.anchor)}”</span></div>` : ''}</div>`;
-  const rowHTML = (sc, it) => {
-    const mine = (sc.cues || []).filter(c => c.item === it.id);
-    const canAdd = it.type === 'narracao' || it.type === 'titulo';
-    const adding = AN.adding === it.id;
-    return `<div class="an-row"><div><span class="itag ${it.type}">${tagName(it.type)}${it.speaker ? ' · ' + esc(it.speaker.slice(0, 40)) : ''}</span>
-        <div class="an-txt ${it.type}" style="margin-top:6px">${esc(it.text.length > 700 ? it.text.slice(0, 700) + '…' : it.text)}</div></div>
-      <div>${mine.map(cueHTML).join('')}
-        ${it.type === 'entrevista' ? '<span class="note">Sem sons por cima da entrevista.</span>' : ''}
-        ${adding ? `<div class="cue-form" data-form="${it.id}">
-          <select id="addkind" class="epsel"><option value="sfx">Efeito</option><option value="ambience">Ambiente</option><option value="music">Música</option></select>
-          <input type="text" id="addtext" maxlength="300" placeholder="Ex.: carros a buzinar ao longe, um avião a passar">
-          <input type="text" id="addanchor" maxlength="120" placeholder="Entra em (palavras do texto, opcional)">
-          <label class="note" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="addend" checked> Ambiente e música: até ao fim da cena</label>
-          <div style="display:flex;gap:8px"><button class="btn blue" id="addok">Adicionar</button><button class="btn" id="addcancel">Cancelar</button></div></div>`
-          : canAdd && !S.demo ? `<button class="link cue-add" data-add="${it.id}">+ Adicionar som</button>` : ''}</div></div>`;
-  };
-  const card = sc => {
-    const items = (an.items || []).filter(it => it.id >= sc.from && it.id <= sc.to), has = (sc.cues || []).length;
-    return `<div class="card an-sc">
-      <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
-        <div><h3>Cena ${sc.n} · ${esc(sc.title)}</h3><p class="note" style="margin:2px 0 0">${esc(sc.setting || '')}</p></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn" data-rerun="${sc.n}" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${has ? 'Analisar de novo' : 'Analisar esta cena'}</button>
-          <a class="btn blue" href="#/estrutura/${AN.id}/${sc.n}">${I.layers}Montar na Estrutura Plus</a></div></div>
-      ${sc.direction ? `<p style="margin:12px 0 4px"><b style="font-size:12px;color:var(--muted);letter-spacing:.04em">DIREÇÃO SONORA</b><br>${esc(sc.direction)}</p>` : ''}
-      ${sc.error ? `<div class="errbox" style="margin:12px 0">${esc(sc.error)}</div>` : ''}
-      <label class="field" style="margin:10px 0 8px">Notas para o Claude sobre esta cena (usadas ao analisar esta cena)
-        <input type="text" data-note="${sc.n}" maxlength="2000" value="${esc((an.notes || {})[String(sc.n)] || '')}" ${S.demo ? 'disabled' : ''}></label>
-      <div class="an-grid"><div class="an-head">TEXTO DO GUIÃO</div><div class="an-head">SONS (editáveis)</div>
-        ${items.map(it => rowHTML(sc, it)).join('')}</div>
-      ${(sc.reading || []).length ? `<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600;font-size:14px">O que o Claude percebeu</summary>
-        ${sc.reading.map(x => `<div style="margin-top:10px"><b class="note">ITEM ${x.item}</b>
-          ${x.events.length ? `<p class="note" style="margin:3px 0">Acontece: ${x.events.map(esc).join(' · ')}</p>` : ''}
-          ${x.not_happening.length ? `<p class="note" style="margin:3px 0;color:var(--warn)">Não acontece (sem som): ${x.not_happening.map(esc).join(' · ')}</p>` : ''}</div>`).join('')}</details>` : ''}
-    </div>`;
-  };
+  const total = scenes.reduce((a, s) => a + soundsIn(s), 0);
+  const status = !d.claude ? 'Falta a chave da Anthropic no servidor: podes escrever os sons à mão, mas não pedir sugestões ao Claude.'
+    : an.status === 'a sugerir sons' ? `O Claude está a sugerir sons, ${an.done} de ${an.total} cenas…`
+    : '';
+  const errs = Object.entries(an.errors || {}).map(([n, m]) => `<div class="errbox" style="margin:0 0 12px">Cena ${n}: ${esc(m)}</div>`).join('');
+  const head = `<div class="ep-head"><div><h1 class="page-t">Análise de Guião</h1>
+      <p class="page-s">${sc ? `Cena ${sc.n}: ${esc(sc.title)}` : 'As cenas do guião. Abre uma cena para ver os parágrafos e escrever, ao lado, os sons a ir buscar à ElevenLabs.'}</p></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select class="epsel" id="anep" aria-label="Episódio">${epOpts}</select>
+        ${sc ? '' : `<button class="btn blue" id="anall" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${busy ? 'A sugerir…' : 'Sugerir sons para as cenas'}</button>`}
+      </div></div>
+      ${status ? `<p class="st-note" style="margin:0 0 16px">${esc(status)}</p>` : ''}${errs}
+      ${an.status === 'erro' ? `<div class="errbox" style="margin:0 0 16px">${esc(an.message)}</div>` : ''}`;
 
-  $app.innerHTML = shell('analise', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios.</div>' : ''}
-    <div class="wrap">
-      <div class="ep-head"><div><h1 class="page-t">Análise de Guião</h1>
-        <p class="page-s">A folha de sonoplastia do episódio: cenas, o texto de cada parágrafo e, ao lado, os sons que o Claude sugere. Edita, apaga ou acrescenta sons. A Estrutura Plus vai buscar daqui e monta a cena.</p></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <select class="epsel" id="anep" aria-label="Episódio">${epOpts}</select>
-          <button class="btn blue" id="anrun" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${busy ? 'A analisar…' : scenes.length ? 'Analisar tudo de novo' : 'Analisar guião'}</button>
-        </div></div>
-      <p class="st-note" style="margin:0 0 16px">${esc(status)}</p>
-      ${an.status === 'erro' ? `<div class="errbox" style="margin:0 0 16px">${esc(an.message)}</div>` : ''}
-      ${scenes.length ? '' : scriptSummary(an)}
-      ${scenes.map(card).join('')}
-    </div>`);
-
-  document.getElementById('anep').onchange = e => { location.hash = '#/analise/' + e.target.value; };
-  document.getElementById('anrun').onclick = async () => {
-    if (scenes.length && !confirm('Isto volta a analisar o guião todo e substitui as cenas e os sons, incluindo as tuas edições. Continuar?')) return;
-    try { await api(`/api/episodes/${AN.id}/analysis/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch (e) { alert(e.message); return; }
-    loadAnalysis();
-  };
-  const findCue = id => { for (const sc of scenes) { const c = (sc.cues || []).find(x => x.id === id); if (c) return c; } };
-  const patch = (id, body) => api(`/api/episodes/${AN.id}/analysis/cues/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  $app.querySelectorAll('[data-rerun]').forEach(b => b.onclick = async () => {
-    const n = +b.dataset.rerun, sc = scenes.find(x => x.n === n), note = $app.querySelector(`[data-note="${n}"]`).value;
-    if ((sc.cues || []).length && !confirm('Isto substitui os sons desta cena, incluindo as tuas edições. Continuar?')) return;
-    try { await api(`/api/episodes/${AN.id}/analysis/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: n, notes: note }) }); } catch (e) { alert(e.message); return; }
-    loadAnalysis();
-  });
-  $app.querySelectorAll('[data-delcue]').forEach(b => b.onclick = async () => {
-    for (const sc of scenes) sc.cues = (sc.cues || []).filter(c => c.id !== b.dataset.delcue);
-    renderAnalysis();
-    await api(`/api/episodes/${AN.id}/analysis/cues/${b.dataset.delcue}`, { method: 'DELETE' }).catch(e => { showErr(e); loadAnalysis(); });
-  });
-  $app.querySelectorAll('[data-desc]').forEach(t => {
-    const fit = () => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }; fit(); t.oninput = fit;
-    t.onchange = async () => {
-      const c = findCue(t.dataset.desc); if (!c || t.value.trim() === (c.description || c.label)) return;
-      t.disabled = true;
-      try { Object.assign(c, await patch(c.id, { description: t.value })); } catch (e) { showErr(e); }
-      renderAnalysis();
+  if (!sc) {
+    $app.innerHTML = shell('analise', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios.</div>' : ''}<div class="wrap">${head}
+      <p class="st-note" style="margin:0 0 16px">${scenes.length} cenas, ${total} sons escritos. A Estrutura Plus vai buscar estes sons e monta a linha do tempo.</p>
+      <div class="projs" style="margin-top:0">${scenes.map(s => { const np = visible(s).filter(it => it.type === 'narracao').length, ns = soundsIn(s); return `
+        <a class="card fcard" href="#/analise/${AN.id}/${s.n}"><b style="font-size:13px;color:var(--muted);letter-spacing:.04em">CENA ${s.n}</b>
+          <b style="font-size:17px;line-height:1.3">${esc(s.title)}</b>
+          <span>${np} parágrafos · ${ns ? `<b style="color:var(--accent)">${ns} sons</b>` : 'sem sons ainda'}</span></a>`; }).join('')}</div></div>`);
+    document.getElementById('anall').onclick = async () => {
+      const missing = scenes.filter(s => soundsIn(s) === 0).length, replace = missing === 0;
+      if (replace && !confirm('Todas as cenas já têm sons. Voltar a pedir sugestões substitui o que lá está, incluindo as tuas edições. Continuar?')) return;
+      try { await api(`/api/episodes/${AN.id}/analysis/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: 'all', replace }) }); } catch (e) { alert(e.message); return; }
+      loadAnalysis();
     };
-  });
-  $app.querySelectorAll('[data-prompt]').forEach(i => i.onchange = async () => {
-    const c = findCue(i.dataset.prompt); if (!c) return;
-    try { Object.assign(c, await patch(c.id, { prompt: i.value })); } catch (e) { showErr(e); }
-  });
-  $app.querySelectorAll('[data-kind]').forEach(sel => sel.onchange = async () => {
-    const c = findCue(sel.dataset.kind); if (!c) return;
-    try { Object.assign(c, await patch(c.id, { kind: sel.value })); } catch (e) { showErr(e); }
-    renderAnalysis();
-  });
-  $app.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { AN.adding = +b.dataset.add; renderAnalysis(); document.getElementById('addtext')?.focus(); });
-  const form = $app.querySelector('[data-form]');
-  if (form) {
-    const item = +form.dataset.form, txt = document.getElementById('addtext'); txt.focus();
-    const go = async () => {
-      const text = txt.value.trim(); if (!text) return;
-      const body = { item, kind: document.getElementById('addkind').value, text, anchor: document.getElementById('addanchor').value, to_end: document.getElementById('addend').checked };
-      document.getElementById('addok').disabled = true;
-      try {
-        const c = await api(`/api/episodes/${AN.id}/analysis/cues`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        const sc = scenes.find(x => item >= x.from && item <= x.to); (sc.cues = sc.cues || []).push(c);
-      } catch (e) { alert(e.message); }
-      AN.adding = null; renderAnalysis();
+  } else {
+    const rows = visible(sc).map(it => it.type === 'entrevista'
+      ? `<div class="an-row"><div><span class="itag entrevista">ENTREVISTA${it.speaker ? ' · ' + esc(it.speaker.replace(/^[…. ]+/, '').slice(0, 40)) : ''}</span>
+          <div class="an-txt entrevista" style="margin-top:6px">${esc(it.text.length > 600 ? it.text.slice(0, 600) + '…' : it.text)}</div></div><div><span class="note">Sem sons por cima da entrevista.</span></div></div>`
+      : `<div class="an-row"><div><div class="an-txt">${esc(it.text)}</div></div>
+          <div><textarea class="an-lines" data-item="${it.id}" rows="2" ${S.demo ? 'disabled' : ''} placeholder="Um som por linha. Ex.: porta pesada a fechar">${esc((an.lines || {})[String(it.id)] || '')}</textarea></div></div>`).join('');
+    $app.innerHTML = shell('analise', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios.</div>' : ''}<div class="wrap">
+      <p style="margin:0 0 12px"><a class="back" href="#/analise/${AN.id}">${I.chevL}Todas as cenas</a></p>${head}
+      <div class="card an-sc">
+        <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <label class="field" style="flex:1 1 320px;margin:0">Notas para o Claude sobre esta cena (opcional)
+            <input type="text" id="anote" maxlength="2000" value="${esc((an.notes || {})[String(sc.n)] || '')}" placeholder="Ex.: os polícias NÃO bateram à porta" ${S.demo ? 'disabled' : ''}></label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" id="ansug" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}Sugerir sons</button>
+            <a class="btn blue" href="#/estrutura/${AN.id}/${sc.n}">${I.layers}Montar na Estrutura Plus</a></div></div>
+        <p class="note" style="margin:12px 0 0">Escreve os sons de cada parágrafo, uma linha por som, em português ou inglês. Opcional: <b>@ palavras do texto</b> para escolher onde entra
+          (ex.: <i>porta pesada a fechar @ A sede da Polícia</i>) e <b>música:</b> no início para pedir música. Guarda sozinho.</p>
+        <div class="an-grid" style="margin-top:12px"><div class="an-head">PARÁGRAFOS</div><div class="an-head">SONS A IR BUSCAR À ELEVENLABS</div>${rows}</div></div></div>`);
+    $app.querySelectorAll('.an-lines').forEach(t => {
+      const fit = () => { t.style.height = 'auto'; t.style.height = Math.max(46, t.scrollHeight) + 'px'; }; fit(); t.oninput = fit;
+      t.onchange = async () => {
+        (an.lines = an.lines || {})[t.dataset.item] = t.value;
+        t.classList.add('saving');
+        await api(`/api/episodes/${AN.id}/analysis/lines`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item: +t.dataset.item, text: t.value }) }).catch(showErr);
+        t.classList.remove('saving');
+      };
+    });
+    document.getElementById('ansug').onclick = async () => {
+      if (soundsIn(sc) && !confirm('Isto substitui os sons escritos nesta cena, incluindo as tuas edições. Continuar?')) return;
+      try { await api(`/api/episodes/${AN.id}/analysis/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: sc.n, notes: document.getElementById('anote').value }) }); } catch (e) { alert(e.message); return; }
+      loadAnalysis();
     };
-    txt.onkeydown = e => { if (e.key === 'Enter') go(); else if (e.key === 'Escape') { AN.adding = null; renderAnalysis(); } };
-    document.getElementById('addok').onclick = go;
-    document.getElementById('addcancel').onclick = () => { AN.adding = null; renderAnalysis(); };
   }
+  document.getElementById('anep').onchange = e => { location.hash = '#/analise/' + e.target.value + (sc ? '/' + sc.n : ''); };
 }
 
 /* ---------- Estrutura Plus ---------- */
@@ -689,8 +625,8 @@ function renderStructure() {
       ${st.note ? `<div class="errbox" style="margin:0 0 16px">${esc(st.note)}</div>` : ''}
       ${scene && d.has_analysis ? (() => {
         const n = String(scene.n), mine = sceneClips(scene.n).length, planned = d.planned[n] || 0, stale = mine && st.sigs && st.sigs[n] && st.sigs[n] !== d.sigs[n];
-        const link = `<a href="#/analise/${ST.id}">Ver e editar os sons desta cena na Análise de Guião</a>`;
-        return !mine && planned ? `<p class="st-note" style="margin:0 0 12px">Esta cena tem ${planned} sons na Análise de Guião. Carrega em <b>Create</b> para a montar. ${link}</p>`
+        const link = `<a href="#/analise/${ST.id}/${scene.n}">Ver e editar os sons desta cena na Análise de Guião</a>`;
+        return !mine && planned ? `<p class="st-note" style="margin:0 0 12px">Esta cena tem ${planned} sons escritos na Análise de Guião. Carrega em <b>Create</b> para a montar. ${link}</p>`
           : stale ? `<div class="errbox" style="margin:0 0 12px">A Análise de Guião mudou desde que montaste esta cena. Carrega em <b>Create</b> para a atualizar. ${link}</div>`
           : `<p class="st-note" style="margin:0 0 12px">${link}</p>`;
       })() : ''}
@@ -707,7 +643,7 @@ function renderStructure() {
           ${scnRow}
           <div class="tl-row" style="height:84px"><div class="tl-lbl">Narração<small>Takes</small></div><div class="tl-lane">${nar}</div></div>
           ${Array.from({ length: SFX_LANES }, (_, k) => row(k, 'Efeitos ' + (k + 1), 'Sound design', 44)).join('')}
-          ${row(SFX_LANES, 'Ambiente', 'Sound design', 44)}
+          ${st.clips.some(c => c.lane === SFX_LANES) ? row(SFX_LANES, 'Ambiente', 'Sound design', 44) : ''}
           ${row(SFX_LANES + 1, 'Música', 'Sound design', 44)}
           <div class="tl-ov"><div class="tl-ph" id="ph" style="left:${pct(ST.t)}%"></div></div>
         </div>
@@ -1225,14 +1161,12 @@ const Demo = {
     };
   },
   analysis() {
-    const items = [{ id: 1, type: 'titulo', text: 'TEASER INICIAL' }, { id: 2, type: 'narracao', text: this.ep.result.blocks[0].text }, { id: 3, type: 'nota', marker: 'entrevista', text: '… VÍTOR ALEXANDRE EP4 SOM 1 (01:52.27)' }, { id: 4, type: 'entrevista', speaker: 'VÍTOR ALEXANDRE', text: 'Houve contactos, efetivamente, entre o comissário e a Polícia Judiciária.' }, { id: 5, type: 'narracao', text: this.ep.result.blocks[1].text }];
-    const sc = [{ n: 1, title: 'Abertura', setting: 'Lisboa, 1755', direction: 'Passar do silêncio de estúdio à tensão do dia, deixando a voz dominar.', from: 1, to: 2, error: '',
-      reading: [{ item: 2, events: ['Lisboa acorda para um dia de festa', 'as igrejas estão cheias'], not_happening: ['ninguém imagina o que vai acontecer'] }],
-      cues: [{ id: 'a1', item: 2, kind: 'ambience', label: 'Lisboa de manhã', description: 'Rua de Lisboa ao amanhecer, 1755: vozes distantes, passos em calçada, ar de festa.', prompt: 'morning city street, distant voices', anchor: 'Lisboa acordou', gain: .65 },
-        { id: 'a2', item: 2, kind: 'sfx', label: 'Sino de igreja', description: 'Sino grave, longe, a marcar o Dia de Todos os Santos.', prompt: 'church bell tolling slowly', anchor: 'as igrejas estavam cheias', gain: .8 },
-        { id: 'a3', item: 2, kind: 'music', label: 'Cama de piano', description: 'Piano solo sóbrio, notas espaçadas, andamento lento.', prompt: 'sparse solo piano, slow, melancholic, instrumental', anchor: '', gain: .4 }] },
-      { n: 2, title: 'O sismo', setting: 'Lisboa, 9h30', direction: 'Tensão súbita, sem música; o ambiente conduz.', from: 3, to: 5, error: '', reading: [], cues: [{ id: 'a4', item: 5, kind: 'sfx', label: 'Terra a tremer', description: 'Estrondo grave e contínuo, com objetos a cair.', prompt: 'deep earthquake rumble', anchor: 'a terra começou a tremer', gain: .9 }] }];
-    return { meta: this.ep.meta, claude: true, analysis: { status: 'pronto', message: '', done: 2, total: 2, items, scenes: sc, notes: {} } };
+    const T = i => this.ep.result.blocks[i].text;
+    const items = [{ id: 1, type: 'titulo', text: 'CENA 1 - Lisboa acorda' }, { id: 2, type: 'narracao', text: T(0) }, { id: 3, type: 'nota', marker: 'entrevista', text: '… VÍTOR ALEXANDRE EP4 SOM 1' },
+      { id: 4, type: 'entrevista', speaker: 'VÍTOR ALEXANDRE', text: 'Houve contactos, efetivamente, entre o comissário e a Polícia Judiciária.' }, { id: 5, type: 'titulo', text: 'CENA 2 - O sismo' }, { id: 6, type: 'narracao', text: T(1) }, { id: 7, type: 'narracao', text: T(2) }];
+    return { meta: this.ep.meta, claude: true, analysis: { v: 2, status: null, message: '', done: 0, total: 0, items, notes: {},
+      scenes: [{ n: 1, title: 'Lisboa acorda', from: 1, to: 4 }, { n: 2, title: 'O sismo', from: 5, to: 7 }],
+      lines: { '2': 'sino de igreja a tocar ao longe\nmultidão a murmurar', '6': 'terra a tremer\nedifícios a ruir @ os edifícios ruíram' } } };
   },
   structure() {
     const pk = (seed, n) => Array.from({ length: n }, (_, i) => 18 + Math.round(Math.abs(Math.sin((i + seed) * .7) * Math.cos((i + seed) * .23 + 1)) * 78));

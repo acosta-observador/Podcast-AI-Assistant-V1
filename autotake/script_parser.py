@@ -75,7 +75,11 @@ def classify_items(path: Path) -> list[dict]:
                                                           or (len(words) == 2 and all(w.isupper() for w in words)))):
             add("titulo", s)
             continue
-        if not tokenize(s):
+        toks = tokenize(s)
+        if not toks:
+            continue
+        if len(toks) <= 2 and not re.search(r"[.!?…\"”»]$", s):      # 'Episódio', '4': rótulos soltos, não se lêem
+            add("titulo", s)
             continue
         if expecting:
             add("entrevista", s, speaker=speaker)
