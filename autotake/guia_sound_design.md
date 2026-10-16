@@ -137,21 +137,21 @@ mostra onde e porquê pôr sons; aqui pintas a cena por inteiro, com as quatro c
 - Passagens de opinião, análise e cronologia seca levam só ambiente baixo (e cama de piano). Não inventes ações que o texto não tem.
 - Se o texto não nomeia o som e a frase é ambígua, não ponhas. Mas, quando houver ação, põe: prefere sons a mais do que a menos.
 
-## 9. Como descrever cada som ao gerador (prompts em inglês, curtos)
+## 9. Como descrever cada som ao gerador (prompts em inglês, ricos)
 
-**Curtos e simples: 3 a 8 palavras e UM só som por prompt.** O gerador responde melhor a pedidos diretos do que a descrições longas.
+A ElevenLabs não melhora prompts: o que importa tem de estar no texto. **Um só som por prompt, mas descrito com riqueza**
+(8 a 20 palavras): fonte e material, ação, espaço acústico, distância, textura, intensidade e época.
 
-- Bom: "electric typewriter typing", "desk phone ringing twice", "heavy office door closing", "newspaper pages rustling",
-  "fax machine receiving", "camera flashes crowd", "pen writing on paper", "rubber stamp on paper".
-- Mau: "electric typewriter in an office followed by a distant rotary desk phone ringing twice".
-- **Nunca juntes dois sons** ("X followed by Y", "X and Y"). Cria dois sons separados, cada um com o seu momento. Onde o texto
-  nomeia dois objetos ("máquina de escrever e telefone de escritório"), são dois efeitos: a máquina de escrever entra primeiro e
-  o telefone um pouco depois, em faixas diferentes.
-- Se a época ou a distância importam, uma palavra chega ("1990s", "distant").
-- Para ambiente: "office ambience", "rainy night street", "quiet church interior". Sem vozes a falar. Murmúrio indistinto é aceitável.
-- Para música: estilo, instrumentos e andamento em poucas palavras ("sparse solo piano, slow, melancholic").
+- Bom: "heavy wooden apartment door slamming shut in an empty stone stairwell, sharp bang with a long dark echo".
+- Bom: "old rotary desk phone ringing twice in a quiet office, distant, slightly muffled, 1990s".
+- Mau: "door sound" (pobre) e "typewriter followed by phone" (dois sons: faz dois prompts, cada um com o seu momento).
+- Onde o texto nomeia dois objetos, são dois efeitos separados, em momentos e faixas diferentes.
 
-A descrição em português (campo "description") é que leva o detalhe, a época e o que o som faz na cena. O prompt em inglês só diz o som.
+**Música:** prompts de 20 a 45 palavras, em camadas, como a descrição de uma banda sonora: ritmo ou percussão, harmonia e clima,
+instrumento em destaque com a sua posição na mistura, género ou referência de ecrã, e carácter. Exemplo:
+"soft ticking percussion, ominous harmony for a detective TV show, mysterious, a gentle dark electric guitar in the distance".
+Evita "drone", "pulse" ou "dark ambient" sozinhos: são vagos e saem aborrecidos. Sem nomes de artistas. Sempre instrumental, em cama
+discreta sob a voz.
 
 ## 10. Volumes (campo gain, de 0.1 a 1)
 

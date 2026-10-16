@@ -139,7 +139,9 @@ Sem " @ ", o som entra distribuído ao longo do parágrafo.
 
 NÃO sugiras sons de ambiente (chuva, trânsito de fundo, sala vazia, murmúrio): o gerador ainda não os faz bem. Só efeitos pontuais
 ligados a objetos e ações que o texto nomeia ou sugere fisicamente. Música: no máximo UMA linha na cena toda, só se a cena a pedir,
-no parágrafo onde entra, escrita assim: "música: piano solo lento, melancólico".
+no parágrafo onde entra, escrita em português como uma descrição de banda sonora, com percussão/ritmo, harmonia e clima, um instrumento
+em destaque, e o género ou referência ("tipo série policial"): "música: percussão suave a marcar o tempo, harmonia ominosa, tipo série policial,
+guitarra elétrica escura ao longe". Nada de "drone" ou "pulso" vagos: instrumentos e movimento concretos.
 
 Quando há ação, objetos, deslocações ou confronto, sugere vários sons (cada objeto ou ação com o seu), para a cena ficar bem
 preenchida. Parágrafos de opinião, análise, datas e cronologia seca não levam sons.
@@ -191,10 +193,25 @@ def suggest_scene(an: dict, n: int, key: str, guide: str = "", notes: str = "") 
     return out
 
 
-NORMALIZE_SYSTEM = """Convertes pedidos de som (em português ou inglês) para um gerador de áudio. Para cada pedido, na mesma ordem,
-devolve: "prompt" curto em inglês (3 a 8 palavras, UM só som, simples e direto), "label" (nome curto em português, 2 a 3 palavras)
-e "duration" em segundos (efeito: 1 a 8, conforme o som; música: 20 a 60). Pedidos que começam por "música" ou "music" são música: o
-prompt descreve estilo, instrumentos e andamento em poucas palavras, sem nomes de artistas.
+NORMALIZE_SYSTEM = """Escreves os prompts finais para a ElevenLabs (efeitos sonoros e música) a partir de pedidos em português ou inglês, para um
+podcast true crime sombrio e sóbrio. A ElevenLabs não melhora prompts: tudo o que importa tem de estar no teu texto, em inglês.
+Para cada pedido, na mesma ordem, devolve "prompt", "label" (nome curto em português, 2 a 3 palavras) e "duration" em segundos.
+
+EFEITOS (pedido normal): UM só som, mas descrito com riqueza, em 8 a 20 palavras: a fonte e o material, a ação, o espaço acústico
+(sala vazia, corredor de pedra, rua aberta), a distância (close, distant), a textura e a intensidade, e a época se importar.
+Nunca juntes dois sons diferentes num prompt (nada de "X followed by Y"). "duration": 1 a 8 segundos conforme o som.
+ Bom: "heavy wooden apartment door slamming shut in an empty stone stairwell, sharp bang with a long dark echo"
+ Bom: "old rotary desk phone ringing twice in a quiet office, distant, slightly muffled, 1990s"
+ Mau: "door sound" (pobre) e "typewriter followed by phone" (dois sons).
+
+MÚSICA (pedidos que começam por "música" ou "music"): um prompt de 20 a 45 palavras, em camadas, como a descrição de uma banda sonora:
+percussão ou ritmo (ex.: soft ticking percussion), harmonia e clima (ominous harmony, melancholic strings), instrumento principal ou
+textura com a sua posição na mistura (a gentle dark electric guitar in the distance, sparse felt piano), o género ou a referência de
+ecrã (for a detective TV show, nordic noir documentary, true crime podcast underscore), e o carácter (mysterious, tense, restrained).
+Evita descrições vagas e aborrecidas como "drone", "pulse", "dark ambient" sozinhas: têm de aparecer instrumentos e movimento concretos.
+Sem nomes de artistas. Instrumental. Tem de funcionar como cama discreta sob uma voz. "duration": 20 a 60.
+ Exemplo: "soft ticking percussion, ominous harmony for a detective TV show, mysterious, a gentle dark electric guitar in the distance"
+
 Responde APENAS com JSON: {"items": [{"prompt": "...", "label": "...", "duration": n}]}"""
 
 
@@ -206,7 +223,7 @@ def normalize_lines(lines: list[dict], key: str | None) -> list[dict]:
         return fallback
     try:
         req = "\n".join(f"{i + 1}. {'música: ' if l['kind'] == 'music' else ''}{l['text']}" for i, l in enumerate(lines))
-        data = _call(NORMALIZE_SYSTEM, req, key, 4000, timeout=90, model=sd.ANTHROPIC_FAST_MODEL)
+        data = _call(NORMALIZE_SYSTEM, req, key, 6000, timeout=120, model=sd.ANTHROPIC_MODEL)
         items = data.get("items", [])
         if len(items) != len(lines):
             return fallback
@@ -252,7 +269,7 @@ def cues_for_scene(an: dict, n: int, tl: dict, key: str | None) -> tuple[list[di
         start = max(b["start"], min(b["end"] - 0.4, start))
         if l["kind"] == "music":
             dur = max(10.0, min(120.0, tsc["end"] - start, max(30.0, nm["duration"])))
-            cues.append({"kind": "music", "label": nm["label"] or "Música", "prompt": nm["prompt"] + sd.MUSIC_SUFFIX, "block": blk,
+            cues.append({"kind": "music", "label": nm["label"] or "Música", "prompt": nm["prompt"], "block": blk,
                          "start": round(start, 2), "dur": round(dur, 2), "gain": sd.DEFAULT_GAIN["music"],
                          "desc": l["text"], "anchor": l["anchor"]})
             continue

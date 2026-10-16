@@ -177,7 +177,8 @@ Cada elemento de "cues":
 A timeline tem de ficar BEM PREENCHIDA: ambiente contínuo por baixo da cena (usa "until_block"), um efeito para cada objeto ou
 ação que o texto nomeia (com foley subtil), cama de música na maior parte das cenas narrativas e pontuação nas viragens. Cada
 som, simples. Se uma frase for ambígua, não ponhas o som."""
-MUSIC_SUFFIX = ", instrumental, no vocals, subtle background"
+MUSIC_SUFFIX = ""        # a música sai instrumental com force_instrumental, sem texto a mais no prompt
+MUSIC_MODEL = os.getenv("ELEVEN_MUSIC_MODEL", "music_v2_5")
 AMBIENCE_SUFFIX = ", no music"
 MUSIC_PROMPT = ("Subtle atmospheric instrumental underscore for a narrative documentary podcast, "
                 "low intensity, slow, understated, no vocals, leaves room for a spoken voice")
@@ -271,33 +272,18 @@ def plan_claude(tl: dict, scene: dict, key: str, guide: str = "", notes: str = "
 
 def split_prompt(prompt: str) -> list[str]:
     """Rede de segurança: 'X followed by Y' vira dois sons."""
-    parts = [p.strip(" ,.") for p in re.split(r"\s+(?:followed by|and then|then)\s+|;\s*", prompt) if p.strip(" ,.")]
-    parts = [p for p in parts if len(p.split()) >= 2]
+    parts = [p.strip(" ,.") for p in re.split(r"\s+(?:followed by|and then)\s+|;\s*", prompt) if p.strip(" ,.")]
+    parts = [p for p in parts if len(p.split()) >= 3]
     return parts if len(parts) >= 2 else [prompt]
 
 
 def simple_prompt(text: str, key: str | None, kind: str = "sfx") -> dict:
-    """Pedido livre do utilizador → nome curto em português e prompt curto em inglês (um só som)."""
-    text = text.strip()
-    out = {"label": " ".join(text.split()[:3])[:40] or "Som", "prompt": text}
-    if key:
-        try:
-            r = httpx.post(ANTHROPIC_URL, timeout=30, headers={"x-api-key": key, "anthropic-version": "2023-06-01"}, json={
-                "model": ANTHROPIC_FAST_MODEL, "max_tokens": 200,
-                "system": "Converte o pedido de som num prompt curto em inglês para um gerador de áudio (3 a 8 palavras, UM só som, "
-                          "simples e direto) e num nome curto em português (2 a 3 palavras). Responde só com JSON: "
-                          '{"label": "...", "prompt": "..."}',
-                "messages": [{"role": "user", "content": text}]})
-            if r.status_code == 200:
-                m = re.search(r"\{.*\}", "".join(p.get("text", "") for p in r.json().get("content", [])), re.S)
-                if m:
-                    d = json.loads(m.group(0))
-                    out = {"label": str(d.get("label") or out["label"])[:40], "prompt": str(d.get("prompt") or text)[:300]}
-        except Exception:
-            pass
-    if kind == "music":
-        out["prompt"] += MUSIC_SUFFIX
-    elif kind == "ambience":
+    """Pedido livre do utilizador → nome curto em português e prompt rico em inglês (um só som)."""
+    from . import analysis
+    line = {"text": text.strip(), "kind": "music" if kind == "music" else "sfx", "anchor": ""}
+    nm = analysis.normalize_lines([line], key)[0]
+    out = {"label": nm["label"] or "Som", "prompt": nm["prompt"]}
+    if kind == "ambience":
         out["prompt"] += AMBIENCE_SUFFIX
     return out
 
@@ -379,12 +365,14 @@ def assign_lanes(cues: list[dict]) -> None:
 def generate(cue: dict, eleven_key: str, dst: Path) -> None:
     headers = {"xi-api-key": eleven_key}
     if cue["kind"] == "music":
-        r = httpx.post(MUSIC_URL, headers=headers, timeout=300,
-                       json={"prompt": cue["prompt"], "music_length_ms": int(max(3, min(cue["dur"], 300)) * 1000)})
+        body = {"prompt": cue["prompt"], "music_length_ms": int(max(3, min(cue["dur"], 300)) * 1000), "force_instrumental": True}
+        r = httpx.post(MUSIC_URL, headers=headers, timeout=300, json={**body, "model_id": MUSIC_MODEL})
+        if r.status_code in (400, 403, 404, 422) and MUSIC_MODEL:      # modelo indisponível neste plano: usa o modelo por defeito
+            r = httpx.post(MUSIC_URL, headers=headers, timeout=300, json=body)
     else:
         r = httpx.post(SFX_URL, headers=headers, timeout=120,
-                       json={"text": cue["prompt"], "duration_seconds": round(max(0.5, min(cue["dur"], 22)), 1),
-                             "prompt_influence": 0.4})
+                       json={"text": cue["prompt"], "duration_seconds": round(max(0.5, min(cue["dur"], 30)), 1),
+                             "prompt_influence": 0.5})
     if r.status_code != 200:
         raise RuntimeError(f"A ElevenLabs devolveu {r.status_code}: {r.text[:300]}")
     dst.write_bytes(r.content)
