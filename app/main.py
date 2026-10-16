@@ -930,15 +930,27 @@ def _try_sync(d: Path, scenes) -> None:
 
 @app.post("/api/episodes/{eid}/maestro/send")
 def maestro_send(eid: str, body: dict = Body(...)):
-    """Volta a pôr na Estrutura Plus as músicas geradas de uma cena (acontece sozinho depois de gerar)."""
+    """Montar no Plus: põe na Estrutura Plus as músicas geradas de uma cena ({"scene": n}) ou de todas ({"scene": "all"})."""
     d = ep_dir(eid)
-    try:
-        sent = sync_maestro_scene(d, int(body.get("scene") or 0))
-    except RuntimeError as e:
-        raise HTTPException(400, str(e))
-    if not sent:
-        raise HTTPException(400, "Esta cena não tem músicas geradas")
-    return {"ok": True, "sent": sent}
+    mm = read_maestro(d)
+    if body.get("scene") == "all":
+        todo = [int(n) for n, sc in mm["scenes"].items() if any(p["state"] == "gerado" for p in sc.get("pieces", []))]
+        if not todo:
+            raise HTTPException(400, "Ainda não há músicas geradas")
+    else:
+        todo = [int(body.get("scene") or 0)]
+    sent, skipped = 0, {}
+    for n in sorted(todo):
+        try:
+            k = sync_maestro_scene(d, n)
+            sent += k
+            if not k and len(todo) == 1:
+                raise HTTPException(400, "Esta cena não tem músicas geradas")
+        except RuntimeError as e:
+            if len(todo) == 1:
+                raise HTTPException(400, str(e))
+            skipped[str(n)] = str(e)
+    return {"ok": True, "sent": sent, "scenes": len(todo) - len(skipped), "skipped": skipped}
 
 
 # ---------- guia de sound design (editável) ----------
@@ -1140,9 +1152,14 @@ def clip_audio(eid: str, cid: str):
     return FileResponse(p, media_type="audio/mpeg")
 
 
-def _track_items(d: Path, lane: int, tl: dict, scene: int | None):
-    """Sons de uma faixa e a janela de tempo a exportar (episódio todo, ou só a cena escolhida)."""
-    clips = repositioned([c for c in read_struct(d)["clips"] if c["state"] == "gerado" and c.get("lane") == lane], tl)
+TRACK_GROUPS = [((i,), name) for i, name in enumerate(sounddesign.LANE_NAMES[:sounddesign.MUSIC_LANE])] + [
+    ((sounddesign.MUSIC_LANE, sounddesign.MUSIC_LANE2), "Música")]   # a faixa Música junta camas e stems
+
+
+def _track_items(d: Path, lanes, tl: dict, scene: int | None):
+    """Sons de uma faixa (ou de várias faixas juntas) e a janela de tempo a exportar (episódio todo, ou só a cena escolhida)."""
+    lanes = (lanes,) if isinstance(lanes, int) else tuple(lanes)
+    clips = repositioned([c for c in read_struct(d)["clips"] if c["state"] == "gerado" and c.get("lane") in lanes], tl)
     t0, t1 = 0.0, max([tl["total"]] + [c["start"] + c["dur"] for c in clips]) + 1.0
     if scene:
         sc = next((x for x in tl["scenes"] if x["n"] == scene), None)
@@ -1162,17 +1179,26 @@ def _structure_timeline(d: Path) -> dict:
 
 
 @app.get("/api/episodes/{eid}/export/track/{lane}")
-def export_track(eid: str, lane: int, scene: int | None = None):
-    """Uma faixa (Efeitos 1 a 5, Ambiente, Música) como WAV alinhado ao tempo. Com ?scene=n, só essa cena."""
+def export_track(eid: str, lane: str, scene: int | None = None):
+    """Uma faixa como WAV alinhado ao tempo: Efeitos 1 a 5, Ambiente, 'music' (toda a música: camas e stems), ou '7' (só os stems).
+    Com ?scene=n, só essa cena; sem isso, o episódio todo."""
     d = ep_dir(eid)
-    if not 0 <= lane < len(sounddesign.LANE_NAMES):
-        raise HTTPException(404)
-    items, total = _track_items(d, lane, _structure_timeline(d), scene)
+    if lane == "music":
+        lanes, label = (sounddesign.MUSIC_LANE, sounddesign.MUSIC_LANE2), "Música"
+    else:
+        try:
+            k = int(lane)
+        except ValueError:
+            raise HTTPException(404)
+        if not 0 <= k < len(sounddesign.LANE_NAMES):
+            raise HTTPException(404)
+        lanes, label = (k,), sounddesign.LANE_NAMES[k]
+    items, total = _track_items(d, lanes, _structure_timeline(d), scene)
     if not items:
         raise HTTPException(400, "Esta faixa não tem sons")
     tmp = Path(tempfile.mkdtemp()) / "faixa.wav"
     audio_tools.mix_track(items, total, tmp)
-    name = f"{slug(read_json(d / 'meta.json')['title'])}-{slug(sounddesign.LANE_NAMES[lane])}{f'-cena-{scene}' if scene else ''}.wav"
+    name = f"{slug(read_json(d / 'meta.json')['title'])}-{slug(label)}{f'-cena-{scene}' if scene else ''}.wav"
     return FileResponse(tmp, media_type="audio/wav", filename=name,
                         background=BackgroundTask(shutil.rmtree, tmp.parent, ignore_errors=True))
 
@@ -1208,8 +1234,8 @@ def export_tracks(eid: str, scene: int | None = None):
     zpath = work / "faixas.zip"
     n = 0
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_STORED) as z:
-        for lane, lname in enumerate(sounddesign.LANE_NAMES):
-            items, total = _track_items(d, lane, tl, scene)
+        for lane, (lanes, lname) in enumerate(TRACK_GROUPS):
+            items, total = _track_items(d, lanes, tl, scene)
             if not items:
                 continue
             wav = work / f"{lane}.wav"

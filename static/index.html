@@ -636,7 +636,8 @@ function renderMaestro() {
       <p class="page-s">${sc ? `Cena ${sc.n}: ${esc(sc.title)}` : 'O Claude lê cada cena e decide as músicas e os stems (3 a 5 por cena), todos diferentes. A ElevenLabs gera-os e eles entram sozinhos na timeline da Estrutura Plus.'}</p></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select class="epsel" id="maep" aria-label="Episódio">${epOpts}</select>
         ${sc ? '' : `<button class="btn blue" id="maplanall" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${busy ? 'A trabalhar…' : 'Planear as cenas'}</button>
-        <button class="btn" id="magenall" ${S.demo || busy || !d.eleven ? 'disabled' : ''}>${I.music}Gerar todas as músicas</button>`}</div></div>
+        <button class="btn" id="magenall" ${S.demo || busy || !d.eleven ? 'disabled' : ''}>${I.music}Gerar todas as músicas</button>
+        <button class="btn" id="mamontall" ${S.demo || busy || !scenes.some(s => piecesOf(s.n).some(p => p.state === 'gerado')) ? 'disabled' : ''} title="Põe todas as músicas geradas na timeline da Estrutura Plus">${I.layers}Montar tudo no Plus</button>`}</div></div>
       ${status ? `<p class="st-note" style="margin:0 0 16px">${esc(status)}</p>` : ''}${errs}
       ${mo.status === 'erro' ? `<div class="errbox" style="margin:0 0 16px">${esc(mo.message)}</div>` : ''}`;
 
@@ -651,6 +652,12 @@ function renderMaestro() {
       if (replace && !confirm('Todas as cenas já têm músicas planeadas. Voltar a planear substitui-as, incluindo as geradas. Continuar?')) return;
       try { await post('plan', { scene: 'all', replace }); } catch (e) { alert(e.message); return; }
       loadMaestro();
+    };
+    document.getElementById('mamontall').onclick = async () => {
+      let r; try { r = await post('send', { scene: 'all' }); } catch (e) { alert(e.message); return; }
+      const sk = Object.entries(r.skipped || {});
+      if (sk.length) alert(`${r.sent} músicas montadas em ${r.scenes} cenas.\n\nNão entraram:\n` + sk.map(([n, m]) => `Cena ${n}: ${m}`).join('\n'));
+      location.hash = `#/estrutura/${MA.id}/0`;
     };
     document.getElementById('magenall').onclick = async () => {
       const n = scenes.reduce((a, s) => a + piecesOf(s.n).filter(p => p.state === 'novo' || p.state === 'erro').length, 0);
@@ -684,10 +691,10 @@ function renderMaestro() {
             <input type="text" id="manote" maxlength="2000" placeholder="Ex.: mais piano e menos sintetizadores; tensão a crescer até ao fim" ${S.demo ? 'disabled' : ''}></label>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn" id="maplan" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${ps.length ? 'Planear de novo' : 'Planear com o Claude'}</button>
-            <button class="btn blue" id="magen" ${S.demo || busy || !d.eleven || !ps.some(p => p.state === 'novo' || p.state === 'erro') ? 'disabled' : ''}>${I.music}Gerar tudo</button>
-            <button class="btn" id="masend" ${S.demo || !ps.some(p => p.state === 'gerado') ? 'disabled' : ''} title="As músicas geradas entram sozinhas na timeline">${I.layers}Ver na Estrutura Plus</button></div></div>
+            <button class="btn" id="magen" ${S.demo || busy || !d.eleven || !ps.some(p => p.state === 'novo' || p.state === 'erro') ? 'disabled' : ''}>${I.music}Gerar tudo</button>
+            <button class="btn blue" id="masend" ${S.demo || busy || !ps.some(p => p.state === 'gerado') ? 'disabled' : ''} title="Põe as músicas geradas desta cena na timeline da Estrutura Plus">${I.layers}Montar no Plus</button></div></div>
         ${info.direction ? `<p style="margin:14px 0 0"><b style="font-size:12px;color:var(--muted);letter-spacing:.04em">ARCO MUSICAL</b><br>${esc(info.direction)}</p>` : ''}
-        <p class="note" style="margin:10px 0 0">Depois de gerar, as músicas entram sozinhas na timeline da Estrutura Plus: as camas na faixa <b>Música</b> e os stems, stingers e transições na <b>Música 2</b>, no parágrafo escolhido.</p>
+        <p class="note" style="margin:10px 0 0">Depois de gerar, as músicas entram sozinhas na timeline da Estrutura Plus. Para músicas que já tinhas geradas, usa <b>Montar no Plus</b>: as camas vão para a faixa <b>Música</b> e os stems, stingers e transições para a <b>Música 2</b>, no parágrafo escolhido.</p>
       </div>
       ${ps.length ? ps.map(card).join('') : `<div class="card empty" style="margin-top:14px">Esta cena ainda não tem músicas. Carrega em <b>Planear com o Claude</b>, ou acrescenta uma à mão abaixo.</div>`}
       <div class="card mp"><b>Acrescentar uma música</b>
@@ -708,7 +715,10 @@ function renderMaestro() {
       try { await post('generate', { scene: sc.n }); } catch (e) { alert(e.message); return; }
       loadMaestro();
     };
-    document.getElementById('masend').onclick = () => { location.hash = `#/estrutura/${MA.id}/${sc.n}`; };
+    document.getElementById('masend').onclick = async () => {
+      try { await post('send', { scene: sc.n }); } catch (e) { alert(e.message); return; }
+      location.hash = `#/estrutura/${MA.id}/${sc.n}`;
+    };
     document.getElementById('mnadd').onclick = async () => {
       const text = document.getElementById('mnew').value.trim(); if (!text) return;
       try { await post('pieces', { scene: sc.n, text, role: document.getElementById('mnrole').value, duration: +document.getElementById('mndur').value }); } catch (e) { alert(e.message); return; }
@@ -749,7 +759,7 @@ async function estruturaPage(wanted, scene) {
   }
   const pick = ready.find(e => e.id === wanted) || ready.find(e => e.id === ST.id) || ready[0];
   if (ST.id !== pick.id) { ST.id = pick.id; ST.scene = null; ST.sel = null; ST.zoom = 1; }
-  if (scene) { ST.scene = scene; ST.zoom = 1; }
+  if (scene !== null && scene !== undefined) { ST.scene = scene; ST.zoom = 1; }
   if (!S.demo) player.src = `/api/episodes/${ST.id}/audio`;
   await loadStructure();
 }
@@ -802,9 +812,9 @@ function renderStructure() {
   const bars = (arr, n) => (arr && arr.length ? arr : Array(n).fill(30)).map(h => `<i style="height:${h}%"></i>`).join('');
   const nar = tl.blocks.filter(b => inView(b.start, b.end)).map(b => `<button class="clip nar" style="left:${pct(b.start)}%;width:${(b.end - b.start) / span * 100}%" data-seek="${b.start}" title="${esc(b.text)}"><span class="nm">Bloco ${b.block}</span><span class="bars">${bars(b.peaks, 8)}</span></button>`).join('');
   const lane = k => st.clips.filter(c => c.lane === k && inView(c.start, c.start + c.dur)).map(c => `<button class="clip ${c.kind === 'music' ? 'mus' : c.kind === 'ambience' ? 'amb' : 'sfx'} ${c.state === 'a gerar' ? 'gen' : ''} ${c.state === 'erro' ? 'err' : ''} ${ST.sel === c.id ? 'sel' : ''}" style="left:${pct(c.start)}%;width:${c.dur / span * 100}%" data-clip="${c.id}"><span class="nm">${esc(c.label)}${c.state === 'a gerar' ? ', a gerar…' : c.state === 'erro' ? ', erro' : ''}</span><span class="bars">${bars(c.peaks, 8)}</span></button>`).join('');
-  const laneHas = k => st.clips.some(c => c.lane === k && c.state === 'gerado' && (!scene || c.scene === scene.n));
+  const laneHas = k => st.clips.some(c => (c.lane === k || (k === SFX_LANES + 1 && c.lane === SFX_LANES + 2)) && c.state === 'gerado' && (!scene || c.scene === scene.n));
   const row = (k, name, sub, h) => `<div class="tl-row" style="height:${h}px"><div class="tl-lbl"><span class="lt">${name}<small>${sub}</small></span>
-    <button class="trk-dl" type="button" data-dl="${k}" title="Descarregar a faixa ${name}${scene ? ' (' + scene.title + ')' : ''}" aria-label="Descarregar a faixa ${name}" ${S.demo || !laneHas(k) ? 'disabled' : ''}>${I.dl}</button></div><div class="tl-lane" data-lane="${k}">${lane(k)}</div></div>`;
+    <button class="trk-dl" type="button" data-dl="${k === SFX_LANES + 1 ? 'music' : k}" title="${k === SFX_LANES + 1 ? 'Descarregar toda a música (camas e stems)' : 'Descarregar a faixa ' + name}${scene ? ' (' + scene.title + ')' : ' (episódio todo)'}" aria-label="Descarregar ${k === SFX_LANES + 1 ? 'toda a música' : 'a faixa ' + name}" ${S.demo || !laneHas(k) ? 'disabled' : ''}>${I.dl}</button></div><div class="tl-lane" data-lane="${k}">${lane(k)}</div></div>`;
   const scnRow = ST.scene === 0 ? `<div class="tl-row" style="height:36px"><div class="tl-lbl"><span class="lt">Cenas<small>Estrutura</small></span></div><div class="tl-lane">${tl.scenes.map(x => `<button class="clip scn" style="left:${pct(x.start)}%;width:${(x.end - x.start) / span * 100}%" data-scene="${x.n}">${esc(x.title)}</button>`).join('')}</div></div>` : '';
   const chips = `<button class="sc-chip ${ST.scene === 0 ? 'on' : ''}" data-scene="0">Todas</button>` + tl.scenes.map(x => `<button class="sc-chip ${ST.scene === x.n ? 'on' : ''}" data-scene="${x.n}" title="${esc(x.subtitle || '')}">${esc(x.title)}${sceneClips(x.n).length ? I.check : ''}</button>`).join('');
   const epOpts = S.list.map(e => `<option value="${e.id}" ${e.id === ST.id ? 'selected' : ''} ${e.state?.status === 'pronto' ? '' : 'disabled'}>${esc(e.title)}${e.state?.status === 'pronto' ? '' : ' (a processar)'}</option>`).join('');
