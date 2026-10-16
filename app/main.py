@@ -35,7 +35,8 @@ APP_PASSWORD = os.getenv("APP_PASSWORD")
 GUIDE_PATH = DATA.parent / "guia_sound_design.md"
 
 app = FastAPI(title="Podcast Plus AI Assistant")
-jobs = ThreadPoolExecutor(max_workers=int(os.getenv("WORKERS", "1")))
+jobs = ThreadPoolExecutor(max_workers=int(os.getenv("WORKERS", "1")))          # AutoTake (pesado)
+structure_jobs = ThreadPoolExecutor(max_workers=2)                              # Estrutura Plus: não espera pelo AutoTake
 _lock = threading.Lock()
 
 
@@ -131,6 +132,21 @@ def read_struct(d: Path) -> dict:
             c["lane"] = min(c.get("lane", 0), sounddesign.N_SFX_LANES - 1)
         c.setdefault("scene", 1)
     return st
+
+
+def update_struct(d: Path, fn) -> None:
+    with _lock:
+        st = read_struct(d)
+        fn(st)
+        st["ts"] = time.time()
+        write_json(struct_path(d), st)
+
+
+def struct_busy(d: Path) -> bool:
+    """Há sons a ser criados? Um trabalho parado há mais de 15 minutos (servidor reiniciado, falha) já não conta."""
+    st = read_struct(d)
+    running = st.get("status") in {"a planear", "a gerar"} or st.get("batch")
+    return bool(running and time.time() - st.get("ts", 0) < 900)
 
 
 def scenes_of(d: Path, result: dict) -> list[dict]:
@@ -632,19 +648,19 @@ async def create_structure(eid: str, request: Request):
         todo = [sc["n"] for sc in all_scenes if not (body.get("missing_only") and sc["n"] in have)]
         if not todo:
             raise HTTPException(400, "Todas as cenas já têm sons")
-        if read_struct(d).get("status") in {"a planear", "a gerar"} or read_struct(d).get("batch"):
+        if struct_busy(d):
             raise HTTPException(409, "Já há sound design a ser criado")
         update_struct(d, lambda st: st.update(status="a planear", message="", done=0, total=0, scene=todo[0], batch=len(todo)))
-        jobs.submit(run_structure_all, d, todo)
+        structure_jobs.submit(run_structure_all, d, todo)
         return {"ok": True, "scenes": todo}
     scene = int(body.get("scene") or 0)
     if not any(sc["n"] == scene for sc in all_scenes):
         raise HTTPException(400, "Escolhe uma cena")
-    if read_struct(d).get("status") in {"a planear", "a gerar"}:
+    if struct_busy(d):
         raise HTTPException(409, "Já há sound design a ser criado")
     update_struct(d, lambda st: (st.update(status="a planear", message="", done=0, total=0, scene=scene),
                                  st.setdefault("notes", {}).__setitem__(str(scene), notes)))
-    jobs.submit(run_structure, d, scene)
+    structure_jobs.submit(run_structure, d, scene)
     return {"ok": True}
 
 
@@ -686,7 +702,7 @@ def add_clip(eid: str, body: dict = Body(...)):
         st["next"] = nxt + 1
         made.update(clip)
     update_struct(d, apply)
-    jobs.submit(run_clip, d, made["id"])
+    structure_jobs.submit(run_clip, d, made["id"])
     return made
 
 
@@ -707,7 +723,7 @@ def clear_structure(eid: str, body: dict = Body(default={})):
     """Balde do lixo: apaga todos os sons de uma cena ({"scene": n}) ou do episódio todo ({"scene": "all"})."""
     d = ep_dir(eid)
     st = read_struct(d)
-    if st.get("status") in {"a planear", "a gerar"} or st.get("batch"):
+    if struct_busy(d):
         raise HTTPException(409, "Espera que acabe a criação dos sons")
     scene = None if body.get("scene") == "all" else int(body.get("scene") or 0)
     gone = []
@@ -747,7 +763,7 @@ async def regenerate_clip(eid: str, cid: str, request: Request):
                 if body.get("prompt"):
                     c["prompt"] = str(body["prompt"])[:400]
     update_struct(d, apply)
-    jobs.submit(run_clip, d, cid)
+    structure_jobs.submit(run_clip, d, cid)
     return {"ok": True}
 
 
