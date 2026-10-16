@@ -90,7 +90,11 @@ a{color:var(--accent);text-decoration:none}
 .tl-inner{min-width:100%}
 .tl-row{display:flex;border-bottom:1px solid var(--line)}
 .tl-row:last-child{border-bottom:0}
-.tl-lbl{position:sticky;left:0;z-index:3;background:var(--card);width:170px;flex:none;padding:0 14px;display:flex;flex-direction:column;justify-content:center;gap:2px;font-size:14px;font-weight:600}
+.tl-lbl{position:sticky;left:0;z-index:3;background:var(--card);width:170px;flex:none;box-sizing:border-box;padding:0 8px 0 14px;display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:6px;font-size:14px;font-weight:600}
+.tl-lbl .lt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.trk-dl{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:var(--muted);flex:none}
+.trk-dl:hover:not(:disabled){background:var(--hover);color:var(--accent)}.trk-dl:disabled{opacity:.3;cursor:default}
+.trk-dl svg{width:15px;height:15px}
 .tl-lbl small{font-size:12px;color:var(--muted);font-weight:400}
 .tl-lane{position:relative;flex:1;min-width:0;border-left:1px solid var(--line);overflow:hidden}
 .tl-ruler{height:30px;background:var(--panel);cursor:pointer}
@@ -647,8 +651,10 @@ function renderStructure() {
   const bars = (arr, n) => (arr && arr.length ? arr : Array(n).fill(30)).map(h => `<i style="height:${h}%"></i>`).join('');
   const nar = tl.blocks.filter(b => inView(b.start, b.end)).map(b => `<button class="clip nar" style="left:${pct(b.start)}%;width:${(b.end - b.start) / span * 100}%" data-seek="${b.start}" title="${esc(b.text)}"><span class="nm">Bloco ${b.block}</span><span class="bars">${bars(b.peaks, 8)}</span></button>`).join('');
   const lane = k => st.clips.filter(c => c.lane === k && inView(c.start, c.start + c.dur)).map(c => `<button class="clip ${c.kind === 'music' ? 'mus' : c.kind === 'ambience' ? 'amb' : 'sfx'} ${c.state === 'a gerar' ? 'gen' : ''} ${c.state === 'erro' ? 'err' : ''} ${ST.sel === c.id ? 'sel' : ''}" style="left:${pct(c.start)}%;width:${c.dur / span * 100}%" data-clip="${c.id}"><span class="nm">${esc(c.label)}${c.state === 'a gerar' ? ', a gerar…' : c.state === 'erro' ? ', erro' : ''}</span><span class="bars">${bars(c.peaks, 8)}</span></button>`).join('');
-  const row = (k, name, sub, h) => `<div class="tl-row" style="height:${h}px"><div class="tl-lbl">${name}<small>${sub}</small></div><div class="tl-lane" data-lane="${k}">${lane(k)}</div></div>`;
-  const scnRow = ST.scene === 0 ? `<div class="tl-row" style="height:36px"><div class="tl-lbl">Cenas<small>Estrutura</small></div><div class="tl-lane">${tl.scenes.map(x => `<button class="clip scn" style="left:${pct(x.start)}%;width:${(x.end - x.start) / span * 100}%" data-scene="${x.n}">${esc(x.title)}</button>`).join('')}</div></div>` : '';
+  const laneHas = k => st.clips.some(c => c.lane === k && c.state === 'gerado' && (!scene || c.scene === scene.n));
+  const row = (k, name, sub, h) => `<div class="tl-row" style="height:${h}px"><div class="tl-lbl"><span class="lt">${name}<small>${sub}</small></span>
+    <button class="trk-dl" type="button" data-dl="${k}" title="Descarregar a faixa ${name}${scene ? ' (' + scene.title + ')' : ''}" aria-label="Descarregar a faixa ${name}" ${S.demo || !laneHas(k) ? 'disabled' : ''}>${I.dl}</button></div><div class="tl-lane" data-lane="${k}">${lane(k)}</div></div>`;
+  const scnRow = ST.scene === 0 ? `<div class="tl-row" style="height:36px"><div class="tl-lbl"><span class="lt">Cenas<small>Estrutura</small></span></div><div class="tl-lane">${tl.scenes.map(x => `<button class="clip scn" style="left:${pct(x.start)}%;width:${(x.end - x.start) / span * 100}%" data-scene="${x.n}">${esc(x.title)}</button>`).join('')}</div></div>` : '';
   const chips = `<button class="sc-chip ${ST.scene === 0 ? 'on' : ''}" data-scene="0">Todas</button>` + tl.scenes.map(x => `<button class="sc-chip ${ST.scene === x.n ? 'on' : ''}" data-scene="${x.n}" title="${esc(x.subtitle || '')}">${esc(x.title)}${sceneClips(x.n).length ? I.check : ''}</button>`).join('');
   const epOpts = S.list.map(e => `<option value="${e.id}" ${e.id === ST.id ? 'selected' : ''} ${e.state?.status === 'pronto' ? '' : 'disabled'}>${esc(e.title)}${e.state?.status === 'pronto' ? '' : ' (a processar)'}</option>`).join('');
   const busy = running(st), n = st.clips.length, mySc = scene ? sceneClips(scene.n).length : 0;
@@ -667,6 +673,7 @@ function renderStructure() {
         <p class="page-s">Cria o sound design do episódio cena a cena: efeitos e música em faixas por baixo dos takes.</p></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <select class="epsel" id="epsel" aria-label="Episódio">${epOpts}</select>
+          <button class="btn" id="exptr" ${S.demo || !n ? 'disabled' : ''} title="Uma WAV por faixa${scene ? ' (' + scene.title + ')' : ''}">${I.dl}Exportar faixas</button>
           <button class="btn" id="exp" ${S.demo || !n ? 'disabled' : ''}>${I.dl}Exportar Reaper</button>
           <button class="btn" id="createall" ${S.demo || busy || d.missing.length ? 'disabled' : ''}>${I.spark}Create todas as cenas</button>
           <button class="btn" id="clear" ${S.demo || busy || !(scene ? sceneClips(scene.n).length : n) ? 'disabled' : ''} title="Apagar todos os sons ${scene ? 'desta cena' : 'do episódio'}">${I.trash}${scene ? 'Limpar cena' : 'Limpar tudo'}</button>
@@ -693,7 +700,7 @@ function renderStructure() {
         <div class="tl-row"><div class="tl-lbl rl" style="height:30px"></div><div class="tl-lane tl-ruler" id="ruler">${ticksHTML()}</div></div>
         <div class="tl-wrap">
           ${scnRow}
-          <div class="tl-row" style="height:84px"><div class="tl-lbl">Narração<small>Takes</small></div><div class="tl-lane">${nar}</div></div>
+          <div class="tl-row" style="height:84px"><div class="tl-lbl"><span class="lt">Narração<small>Takes</small></span></div><div class="tl-lane">${nar}</div></div>
           ${Array.from({ length: SFX_LANES }, (_, k) => row(k, 'Efeitos ' + (k + 1), 'Sound design', 44)).join('')}
           ${st.clips.some(c => c.lane === SFX_LANES) ? row(SFX_LANES, 'Ambiente', 'Sound design', 44) : ''}
           ${row(SFX_LANES + 1, 'Música', 'Sound design', 44)}
@@ -738,6 +745,9 @@ function renderStructure() {
   });
   renderPop();
   document.getElementById('exp').onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/structure`; };
+  const q = scene ? `?scene=${scene.n}` : '';
+  document.getElementById('exptr').onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/tracks${q}`; };
+  $app.querySelectorAll('[data-dl]').forEach(b => b.onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/track/${b.dataset.dl}${q}`; });
   applyZoom(ST.zoom);
   sc.scrollLeft = keepLeft;
   requestAnimationFrame(() => { const r = document.getElementById('ruler'); if (r) r.innerHTML = ticksHTML(); });

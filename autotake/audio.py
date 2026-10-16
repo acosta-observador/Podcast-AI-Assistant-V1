@@ -110,3 +110,18 @@ def render(src: Path, cuts: list[dict], dst: Path, fade: float = 0.012) -> None:
         lst = tmp / "list.txt"
         lst.write_text("".join(f"file '{p}'\n" for p in parts))
         run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", str(dst)])
+
+
+def mix_track(items: list[dict], total: float, dst: Path) -> None:
+    """Uma faixa de sound design como WAV 24-bit: cada som no seu instante (items: {file, start, gain}), com silêncio entre eles.
+    O ficheiro tem 'total' segundos, para todas as faixas ficarem alinhadas quando se importam numa DAW."""
+    cmd = ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-t", f"{total:.3f}", "-i", "anullsrc=r=44100:cl=stereo"]
+    for it in items:
+        cmd += ["-i", str(it["file"])]
+    parts, labels = [], ["[0:a]"]
+    for k, it in enumerate(items, 1):
+        ms = max(0, int(it["start"] * 1000))
+        parts.append(f"[{k}:a]aformat=sample_rates=44100:channel_layouts=stereo,adelay={ms}|{ms},volume={it['gain']:.3f}[a{k}]")
+        labels.append(f"[a{k}]")
+    parts.append("".join(labels) + f"amix=inputs={len(labels)}:duration=first:normalize=0:dropout_transition=0[out]")
+    run(cmd + ["-filter_complex", ";".join(parts), "-map", "[out]", "-c:a", "pcm_s24le", str(dst)])
