@@ -492,9 +492,11 @@ def run_suggest(d: Path, todo: list[int], notes: dict) -> None:
             def apply(a):
                 sc = next(x for x in a["scenes"] if x["n"] == n)
                 if got is not None:
-                    for iid in range(sc["from"], sc["to"] + 1):
-                        a["lines"].pop(str(iid), None)
-                    a["lines"].update({str(k): v for k, v in got.items()})
+                    norm = lambda t: re.sub(r"\s+", " ", t).strip().lower()
+                    for iid, text in got.items():          # acrescenta, sem apagar nem repetir o que já lá está
+                        old = [l for l in a["lines"].get(str(iid), "").splitlines() if l.strip()]
+                        seen = {norm(l) for l in old}
+                        a["lines"][str(iid)] = "\n".join(old + [l for l in text.splitlines() if l.strip() and norm(l) not in seen])
                 else:
                     a.setdefault("errors", {})[str(n)] = err
                 a["done"] += 1
@@ -525,6 +527,21 @@ def put_lines(eid: str, body: dict = Body(...)):
             an["lines"][iid] = text
         else:
             an["lines"].pop(iid, None)
+    update_analysis(d, apply)
+    return {"ok": True}
+
+
+@app.post("/api/episodes/{eid}/analysis/clear")
+def clear_analysis_scene(eid: str, body: dict = Body(...)):
+    """Apaga os sons escritos de uma cena."""
+    d = ep_dir(eid)
+    n = int(body.get("scene") or 0)
+
+    def apply(an):
+        sc = next((s for s in an["scenes"] if s["n"] == n), None)
+        if sc:
+            for iid in range(sc["from"], sc["to"] + 1):
+                an["lines"].pop(str(iid), None)
     update_analysis(d, apply)
     return {"ok": True}
 

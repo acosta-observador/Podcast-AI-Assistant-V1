@@ -556,14 +556,19 @@ function renderAnalysis() {
           <label class="field" style="flex:1 1 320px;margin:0">Notas para o Claude sobre esta cena (opcional)
             <input type="text" id="anote" maxlength="2000" value="${esc((an.notes || {})[String(sc.n)] || '')}" placeholder="Ex.: os polícias NÃO bateram à porta" ${S.demo ? 'disabled' : ''}></label>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn" id="ansug" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}Sugerir sons</button>
+            <button class="btn" id="anclr" ${S.demo || busy || !soundsIn(sc) ? 'disabled' : ''} title="Apagar os sons escritos desta cena">${I.trash}Limpar sons</button>
+            <button class="btn" id="ansug" ${S.demo || busy || !d.claude ? 'disabled' : ''} title="O Claude acrescenta sons sem apagar os que já escreveste">${I.spark}Sugerir sons</button>
             <a class="btn blue" href="#/estrutura/${AN.id}/${sc.n}">${I.layers}Montar na Estrutura Plus</a></div></div>
         <p class="note" style="margin:12px 0 0">Em cada parágrafo escreve um som e carrega em <b>Enter</b> (português ou inglês). Clica num som para o editar; o <b>✕</b> apaga-o.
           Opcional: <b>@ palavras do texto</b> no fim para escolher onde entra (ex.: <i>porta pesada a fechar @ A sede da Polícia</i>) e <b>música:</b> no início para pedir música. Guarda sozinho.</p>
         <div class="an-grid" style="margin-top:12px"><div class="an-head">PARÁGRAFOS</div><div class="an-head">SONS A IR BUSCAR À ELEVENLABS</div>${rows}</div></div></div>`);
     $app.querySelectorAll('.snd-wrap').forEach(w => bindCell(an, w));
+    document.getElementById('anclr').onclick = async () => {
+      if (!soundsIn(sc) || !confirm(`Apagar os ${soundsIn(sc)} sons escritos nesta cena? Não se pode desfazer.`)) return;
+      try { await api(`/api/episodes/${AN.id}/analysis/clear`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: sc.n }) }); } catch (e) { alert(e.message); return; }
+      loadAnalysis();
+    };
     document.getElementById('ansug').onclick = async () => {
-      if (soundsIn(sc) && !confirm('Isto substitui os sons escritos nesta cena, incluindo as tuas edições. Continuar?')) return;
       try { await api(`/api/episodes/${AN.id}/analysis/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: sc.n, notes: document.getElementById('anote').value }) }); } catch (e) { alert(e.message); return; }
       loadAnalysis();
     };

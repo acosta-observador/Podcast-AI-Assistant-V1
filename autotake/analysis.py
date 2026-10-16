@@ -126,28 +126,36 @@ def _call(system: str, user: str, key: str, max_tokens: int, timeout: int = 300,
 
 SUGGEST_SYSTEM = """És o sonoplasta de um podcast true crime em português (Podcast Plus, Observador). Recebes o texto de UMA cena, parágrafo
 a parágrafo, e sugeres os sons a ir buscar a um gerador de efeitos sonoros (ElevenLabs) para os pôr na linha do tempo.
-Tom: sombrio, tenso, sóbrio e realista. O som serve a narração e nunca a compete.
+Tom: sombrio, tenso, sóbrio e realista. O objetivo é uma cena BEM PREENCHIDA de sons, não uma cena despida.
 
 Cada parágrafo tem uma etiqueta: NARRAÇÃO (lida pelo narrador) ou ENTREVISTA (excerto de entrevista ou arquivo: não leva sons).
-Só sugeres sons para parágrafos de NARRAÇÃO.
+Só sugeres sons para parágrafos de NARRAÇÃO. Alguns parágrafos mostram "já tem": são sons que já estão escritos; não os repitas,
+acrescenta outros.
 
 Escreve cada som numa linha curta, em português, com 3 a 8 palavras e UM só som. Exemplos: "porta pesada a fechar",
 "telefone fixo a tocar duas vezes", "carros a buzinar ao longe", "avião a passar", "máquina de escrever", "folhear de jornal",
-"passos em corredor", "carimbo sobre papel". Nunca juntes dois sons na mesma linha: faz duas linhas.
-Depois de " @ " podes pôr 3 a 6 palavras EXATAS do parágrafo onde o som entra (ex.: "porta pesada a fechar @ A sede da Polícia").
-Sem " @ ", o som entra distribuído ao longo do parágrafo.
+"passos em corredor", "carimbo sobre papel", "flashes de máquinas fotográficas", "elevador a abrir". Nunca juntes dois sons na
+mesma linha: faz duas linhas. Depois de " @ " podes pôr 3 a 6 palavras EXATAS do parágrafo onde o som entra
+(ex.: "porta pesada a fechar @ A sede da Polícia"). Sem " @ ", o som entra distribuído ao longo do parágrafo.
 
-NÃO sugiras sons de ambiente (chuva, trânsito de fundo, sala vazia, murmúrio): o gerador ainda não os faz bem. Só efeitos pontuais
-ligados a objetos e ações que o texto nomeia ou sugere fisicamente. Música: no máximo UMA linha na cena toda, só se a cena a pedir,
-no parágrafo onde entra, escrita em português como uma descrição de banda sonora, com percussão/ritmo, harmonia e clima, um instrumento
-em destaque, e o género ou referência ("tipo série policial"): "música: percussão suave a marcar o tempo, harmonia ominosa, tipo série policial,
-guitarra elétrica escura ao longe". Nada de "drone" ou "pulso" vagos: instrumentos e movimento concretos.
+DENSIDADE (importante, não sejas tímido):
+- Parágrafo de narração com ação, deslocações, objetos, documentos, pessoas a mexer-se ou confronto: 2 a 4 sons, cada objeto ou ação
+  com o seu.
+- Parágrafo de narração com um lugar, um objeto ou uma ação mencionados de passagem: pelo menos 1 som.
+- Só os parágrafos de pura opinião, análise, datas ou cronologia seca podem ficar sem sons.
+- Uma cena com 10 parágrafos de narração deve sair com pelo menos 15 linhas de som.
+- Quando o texto nomeia um lugar sem nomear objetos, sugere os sons pontuais típicos desse lugar e época: esquadra (telefone a tocar,
+  cadeira a arrastar), redação de jornal dos anos 90 (teclas de máquina de escrever, telefone, papel), parlamento (campainha, passos,
+  murmúrio curto), tribunal (martelo, porta pesada), rua (carro a passar, passos), casa à noite (porta, chaves, tábua a ranger).
 
-Quando há ação, objetos, deslocações ou confronto, sugere vários sons (cada objeto ou ação com o seu), para a cena ficar bem
-preenchida. Parágrafos de opinião, análise, datas e cronologia seca não levam sons.
+NÃO sugiras sons de ambiente contínuo (chuva de fundo, trânsito de fundo, sala vazia): o gerador ainda não os faz bem. Sugere sons
+pontuais e concretos. Música: no máximo UMA linha na cena toda, só se a cena a pedir, no parágrafo onde entra, escrita em português
+como uma descrição de banda sonora, com percussão/ritmo, harmonia e clima, um instrumento em destaque, e o género ou referência
+("tipo série policial"): "música: percussão suave a marcar o tempo, harmonia ominosa, tipo série policial, guitarra elétrica escura ao
+longe". Nada de "drone" ou "pulso" vagos.
 
-Lê cada parágrafo literalmente. Só podes sugerir sons de coisas que ACONTECEM fisicamente. Negações ("não bateu à porta"), hipóteses,
-perguntas, metáforas e factos só contados de passagem NÃO dão som.
+Lê cada parágrafo literalmente. Só podes sugerir sons de coisas que ACONTECEM fisicamente ou que são típicas do lugar descrito.
+Negações ("não bateu à porta"), hipóteses, perguntas, metáforas e factos só contados de passagem NÃO dão som.
 Faz dois passos e devolve-os.
 PASSO 1, "reading": só para os parágrafos que têm uma negação, hipótese, pergunta, metáfora ou facto contado de passagem que
   poderia enganar, escreve {"item": n, "not_happening": ["o que NÃO acontece"]}. Os restantes não entram.
@@ -161,8 +169,11 @@ def suggest_scene(an: dict, n: int, key: str, guide: str = "", notes: str = "") 
     sc = next(x for x in an["scenes"] if x["n"] == n)
     mine = [it for it in an["items"] if sc["from"] <= it["id"] <= sc["to"] and it["type"] in VISIBLE]
     tag = {"narracao": "NARRAÇÃO", "entrevista": "ENTREVISTA"}
+    def have(it):
+        ls = [l for l in (an.get("lines") or {}).get(str(it["id"]), "").splitlines() if l.strip()]
+        return f"\n   (já tem: {'; '.join(ls)})" if ls and it["type"] == "narracao" else ""
     msg = f"Cena {sc['n']}: {sc['title']}\n\n" + "\n\n".join(
-        f"[{it['id']}] {tag[it['type']]}{' · ' + it['speaker'] if it.get('speaker') else ''}: {it['text'][:1500]}" for it in mine)
+        f"[{it['id']}] {tag[it['type']]}{' · ' + it['speaker'] if it.get('speaker') else ''}: {it['text'][:1500]}{have(it)}" for it in mine)
     if notes.strip():
         msg += f"\n\nNOTAS DO UTILIZADOR PARA ESTA CENA (têm prioridade):\n{notes.strip()}"
     system = SUGGEST_SYSTEM
