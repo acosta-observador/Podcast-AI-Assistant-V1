@@ -202,9 +202,10 @@ def run_structure(d: Path, scene: int) -> None:
         locals_sig = [sig]
 
         def start(st):
-            for old in [c for c in st["clips"] if c.get("scene") == scene]:
+            mine = lambda c: c.get("scene") == scene and c.get("src") != "maestro"     # as músicas do Maestro ficam
+            for old in [c for c in st["clips"] if mine(c)]:
                 (d / "sd" / f"{old['id']}.mp3").unlink(missing_ok=True)
-            st["clips"] = [c for c in st["clips"] if c.get("scene") != scene]
+            st["clips"] = [c for c in st["clips"] if not mine(c)]
             nxt = st.get("next", 1 + max([int(c["id"][1:]) for c in st["clips"]] or [0]))
             for c in cues:
                 st["clips"].append({**c, "id": f"c{nxt}", "scene": scene, "state": "a gerar", "peaks": [], "message": ""})
@@ -689,8 +690,10 @@ def run_maestro_generate(d: Path, ids: list[str]) -> None:
                     p.update(patch)
                 mm["done"] += 1
             update_maestro(d, apply)
+        scenes = {n for n, _ in (_find_piece(read_maestro(d), i) for i in ids) if n}
         with ThreadPoolExecutor(max_workers=3) as pool:
             list(pool.map(work, ids))
+        _try_sync(d, scenes)                       # as músicas geradas entram sozinhas na timeline da Estrutura Plus
         update_maestro(d, lambda mm: mm.update(status="pronto"))
     except Exception as e:
         traceback.print_exc()
@@ -809,9 +812,12 @@ def maestro_patch_piece(eid: str, pid: str, body: dict = Body(...)):
         if "gain" in body:
             p["gain"] = max(0.05, min(1.0, float(body["gain"])))
         out.update(p)
+    scene_n = _find_piece(read_maestro(d), pid)[0]
     update_maestro(d, apply)
     if not out:
         raise HTTPException(404)
+    if "prompt" in body and scene_n:
+        _try_sync(d, [scene_n])                  # a música com o prompt antigo sai da timeline
     return out
 
 
@@ -824,9 +830,12 @@ def maestro_delete_piece(eid: str, pid: str):
     def apply(mm):
         for sc in mm["scenes"].values():
             sc["pieces"] = [p for p in sc["pieces"] if p["id"] != pid]
+    scene_n = _find_piece(read_maestro(d), pid)[0]
     update_maestro(d, apply)
     for suffix in (".mp3", "-stems.zip"):
         (d / "maestro" / f"{pid}{suffix}").unlink(missing_ok=True)
+    if scene_n:
+        _try_sync(d, [scene_n])
     return {"ok": True}
 
 
@@ -867,24 +876,20 @@ def maestro_stems_zip(eid: str, pid: str):
     return FileResponse(p, media_type="application/zip", filename=f"{pid}-stems.zip")
 
 
-@app.post("/api/episodes/{eid}/maestro/send")
-def maestro_send(eid: str, body: dict = Body(...)):
-    """Copia as músicas geradas de uma cena para a faixa de Música da Estrutura Plus (cada peça entra no parágrafo escolhido)."""
-    d = ep_dir(eid)
-    n = int(body.get("scene") or 0)
+def sync_maestro_scene(d: Path, n: int) -> int:
+    """Põe na faixa de Música da Estrutura Plus as músicas geradas de uma cena (substitui as do Maestro dessa cena).
+    Cada peça entra no parágrafo escolhido: camas na faixa Música, stems/stingers/transições na Música 2."""
     result = read_json(d / "result.json")
     if not result:
-        raise HTTPException(400, "O episódio ainda não foi processado (AutoTake)")
+        raise RuntimeError("O episódio ainda não foi processado (AutoTake)")
     mm = read_maestro(d)
-    pieces = [p for p in mm["scenes"].get(str(n), {}).get("pieces", []) if p["state"] == "gerado"]
-    if not pieces:
-        raise HTTPException(400, "Esta cena não tem músicas geradas")
+    pieces = [p for p in mm["scenes"].get(str(n), {}).get("pieces", []) if p["state"] == "gerado" and (d / "maestro" / f"{p['id']}.mp3").exists()]
     an = load_analysis(d)
     analysis_tools.link_blocks(an["items"], result["blocks"])
     tl = sounddesign.timeline(result, read_json(d / "selections.json", {}), scenes_of(d, result))
     tsc = next((x for x in tl["scenes"] if x["n"] == n), None)
-    if not tsc:
-        raise HTTPException(400, "Esta cena não tem takes escolhidos no AutoTake")
+    if pieces and not tsc:
+        raise RuntimeError("Esta cena não tem takes escolhidos no AutoTake")
     timed = {b["block"]: b for b in tl["blocks"]}
     block_of = {it["id"]: it.get("block") for it in an["items"]}
     (d / "sd").mkdir(exist_ok=True)
@@ -896,13 +901,12 @@ def maestro_send(eid: str, body: dict = Body(...)):
         st["clips"] = [c for c in st["clips"] if not (c.get("src") == "maestro" and c.get("scene") == n)]
         nxt = st.get("next", 1 + max([int(c["id"][1:]) for c in st["clips"]] or [0]))
         for p in pieces:
-            blk = block_of.get(p.get("item"))
-            b = timed.get(blk) or timed[tsc["blocks"][0]]
-            blk = b["block"]
+            b = timed.get(block_of.get(p.get("item"))) or timed[tsc["blocks"][0]]
             length = float(p.get("length") or p.get("duration") or 30)
-            clip = {"id": f"c{nxt}", "kind": "music", "label": p["label"], "prompt": p["prompt"], "block": blk, "scene": n,
-                    "lane": sounddesign.MUSIC_LANE if p["role"] == "bed" else sounddesign.MUSIC_LANE2, "start": b["start"], "dur": round(length, 2), "gain": p.get("gain", 0.4), "rel": 0.0,
-                    "desc": p.get("description", ""), "anchor": "", "state": "gerado", "peaks": [], "message": "", "src": "maestro", "pid": p["id"]}
+            clip = {"id": f"c{nxt}", "kind": "music", "label": p["label"], "prompt": p["prompt"], "block": b["block"], "scene": n,
+                    "lane": sounddesign.MUSIC_LANE if p["role"] == "bed" else sounddesign.MUSIC_LANE2, "start": b["start"],
+                    "dur": round(length, 2), "gain": p.get("gain", 0.4), "rel": 0.0, "desc": p.get("description", ""), "anchor": "",
+                    "state": "gerado", "peaks": [], "message": "", "src": "maestro", "pid": p["id"]}
             shutil.copyfile(d / "maestro" / f"{p['id']}.mp3", d / "sd" / f"{clip['id']}.mp3")
             try:
                 clip["peaks"] = sounddesign.audio_peaks(d / "sd" / f"{clip['id']}.mp3", max(8, min(160, round(length * 3))))
@@ -913,7 +917,28 @@ def maestro_send(eid: str, body: dict = Body(...)):
             nxt += 1
         st["next"] = nxt
     update_struct(d, apply)
-    return {"ok": True, "sent": len(made)}
+    return len(made)
+
+
+def _try_sync(d: Path, scenes) -> None:
+    for n in scenes:
+        try:
+            sync_maestro_scene(d, int(n))
+        except Exception:
+            traceback.print_exc()
+
+
+@app.post("/api/episodes/{eid}/maestro/send")
+def maestro_send(eid: str, body: dict = Body(...)):
+    """Volta a pôr na Estrutura Plus as músicas geradas de uma cena (acontece sozinho depois de gerar)."""
+    d = ep_dir(eid)
+    try:
+        sent = sync_maestro_scene(d, int(body.get("scene") or 0))
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
+    if not sent:
+        raise HTTPException(400, "Esta cena não tem músicas geradas")
+    return {"ok": True, "sent": sent}
 
 
 # ---------- guia de sound design (editável) ----------

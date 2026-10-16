@@ -633,7 +633,7 @@ function renderMaestro() {
   const errs = Object.entries(mo.errors || {}).map(([n, m]) => `<div class="errbox" style="margin:0 0 12px">Cena ${n}: ${esc(m)}</div>`).join('');
   const post = (path, body) => api(`/api/episodes/${MA.id}/maestro/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
   const head = `<div class="ep-head"><div><h1 class="page-t">Maestro</h1>
-      <p class="page-s">${sc ? `Cena ${sc.n}: ${esc(sc.title)}` : 'O Claude lê cada cena e decide as músicas e os stems (3 a 5 por cena), todos diferentes. A ElevenLabs gera-os e podes enviá-los para a Estrutura Plus.'}</p></div>
+      <p class="page-s">${sc ? `Cena ${sc.n}: ${esc(sc.title)}` : 'O Claude lê cada cena e decide as músicas e os stems (3 a 5 por cena), todos diferentes. A ElevenLabs gera-os e eles entram sozinhos na timeline da Estrutura Plus.'}</p></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select class="epsel" id="maep" aria-label="Episódio">${epOpts}</select>
         ${sc ? '' : `<button class="btn blue" id="maplanall" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${busy ? 'A trabalhar…' : 'Planear as cenas'}</button>
         <button class="btn" id="magenall" ${S.demo || busy || !d.eleven ? 'disabled' : ''}>${I.music}Gerar todas as músicas</button>`}</div></div>
@@ -685,8 +685,9 @@ function renderMaestro() {
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn" id="maplan" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${ps.length ? 'Planear de novo' : 'Planear com o Claude'}</button>
             <button class="btn blue" id="magen" ${S.demo || busy || !d.eleven || !ps.some(p => p.state === 'novo' || p.state === 'erro') ? 'disabled' : ''}>${I.music}Gerar tudo</button>
-            <button class="btn" id="masend" ${S.demo || busy || !ps.some(p => p.state === 'gerado') ? 'disabled' : ''} title="Copia as músicas geradas para a faixa de Música da Estrutura Plus">${I.layers}Enviar para a Estrutura Plus</button></div></div>
+            <button class="btn" id="masend" ${S.demo || !ps.some(p => p.state === 'gerado') ? 'disabled' : ''} title="As músicas geradas entram sozinhas na timeline">${I.layers}Ver na Estrutura Plus</button></div></div>
         ${info.direction ? `<p style="margin:14px 0 0"><b style="font-size:12px;color:var(--muted);letter-spacing:.04em">ARCO MUSICAL</b><br>${esc(info.direction)}</p>` : ''}
+        <p class="note" style="margin:10px 0 0">Depois de gerar, as músicas entram sozinhas na timeline da Estrutura Plus: as camas na faixa <b>Música</b> e os stems, stingers e transições na <b>Música 2</b>, no parágrafo escolhido.</p>
       </div>
       ${ps.length ? ps.map(card).join('') : `<div class="card empty" style="margin-top:14px">Esta cena ainda não tem músicas. Carrega em <b>Planear com o Claude</b>, ou acrescenta uma à mão abaixo.</div>`}
       <div class="card mp"><b>Acrescentar uma música</b>
@@ -707,10 +708,7 @@ function renderMaestro() {
       try { await post('generate', { scene: sc.n }); } catch (e) { alert(e.message); return; }
       loadMaestro();
     };
-    document.getElementById('masend').onclick = async () => {
-      try { const r = await post('send', { scene: sc.n }); alert(`${r.sent} músicas enviadas para a Estrutura Plus (faixas Música e Música 2).`); location.hash = `#/estrutura/${MA.id}/${sc.n}`; }
-      catch (e) { alert(e.message); }
-    };
+    document.getElementById('masend').onclick = () => { location.hash = `#/estrutura/${MA.id}/${sc.n}`; };
     document.getElementById('mnadd').onclick = async () => {
       const text = document.getElementById('mnew').value.trim(); if (!text) return;
       try { await post('pieces', { scene: sc.n, text, role: document.getElementById('mnrole').value, duration: +document.getElementById('mndur').value }); } catch (e) { alert(e.message); return; }
