@@ -664,6 +664,7 @@ function renderStructure() {
           <select class="epsel" id="epsel" aria-label="Episódio">${epOpts}</select>
           <button class="btn" id="exp" ${S.demo || !n ? 'disabled' : ''}>${I.dl}Exportar Reaper</button>
           <button class="btn" id="createall" ${S.demo || busy || d.missing.length ? 'disabled' : ''}>${I.spark}Create todas as cenas</button>
+          <button class="btn" id="clear" ${S.demo || busy || !(scene ? sceneClips(scene.n).length : n) ? 'disabled' : ''} title="Apagar todos os sons ${scene ? 'desta cena' : 'do episódio'}">${I.trash}${scene ? 'Limpar cena' : 'Limpar tudo'}</button>
           ${scene ? `<button class="btn blue" id="create" ${S.demo || busy || d.missing.length ? 'disabled' : ''}>${I.spark}${busy ? 'A criar…' : `Create · ${esc(scene.title)}`}</button>` : ''}
         </div></div>
       ${st.status === 'erro' ? `<div class="errbox" style="margin:0 0 16px">${esc(st.message)}</div>` : ''}
@@ -722,6 +723,7 @@ function renderStructure() {
   const sn = document.getElementById('snote'); if (sn) sn.oninput = () => { ST.draft[scene.n] = sn.value; };
   const cr = document.getElementById('create'); if (cr) cr.onclick = createStructure;
   document.getElementById('createall').onclick = createAll;
+  document.getElementById('clear').onclick = clearScene;
   renderGuide();
   $app.querySelectorAll('.tl-lane[data-lane]').forEach(el => el.onclick = e => {
     if (e.target.closest('.clip') || S.demo) return;
@@ -833,6 +835,15 @@ function renderSelected() {
     c.gain = g.value / 100;
     await api(`/api/episodes/${ST.id}/structure/clips/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gain: c.gain }) }).catch(showErr);
   };
+}
+
+async function clearScene() {
+  const d = ST.data, sc = d.timeline.scenes.find(x => x.n === ST.scene);
+  const mine = sc ? d.structure.clips.filter(c => c.scene === sc.n) : d.structure.clips;
+  if (!mine.length || !confirm(`Apagar ${mine.length === 1 ? 'o som' : 'os ' + mine.length + ' sons'} ${sc ? 'da ' + sc.title : 'de todas as cenas'}? Não se pode desfazer.`)) return;
+  stopStructure(true);
+  try { await api(`/api/episodes/${ST.id}/structure/clear`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: sc ? sc.n : 'all' }) }); } catch (e) { alert(e.message); return; }
+  ST.sel = null; loadStructure();
 }
 
 async function createAll() {

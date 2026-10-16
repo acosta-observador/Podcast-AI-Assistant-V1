@@ -685,6 +685,37 @@ def patch_clip(eid: str, cid: str, body: dict = Body(...)):
     return {"ok": True}
 
 
+@app.post("/api/episodes/{eid}/structure/clear")
+def clear_structure(eid: str, body: dict = Body(default={})):
+    """Balde do lixo: apaga todos os sons de uma cena ({"scene": n}) ou do episódio todo ({"scene": "all"})."""
+    d = ep_dir(eid)
+    st = read_struct(d)
+    if st.get("status") in {"a planear", "a gerar"} or st.get("batch"):
+        raise HTTPException(409, "Espera que acabe a criação dos sons")
+    scene = None if body.get("scene") == "all" else int(body.get("scene") or 0)
+    gone = []
+
+    def apply(s):
+        keep = []
+        for c in s["clips"]:
+            if scene is None or c.get("scene") == scene:
+                gone.append(c["id"])
+            else:
+                keep.append(c)
+        s["clips"] = keep
+        sigs = s.setdefault("sigs", {})
+        if scene is None:
+            sigs.clear()
+        else:
+            sigs.pop(str(scene), None)
+        if not keep:
+            s.update(status=None, note="", done=0, total=0)
+    update_struct(d, apply)
+    for cid in gone:
+        (d / "sd" / f"{cid}.mp3").unlink(missing_ok=True)
+    return {"ok": True, "removed": len(gone)}
+
+
 @app.post("/api/episodes/{eid}/structure/clips/{cid}/regenerate")
 async def regenerate_clip(eid: str, cid: str, request: Request):
     d = ep_dir(eid)
