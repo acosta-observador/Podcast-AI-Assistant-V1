@@ -303,7 +303,7 @@ def list_episodes():
     items = []
     for d in sorted(DATA.iterdir(), reverse=True):
         meta = read_json(d / "meta.json")
-        if meta:
+        if meta and meta.get("kind") != "review":          # os episódios só de revisão não aparecem no AutoTake
             items.append({**meta, "state": read_json(d / "state.json", {})})
     return items
 
@@ -1322,10 +1322,44 @@ def review_overview():
             continue
         rv = read_review(d)
         ready = [v for v in rv["versions"] if v["state"] == "pronto"]
-        out.append({"id": meta["id"], "title": meta["title"], "created": meta.get("created"), "versions": len(ready),
+        out.append({"id": meta["id"], "title": meta["title"], "kind": meta.get("kind", "autotake"), "created": meta.get("created"), "versions": len(ready),
                     "latest": ready[-1]["id"] if ready else None, "latest_label": ready[-1]["label"] if ready else None,
                     "notes": len(rv["notes"]), "open": sum(1 for n in rv["notes"] if n.get("status") != "feita")})
     return out
+
+
+@app.post("/api/review/episodes")
+def upload_review_episode(title: str = Form(...), label: str = Form(""), by: str = Form("Sonoplastia"), audio: UploadFile = File(...)):
+    """A Sonoplastia carrega um episódio para a Direção ouvir. Se já existir um com o mesmo título, entra como nova versão."""
+    title = title.strip()[:120]
+    if not title:
+        raise HTTPException(400, "Escreve o nome do episódio")
+    d = None
+    for p in DATA.iterdir():
+        meta = read_json(p / "meta.json")
+        if meta and meta.get("kind") == "review" and meta["title"].strip().lower() == title.lower():
+            d = p
+            break
+    if d is None:
+        eid = f"rev-{time.strftime('%Y%m%d-%H%M%S')}-{slug(title)}"
+        d = DATA / eid
+        d.mkdir(parents=True)
+        write_json(d / "meta.json", {"id": eid, "title": title, "created": time.time(), "kind": "review"})
+    v = _new_version(d, label, "upload", by, "a converter")
+    src = d / "review" / f"{v['id']}-original{Path(audio.filename or 'x.wav').suffix.lower()}"
+    with open(src, "wb") as out:
+        shutil.copyfileobj(audio.file, out, length=8 * 1024 * 1024)
+    structure_jobs.submit(run_review_convert, d, v["id"], src)
+    return {"episode": d.name, "version": v}
+
+
+@app.delete("/api/review/episodes/{eid}")
+def delete_review_episode(eid: str):
+    d = ep_dir(eid)
+    if read_json(d / "meta.json", {}).get("kind") != "review":
+        raise HTTPException(400, "Só se apagam aqui os episódios carregados para a Direção")
+    shutil.rmtree(d)
+    return {"ok": True}
 
 
 @app.get("/api/episodes/{eid}/review")

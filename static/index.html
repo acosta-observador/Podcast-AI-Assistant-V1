@@ -676,10 +676,34 @@ async function directorHome() {
 
 async function notesHome() {
   let list; try { list = await api('/api/review'); } catch { list = []; }
+  const rows = list.filter(e => e.kind === 'review' || e.versions);
   $app.innerHTML = shell('notas', `<div class="wrap"><h1 class="page-t">Notas da Direção</h1>
-    <p class="page-s" style="margin-bottom:28px">As notas que a Direção deixou ao ouvir cada episódio, com a hora exata. Carrega uma versão do episódio para a Direção ouvir.</p>
-    <div class="projs" style="margin-top:0">${list.length ? list.map(e => `<a class="card fcard" href="#/revisao/${e.id}${e.latest ? '/' + e.latest : ''}"><b style="font-size:18px;line-height:1.3">${esc(e.title)}</b>
-      <span>${e.versions ? `${e.versions} versão(ões)` : 'Sem versão para a Direção'} · ${e.notes ? `${e.notes} notas${e.open ? `, <b style="color:var(--warn)">${e.open} abertas</b>` : ', todas tratadas'}` : 'sem notas'}</span></a>`).join('') : '<div class="card empty">Ainda não há episódios.</div>'}</div></div>`);
+    <p class="page-s" style="margin-bottom:24px">Carrega aqui os episódios para a Direção ouvir, com som e música. Eles deixam notas com a hora exata e tu vês tudo aqui.</p>
+    <div class="card" style="padding:20px 22px;margin-bottom:24px"><b style="font-size:16px">Carregar episódio para a Direção</b>
+      <p class="note" style="margin:4px 0 12px">Se já existir um episódio com o mesmo nome, o ficheiro entra como nova versão e as notas ficam separadas por versão.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <input type="text" id="rtitle" list="rtitles" placeholder="Nome do episódio (ex.: As Sombras de Duarte Lima, EP 4)" style="height:40px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font:inherit;color:var(--text);flex:1 1 280px">
+        <datalist id="rtitles">${rows.filter(e => e.kind === 'review').map(e => `<option value="${esc(e.title)}"></option>`).join('')}</datalist>
+        <input type="text" id="rlabel" placeholder="Versão (opcional, ex.: V2 com música nova)" style="height:40px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font:inherit;color:var(--text);flex:1 1 220px">
+        <label class="btn blue" style="cursor:pointer;height:40px">${I.dl}Carregar áudio final<input type="file" id="rfile" accept="audio/*,.wav,.mp3,.m4a,.aif,.aiff,.flac" hidden></label></div>
+      <p class="note" id="rnote" style="margin:10px 0 0"></p></div>
+    <div class="projs" style="margin-top:0">${rows.length ? rows.map(e => `<a class="card fcard" href="#/revisao/${e.id}${e.latest ? '/' + e.latest : ''}"><b style="font-size:18px;line-height:1.3">${esc(e.title)}</b>
+      <span>${e.versions ? `${e.versions} versão(ões)${e.latest_label ? ', última: ' + esc(e.latest_label) : ''}` : 'A preparar…'} · ${e.notes ? `${e.notes} notas${e.open ? `, <b style="color:var(--warn)">${e.open} abertas</b>` : ', todas tratadas'}` : 'sem notas'}</span></a>`).join('') : '<div class="card empty">Ainda não há episódios para a Direção. Carrega o primeiro acima.</div>'}</div></div>`);
+  document.getElementById('rfile').onchange = e => {
+    const f = e.target.files[0], title = document.getElementById('rtitle').value.trim(), note = document.getElementById('rnote');
+    if (!f) return;
+    if (!title) { note.textContent = 'Escreve primeiro o nome do episódio.'; e.target.value = ''; return; }
+    const fd = new FormData(); fd.append('audio', f); fd.append('title', title); fd.append('label', document.getElementById('rlabel').value); fd.append('by', 'Sonoplastia');
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/review/episodes');
+    xhr.upload.onprogress = ev => { if (ev.lengthComputable) note.textContent = `A carregar, ${Math.round(ev.loaded / ev.total * 100)}%`; };
+    xhr.onload = () => {
+      if (xhr.status < 300) { const r = JSON.parse(xhr.responseText); note.textContent = 'Carregado. A converter…'; location.hash = `#/revisao/${r.episode}`; }
+      else { let m = 'O envio falhou.'; try { m = JSON.parse(xhr.responseText).detail } catch {} note.textContent = m; }
+    };
+    xhr.onerror = () => { note.textContent = 'O envio falhou. Verifica a ligação.'; };
+    xhr.send(fd);
+  };
 }
 
 /* ---------- Revisão: player com notas na timeline ---------- */
@@ -741,8 +765,9 @@ function renderVersions() {
       <button class="chip" data-delv="${v.id}">Apagar</button></div>`).join('') : '<p class="note" style="margin:6px 0 0">Ainda não há versões.</p>'}
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
       <input type="text" id="vlabel" placeholder="Nome da versão (opcional)" style="height:36px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font:inherit;color:var(--text);min-width:200px">
-      <label class="btn blue" style="cursor:pointer">${I.dl}Carregar áudio final<input type="file" id="vfile" accept="audio/*,.wav,.mp3,.m4a,.aif,.aiff,.flac" hidden></label>
-      <button class="btn" id="vgen" ${d.can_mix ? '' : 'disabled'} title="Mistura a narração do AutoTake com os sons e músicas da Estrutura Plus">${I.layers}Gerar a partir da Estrutura Plus</button>
+      <label class="btn blue" style="cursor:pointer">${I.dl}Nova versão (áudio final)<input type="file" id="vfile" accept="audio/*,.wav,.mp3,.m4a,.aif,.aiff,.flac" hidden></label>
+      ${d.can_mix ? `<button class="btn" id="vgen" title="Mistura a narração do AutoTake com os sons e músicas da Estrutura Plus">${I.layers}Gerar a partir da Estrutura Plus</button>` : ''}
+      ${d.meta.kind === 'review' ? '<button class="chip" id="vdelep">Apagar episódio</button>' : ''}
       <span class="note" id="vnote"></span></div></div>`;
   box.querySelectorAll('[data-delv]').forEach(b => b.onclick = async () => {
     if (!confirm('Apagar esta versão e as notas que lhe pertencem?')) return;
@@ -758,7 +783,13 @@ function renderVersions() {
     xhr.onerror = () => { note.textContent = 'O envio falhou. Verifica a ligação.'; };
     xhr.send(fd);
   };
-  document.getElementById('vgen').onclick = async () => {
+  const delep = document.getElementById('vdelep');
+  if (delep) delep.onclick = async () => {
+    if (!confirm('Apagar este episódio, todas as versões e todas as notas? Não se pode desfazer.')) return;
+    await api(`/api/review/episodes/${RV.id}`, { method: 'DELETE' }).catch(e => { alert(e.message); }); location.hash = '#/notas';
+  };
+  const vgen = document.getElementById('vgen');
+  if (vgen) vgen.onclick = async () => {
     if (!confirm('Gerar uma versão a partir da narração e das faixas de sons e música da Estrutura Plus? Pode demorar alguns minutos.')) return;
     try { await api(`/api/episodes/${RV.id}/review/versions/from-app`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: document.getElementById('vlabel').value, by: 'Sonoplastia' }) }); } catch (e) { alert(e.message); return; }
     loadReview();
