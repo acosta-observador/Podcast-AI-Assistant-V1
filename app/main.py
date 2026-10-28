@@ -1224,6 +1224,224 @@ def export_narration(eid: str, scene: int):
                         background=BackgroundTask(shutil.rmtree, tmp.parent, ignore_errors=True))
 
 
+# ---------- Revisão: a Direção ouve versões do episódio e deixa notas na timeline ----------
+DIRECTORS = ["Miguel", "Sara", "Tânia", "João", "Raquel"]
+
+
+def review_path(d: Path) -> Path:
+    return d / "review.json"
+
+
+def read_review(d: Path) -> dict:
+    return read_json(review_path(d), {"versions": [], "notes": [], "next_v": 1, "next_n": 1})
+
+
+def update_review(d: Path, fn) -> None:
+    with _lock:
+        rv = read_review(d)
+        fn(rv)
+        write_json(review_path(d), rv)
+
+
+def _version(rv: dict, vid: str):
+    return next((v for v in rv["versions"] if v["id"] == vid), None)
+
+
+def run_review_convert(d: Path, vid: str, src: Path) -> None:
+    """Converte o ficheiro carregado para MP3 (leve e compatível com todos os browsers)."""
+    try:
+        dst = d / "review" / f"{vid}.mp3"
+        audio_tools.run(["ffmpeg", "-y", "-v", "error", "-i", str(src), "-vn", "-ac", "2", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "160k", str(dst)])
+        dur = audio_tools.probe(dst)["duration"]
+        src.unlink(missing_ok=True)
+        update_review(d, lambda rv: (_version(rv, vid) or {}).update(state="pronto", file=dst.name, duration=round(dur, 1), message=""))
+    except Exception as e:
+        traceback.print_exc()
+        update_review(d, lambda rv: (_version(rv, vid) or {}).update(state="erro", message=str(e)))
+
+
+def run_review_mix(d: Path, vid: str) -> None:
+    """Versão gerada a partir do AutoTake + Estrutura Plus: narração e todas as faixas de sons, num MP3."""
+    try:
+        meta, result = read_json(d / "meta.json"), read_json(d / "result.json")
+        sel, scenes = read_json(d / "selections.json", {}), scenes_of(d, result)
+        tl = sounddesign.timeline(result, sel, scenes)
+        work = Path(tempfile.mkdtemp())
+        narr = work / "narracao.wav"
+        render_episode(d, result, sel, narr, scenes)
+        inputs = [narr]
+        total = tl["total"] + 1.0
+        for lanes, _name in TRACK_GROUPS:
+            items, _t = _track_items(d, lanes, tl, None)
+            if items:
+                wav = work / f"faixa{len(inputs)}.wav"
+                audio_tools.mix_track(items, total, wav)
+                inputs.append(wav)
+        dst = d / "review" / f"{vid}.mp3"
+        cmd = ["ffmpeg", "-y", "-v", "error"]
+        for p in inputs:
+            cmd += ["-i", str(p)]
+        parts = "".join(f"[{i}:a]aformat=sample_rates=44100:channel_layouts=stereo[a{i}];" for i in range(len(inputs)))
+        flt = parts + "".join(f"[a{i}]" for i in range(len(inputs))) + f"amix=inputs={len(inputs)}:duration=longest:normalize=0,alimiter=limit=0.95[out]"
+        audio_tools.run(cmd + ["-filter_complex", flt, "-map", "[out]", "-c:a", "libmp3lame", "-b:a", "160k", str(dst)])
+        shutil.rmtree(work, ignore_errors=True)
+        dur = audio_tools.probe(dst)["duration"]
+        update_review(d, lambda rv: (_version(rv, vid) or {}).update(state="pronto", file=dst.name, duration=round(dur, 1), message=""))
+    except Exception as e:
+        traceback.print_exc()
+        update_review(d, lambda rv: (_version(rv, vid) or {}).update(state="erro", message=str(e)))
+
+
+def _new_version(d: Path, label: str, source: str, by: str, state: str) -> dict:
+    made = {}
+
+    def apply(rv):
+        n = rv.get("next_v", 1)
+        v = {"id": f"v{n}", "label": label.strip()[:60] or f"Versão {n}", "created": time.time(), "source": source, "by": by,
+             "state": state, "file": None, "duration": None, "message": ""}
+        rv["next_v"] = n + 1
+        rv["versions"].append(v)
+        made.update(v)
+    update_review(d, apply)
+    (d / "review").mkdir(exist_ok=True)
+    return made
+
+
+@app.get("/api/directors")
+def list_directors():
+    return DIRECTORS
+
+
+@app.get("/api/review")
+def review_overview():
+    """Para cada episódio: versões e notas (para a lista inicial da Direção e da Sonoplastia)."""
+    out = []
+    for d in sorted(DATA.iterdir(), reverse=True):
+        meta = read_json(d / "meta.json")
+        if not meta:
+            continue
+        rv = read_review(d)
+        ready = [v for v in rv["versions"] if v["state"] == "pronto"]
+        out.append({"id": meta["id"], "title": meta["title"], "created": meta.get("created"), "versions": len(ready),
+                    "latest": ready[-1]["id"] if ready else None, "latest_label": ready[-1]["label"] if ready else None,
+                    "notes": len(rv["notes"]), "open": sum(1 for n in rv["notes"] if n.get("status") != "feita")})
+    return out
+
+
+@app.get("/api/episodes/{eid}/review")
+def get_review(eid: str):
+    d = ep_dir(eid)
+    return {"meta": read_json(d / "meta.json"), "review": read_review(d), "directors": DIRECTORS,
+            "can_mix": bool(read_json(d / "result.json"))}
+
+
+@app.post("/api/episodes/{eid}/review/versions")
+def upload_version(eid: str, label: str = Form(""), by: str = Form("Sonoplastia"), audio: UploadFile = File(...)):
+    """A Sonoplastia carrega o episódio final (por exemplo, o bounce do Pro Tools) para a Direção ouvir."""
+    d = ep_dir(eid)
+    v = _new_version(d, label, "upload", by, "a converter")
+    src = d / "review" / f"{v['id']}-original{Path(audio.filename or 'x.wav').suffix.lower()}"
+    with open(src, "wb") as out:
+        shutil.copyfileobj(audio.file, out, length=8 * 1024 * 1024)
+    structure_jobs.submit(run_review_convert, d, v["id"], src)
+    return v
+
+
+@app.post("/api/episodes/{eid}/review/versions/from-app")
+def mix_version(eid: str, body: dict = Body(default={})):
+    """Gera uma versão a partir do AutoTake e da Estrutura Plus (narração e sons)."""
+    d = ep_dir(eid)
+    if not read_json(d / "result.json"):
+        raise HTTPException(400, "O episódio ainda não foi processado")
+    v = _new_version(d, str(body.get("label", "")) or "", "app", str(body.get("by", "Sonoplastia")), "a gerar")
+    structure_jobs.submit(run_review_mix, d, v["id"])
+    return v
+
+
+@app.get("/api/episodes/{eid}/review/versions/{vid}/audio")
+def version_audio(eid: str, vid: str):
+    if not re.fullmatch(r"v\d+", vid):
+        raise HTTPException(404)
+    p = ep_dir(eid) / "review" / f"{vid}.mp3"
+    if not p.exists():
+        raise HTTPException(404, "Versão ainda não está pronta")
+    return FileResponse(p, media_type="audio/mpeg")
+
+
+@app.delete("/api/episodes/{eid}/review/versions/{vid}")
+def delete_version(eid: str, vid: str):
+    d = ep_dir(eid)
+    if not re.fullmatch(r"v\d+", vid):
+        raise HTTPException(404)
+
+    def apply(rv):
+        rv["versions"] = [v for v in rv["versions"] if v["id"] != vid]
+        rv["notes"] = [n for n in rv["notes"] if n["version"] != vid]
+    update_review(d, apply)
+    for p in (d / "review").glob(f"{vid}*"):
+        p.unlink(missing_ok=True)
+    return {"ok": True}
+
+
+@app.post("/api/episodes/{eid}/review/notes")
+def add_note(eid: str, body: dict = Body(...)):
+    """Nota na timeline: {"version": "v1", "t": segundos, "text": "...", "author": "Miguel"}."""
+    d = ep_dir(eid)
+    text = str(body.get("text", "")).strip()[:2000]
+    if not text:
+        raise HTTPException(400, "Escreve a nota")
+    try:
+        t = max(0.0, float(body.get("t", 0)))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Tempo inválido")
+    made = {}
+
+    def apply(rv):
+        if not _version(rv, str(body.get("version"))):
+            raise HTTPException(404, "Versão não encontrada")
+        n = rv.get("next_n", 1)
+        note = {"id": f"n{n}", "version": str(body["version"]), "t": round(t, 1), "text": text, "author": str(body.get("author", ""))[:40],
+                "created": time.time(), "status": "aberta", "reply": ""}
+        rv["next_n"] = n + 1
+        rv["notes"].append(note)
+        made.update(note)
+    update_review(d, apply)
+    return made
+
+
+@app.patch("/api/episodes/{eid}/review/notes/{nid}")
+def patch_note(eid: str, nid: str, body: dict = Body(...)):
+    """Texto e hora (a Direção) ou estado e resposta (a Sonoplastia)."""
+    d = ep_dir(eid)
+    out = {}
+
+    def apply(rv):
+        for n in rv["notes"]:
+            if n["id"] == nid:
+                if "text" in body and str(body["text"]).strip():
+                    n["text"] = str(body["text"]).strip()[:2000]
+                if "t" in body:
+                    n["t"] = round(max(0.0, float(body["t"])), 1)
+                if body.get("status") in ("aberta", "feita"):
+                    n["status"] = body["status"]
+                    n["done_by"] = str(body.get("by", ""))[:40] if body["status"] == "feita" else ""
+                if "reply" in body:
+                    n["reply"] = str(body["reply"])[:1000]
+                    n["reply_by"] = str(body.get("by", ""))[:40]
+                out.update(n)
+    update_review(d, apply)
+    if not out:
+        raise HTTPException(404)
+    return out
+
+
+@app.delete("/api/episodes/{eid}/review/notes/{nid}")
+def delete_note(eid: str, nid: str):
+    d = ep_dir(eid)
+    update_review(d, lambda rv: rv.update(notes=[n for n in rv["notes"] if n["id"] != nid]))
+    return {"ok": True}
+
+
 # ---------- AAF para o Pro Tools ----------
 def export_state(d: Path) -> dict:
     return read_json(d / "export.json", {"status": None, "message": "", "done": 0, "total": 0, "file": None, "scene": None})

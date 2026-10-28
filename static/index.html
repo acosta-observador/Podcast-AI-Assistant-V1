@@ -152,6 +152,40 @@ a{color:var(--accent);text-decoration:none}
 .mp audio{width:100%;max-width:520px;height:36px}
 .rchip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:980px;letter-spacing:.03em;background:rgba(125,92,255,.14);color:#6b4cf0}
 .rchip.stem{background:rgba(48,176,199,.16);color:#1d8a9c}.rchip.stinger{background:rgba(255,159,10,.16);color:#c77700}.rchip.transition{background:var(--panel);color:var(--muted)}
+.gate{min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--bg)}
+.gate-in{width:100%;max-width:640px;text-align:center}
+.gate-in .logo{justify-content:center;padding:0;margin-bottom:18px}.gate-in .logo i{width:44px;height:44px;border-radius:14px}.gate-in .logo i svg{width:24px;height:24px}
+.gate-in h1{margin:0 0 6px;font-size:32px;letter-spacing:-.03em}.gate-in p{margin:0 0 24px;color:var(--muted);font-size:17px}
+.gate-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.gate-card{padding:28px 22px;text-align:left;display:flex;flex-direction:column;gap:6px;cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:14px;color:var(--text)}
+.gate-card:hover{border-color:var(--accent);background:var(--accent-soft)}
+.gate-card b{font-size:20px;letter-spacing:-.02em}.gate-card span{color:var(--muted);font-size:14px}
+.gate-names{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.gate-names button{height:64px;border-radius:14px;border:1px solid var(--line);background:var(--card);font-size:19px;font-weight:600;color:var(--text);cursor:pointer}
+.gate-names button:hover{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.who{margin-top:auto;padding:14px 12px 0;border-top:1px solid var(--line);font-size:13px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.who a{color:var(--accent)}
+.rv-wrap{max-width:900px;margin:0 auto;padding:32px 20px 80px}
+.rv-player{padding:20px 22px}
+.rv-ctl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 10px}
+.rv-ctl .play{width:48px;height:48px}.rv-ctl .play svg{width:20px;height:20px}
+.rv-time{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;min-width:120px}
+.rv-bar{position:relative;height:44px;border-radius:12px;background:var(--panel);cursor:pointer;overflow:hidden;margin:4px 0 6px}
+.rv-fill{position:absolute;left:0;top:0;bottom:0;background:var(--accent-soft);width:0;pointer-events:none}
+.rv-head{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);pointer-events:none;left:0}
+.rv-pin{position:absolute;top:6px;width:14px;height:32px;margin-left:-7px;border-radius:7px;background:#ff9f0a;border:2px solid var(--bg);cursor:pointer;padding:0}
+.rv-pin.feita{background:var(--ok)}.rv-pin.on{outline:3px solid var(--accent-soft);background:var(--accent)}
+.rv-compose{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.rv-compose textarea{width:100%;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:10px 12px;font:inherit;font-size:15px;color:var(--text);resize:vertical;min-height:70px;box-sizing:border-box;margin:8px 0}
+.rv-compose textarea:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+.rv-note{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;padding:14px 16px;border-top:1px solid var(--line)}
+.rv-note:first-child{border-top:0}.rv-note.on{background:var(--accent-soft)}.rv-note.feita .rv-text{color:var(--muted);text-decoration:line-through}
+.rv-t{height:30px;padding:0 12px;border-radius:980px;background:var(--panel);font-weight:600;font-size:13px;font-variant-numeric:tabular-nums;font-family:ui-monospace,Menlo,monospace}
+.rv-t:hover{background:var(--hover)}
+.rv-au{font-weight:600;font-size:13px}.rv-text{font-size:15px;margin-top:2px;white-space:pre-wrap}
+.rv-reply{margin-top:8px;padding:8px 12px;border-radius:10px;background:var(--panel);font-size:14px}
+.rv-act{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.rv-act button{font-size:13px;color:var(--accent);padding:4px 8px;border-radius:8px}.rv-act button:hover{background:var(--hover)}
 .snd-wrap{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .snd{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:5px 6px 5px 12px;border-radius:980px;background:var(--panel);border:1px solid var(--line);font-size:14px;line-height:1.3}
 .snd.music{background:rgba(125,92,255,.12);border-color:rgba(125,92,255,.3);color:#6b4cf0}
@@ -345,6 +379,7 @@ const I = {
   logo:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 10v4M9 6v12M13 9v6M17 4v16M21 11v2"/></svg>',
   spark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>',
   music:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>',
+  note:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 4z"/><path d="M8 8h8M8 12h5"/></svg>',
   dl:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
 };
 
@@ -367,7 +402,14 @@ async function api(path, opts = {}) {
 /* ---------- navegação ---------- */
 window.addEventListener('hashchange', route);
 async function route() {
-  stopAudio(); clearTimeout(S.poll); stopStructure(); clearTimeout(ST.poll); clearTimeout(AN.poll); clearTimeout(MA.poll); player.onloadedmetadata = player.ontimeupdate = player.onpause = player.onplay = null; if (!player.paused) player.pause();
+  stopAudio(); clearTimeout(S.poll); stopStructure(); clearTimeout(ST.poll); clearTimeout(AN.poll); clearTimeout(MA.poll); clearTimeout(RV.poll); stopReviewAudio(); player.onloadedmetadata = player.ontimeupdate = player.onpause = player.onplay = null; if (!player.paused) player.pause();
+  const role = getRole();
+  if (!role) return gatePage();
+  if (role.mode === 'direcao' && !/^#\/(direcao|revisao)/.test(location.hash)) { location.hash = '#/direcao'; return; }
+  const mr = location.hash.match(/^#\/revisao\/([\w-]+)(?:\/(v\d+))?/);
+  if (mr) return reviewPage(mr[1], mr[2]);
+  if (location.hash === '#/direcao') return role.mode === 'direcao' ? directorHome() : (location.hash = '#/notas', undefined);
+  if (location.hash === '#/notas') return notesHome();
   const m = location.hash.match(/^#\/ep\/([\w-]+)/);
   if (m) return openEpisode(m[1]);
   if (location.hash === '#/projeto') return projectPage();
@@ -398,6 +440,8 @@ function side(active) {
     <div class="proj-n"><b>${esc(PROJECT.name)}</b><span>${PROJECT.ep}</span></div>
     <p class="sec">Episódio</p>${it('geral', '#/projeto', I.grid, 'Visão geral')}
     <p class="sec">Funcionalidades</p>${it('autotake', '#/autotake', I.wave, 'AutoTake')}${it('analise', '#/analise', I.doc, 'Análise de Guião')}${it('maestro', '#/maestro', I.music, 'Maestro')}${it('estrutura', '#/estrutura', I.layers, 'Estrutura Plus')}
+    <p class="sec">Revisão</p>${it('notas', '#/notas', I.note, 'Notas da Direção')}
+    <div class="who"><span>Perfil: <b>Sonoplastia</b></span><a href="#" onclick="switchRole();return false">Mudar</a></div>
   </aside>`;
 }
 const shell = (active, html) => `<div class="shell">${active ? side(active) : ''}<div class="main">${html}</div></div>`;
@@ -405,7 +449,7 @@ const plainTop = `<div class="top"><div class="top-in"><div>${brand}</div><div><
 
 /* ---------- homepage: projetos ---------- */
 function projectsPage() {
-  $app.innerHTML = `<div class="top"><div class="top-in"><a class="logo" href="#/" style="padding:0"><i>${I.logo}</i><span style="font-size:15px">Podcast Plus <em style="display:inline;margin-left:4px">AI Assistant</em></span></a><div></div><div class="top-actions"><span style="font-size:13px;color:var(--muted)">Observador</span></div></div></div>
+  $app.innerHTML = `<div class="top"><div class="top-in"><a class="logo" href="#/" style="padding:0"><i>${I.logo}</i><span style="font-size:15px">Podcast Plus <em style="display:inline;margin-left:4px">AI Assistant</em></span></a><div></div><div class="top-actions"><span style="font-size:13px;color:var(--muted)">Sonoplastia</span><a href="#" onclick="switchRole();return false" style="font-size:13px;margin-left:12px">Mudar de perfil</a></div></div></div>
   <div class="wrap">
     <h1 class="page-t">Projetos</h1>
     <p class="page-s">Um projeto por podcast. Abre um para trabalhar o áudio do episódio com as ferramentas do assistente.</p>
@@ -592,6 +636,214 @@ function renderAnalysis() {
   }
   document.getElementById('anep').onchange = e => { location.hash = '#/analise/' + e.target.value + (sc ? '/' + sc.n : ''); };
 }
+
+/* ---------- Perfil: Sonoplastia ou Direção ---------- */
+const ROLE_KEY = 'pp_role', DIRECTORS = ['Miguel', 'Sara', 'Tânia', 'João', 'Raquel'];
+const getRole = () => { try { return JSON.parse(localStorage.getItem(ROLE_KEY)); } catch { return null; } };
+const setRole = r => { try { r ? localStorage.setItem(ROLE_KEY, JSON.stringify(r)) : localStorage.removeItem(ROLE_KEY); } catch {} };
+function switchRole() { setRole(null); location.hash = '#/'; route(); }
+
+function gatePage(step) {
+  const brand = `<a class="logo"><i>${I.logo}</i></a><h1>Podcast Plus AI Assistant</h1>`;
+  if (step === 'dir') {
+    $app.innerHTML = `<div class="gate"><div class="gate-in">${brand}<p>Quem és tu?</p>
+      <div class="gate-names">${DIRECTORS.map(n => `<button data-name="${n}">${n}</button>`).join('')}</div>
+      <p style="margin:24px 0 0;font-size:14px"><a href="#" id="gback">Voltar</a></p></div></div>`;
+    $app.querySelectorAll('[data-name]').forEach(b => b.onclick = () => { setRole({ mode: 'direcao', name: b.dataset.name }); location.hash = '#/direcao'; route(); });
+    document.getElementById('gback').onclick = e => { e.preventDefault(); gatePage(); };
+    return;
+  }
+  $app.innerHTML = `<div class="gate"><div class="gate-in">${brand}<p>Entrar como</p>
+    <div class="gate-cards">
+      <button class="gate-card" id="gson"><b>Sonoplastia</b><span>Montar o episódio, o sound design e a música, e ler as notas da Direção.</span></button>
+      <button class="gate-card" id="gdir"><b>Direção</b><span>Ouvir os episódios e deixar notas na timeline.</span></button></div></div></div>`;
+  document.getElementById('gson').onclick = () => { setRole({ mode: 'sonoplastia' }); location.hash = '#/'; route(); };
+  document.getElementById('gdir').onclick = () => gatePage('dir');
+}
+
+const dirTop = role => `<div class="top"><div class="top-in"><a class="logo" href="#/direcao" style="padding:0"><i>${I.logo}</i><span style="font-size:15px">Podcast Plus <em style="display:inline;margin-left:4px">Direção</em></span></a><div></div>
+  <div class="top-actions"><span style="font-size:13px;color:var(--muted)">${esc(role.name || '')}</span><a href="#" onclick="switchRole();return false" style="font-size:13px;margin-left:12px">Sair</a></div></div></div>`;
+
+async function directorHome() {
+  const role = getRole();
+  let list; try { list = await api('/api/review'); } catch { list = []; }
+  $app.innerHTML = dirTop(role) + `<div class="wrap"><h1 class="page-t">Olá, ${esc(role.name)}</h1>
+    <p class="page-s">Escolhe um episódio para ouvir. Podes deixar notas na timeline enquanto ouves, e a Sonoplastia vê-as todas.</p>
+    <div class="projs">${list.length ? list.map(e => e.latest ? `<a class="card fcard" href="#/revisao/${e.id}/${e.latest}"><b style="font-size:13px;color:var(--muted);letter-spacing:.04em">${esc(e.latest_label)}</b>
+      <b style="font-size:18px;line-height:1.3">${esc(e.title)}</b><span>${e.notes ? `${e.notes} notas` : 'Sem notas ainda'}${e.open ? ` · ${e.open} abertas` : ''}</span></a>`
+      : `<div class="card fcard" style="opacity:.6"><b style="font-size:18px">${esc(e.title)}</b><span>Ainda sem versão para ouvir.</span></div>`).join('') : '<div class="card empty">Ainda não há episódios.</div>'}</div></div>`;
+}
+
+async function notesHome() {
+  let list; try { list = await api('/api/review'); } catch { list = []; }
+  $app.innerHTML = shell('notas', `<div class="wrap"><h1 class="page-t">Notas da Direção</h1>
+    <p class="page-s" style="margin-bottom:28px">As notas que a Direção deixou ao ouvir cada episódio, com a hora exata. Carrega uma versão do episódio para a Direção ouvir.</p>
+    <div class="projs" style="margin-top:0">${list.length ? list.map(e => `<a class="card fcard" href="#/revisao/${e.id}${e.latest ? '/' + e.latest : ''}"><b style="font-size:18px;line-height:1.3">${esc(e.title)}</b>
+      <span>${e.versions ? `${e.versions} versão(ões)` : 'Sem versão para a Direção'} · ${e.notes ? `${e.notes} notas${e.open ? `, <b style="color:var(--warn)">${e.open} abertas</b>` : ', todas tratadas'}` : 'sem notas'}</span></a>`).join('') : '<div class="card empty">Ainda não há episódios.</div>'}</div></div>`);
+}
+
+/* ---------- Revisão: player com notas na timeline ---------- */
+const RV = { id: null, v: null, data: null, poll: null, noteT: 0, pausedByUs: false, editing: null, replying: null, filter: 'todas', active: null };
+const mmss = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s % 60).padStart(2, '0'); };
+function stopReviewAudio() { const a = document.getElementById('rvaudio'); if (a) a.pause(); }
+
+async function reviewPage(id, vid) { RV.id = id; RV.editing = RV.replying = null; await loadReview(vid); }
+
+async function loadReview(vid) {
+  clearTimeout(RV.poll);
+  try { RV.data = await api(`/api/episodes/${RV.id}/review`); }
+  catch (e) { $app.innerHTML = `<div class="wrap"><div class="errbox">${esc(e.message)}</div></div>`; return; }
+  const ready = RV.data.review.versions.filter(v => v.state === 'pronto');
+  RV.v = (vid && ready.some(v => v.id === vid)) ? vid : (RV.v && ready.some(v => v.id === RV.v) ? RV.v : (ready.length ? ready[ready.length - 1].id : null));
+  const a = document.getElementById('rvaudio'), playing = a && !a.paused && RV.v && a.dataset.v === RV.v;
+  if (!document.getElementById('rvpage') || !playing) renderReview(); else renderVersions();
+  if (RV.data.review.versions.some(v => v.state === 'a converter' || v.state === 'a gerar')) RV.poll = setTimeout(() => loadReview(RV.v), 3000);
+}
+
+function renderReview() {
+  const role = getRole(), d = RV.data, rv = d.review, son = role.mode === 'sonoplastia';
+  const ready = rv.versions.filter(v => v.state === 'pronto'), ver = ready.find(v => v.id === RV.v);
+  const inner = `<div id="rvpage" class="rv-wrap">
+    <p style="margin:0 0 8px"><a class="back" href="${son ? '#/notas' : '#/direcao'}">${I.chevL}${son ? 'Notas da Direção' : 'Episódios'}</a></p>
+    <h1 class="page-t" style="font-size:30px">${esc(d.meta.title)}</h1>
+    ${son ? '<div id="rvvers"></div>' : ''}
+    ${ver ? `<div class="card rv-player" id="rvplayer">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+        <select class="epsel" id="rvver" aria-label="Versão">${ready.map(v => `<option value="${v.id}" ${v.id === ver.id ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select>
+        <span class="st-note">${ver.source === 'app' ? 'Gerada pela app (narração e sons)' : 'Carregada por ' + esc(ver.by || 'Sonoplastia')} · ${new Date(ver.created * 1000).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long' })}</span></div>
+      <audio id="rvaudio" data-v="${ver.id}" preload="metadata" src="/api/episodes/${RV.id}/review/versions/${ver.id}/audio"></audio>
+      <div class="rv-ctl"><button class="play" id="rvplay" aria-label="Ouvir">${I.play}</button>
+        <button class="chip" id="rvb10">−10 s</button><button class="chip" id="rvf10">+10 s</button>
+        <span class="rv-time" id="rvtime">0:00 / ${mmss(ver.duration || 0)}</span>
+        <select class="epsel" id="rvspd" aria-label="Velocidade"><option value="1">1×</option><option value="1.25">1,25×</option><option value="1.5">1,5×</option><option value="0.75">0,75×</option></select></div>
+      <div class="rv-bar" id="rvbar" aria-label="Linha do tempo"><div class="rv-fill" id="rvfill"></div><div id="rvpins"></div><div class="rv-head" id="rvhead"></div></div>
+      ${role.mode === 'direcao' ? `<div class="rv-compose"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
+          <b id="rvnt">Nota aos 0:00</b><label class="note" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rvpause" checked> Pausar ao escrever</label></div>
+        <textarea id="rvtxt" placeholder="Escreve a nota para a hora em que estás a ouvir. Ex.: ouve-se um tiro e não é suposto."></textarea>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn blue" id="rvadd">${I.note}Adicionar nota</button>
+          <span class="note">Atalhos: espaço = ouvir/pausar, N = nota, ← → = 5 s, Cmd/Ctrl+Enter = guardar</span></div></div>` : ''}</div>
+      <div class="card" style="margin-top:20px;overflow:hidden"><div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:8px">
+        <b id="rvcount"></b><div style="display:flex;gap:6px"><button class="chip" data-f="todas">Todas</button><button class="chip" data-f="abertas">Abertas</button></div></div><div id="rvnotes"></div></div>`
+      : `<div class="card empty" style="margin-top:20px">${rv.versions.some(v => v.state !== 'pronto' && v.state !== 'erro') ? 'A versão está a ser preparada…' : (son ? 'Ainda não há nenhuma versão para a Direção ouvir. Carrega uma acima.' : 'Ainda não há versão deste episódio para ouvir.')}</div>`}
+    </div>`;
+  $app.innerHTML = son ? shell('notas', inner) : dirTop(role) + inner;
+  if (son) renderVersions();
+  if (ver) bindPlayer(ver);
+}
+
+function renderVersions() {
+  const box = document.getElementById('rvvers'); if (!box) return;
+  const d = RV.data, rv = d.review;
+  box.innerHTML = `<div class="card" style="padding:16px 18px;margin:14px 0 20px"><b style="font-size:15px">Versões para a Direção</b>
+    ${rv.versions.length ? rv.versions.map(v => `<div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);margin-top:8px;flex-wrap:wrap">
+      <span style="flex:1;min-width:160px"><b>${esc(v.label)}</b> <span class="note">${v.source === 'app' ? 'gerada pela app' : 'carregada'}${v.duration ? ' · ' + mmss(v.duration) : ''}</span></span>
+      ${v.state === 'pronto' ? `<span class="pill ok">Pronta</span>` : v.state === 'erro' ? `<span class="pill warn" title="${esc(v.message)}">Erro</span>` : `<span class="pill run">${esc(v.state)}…</span>`}
+      <button class="chip" data-delv="${v.id}">Apagar</button></div>`).join('') : '<p class="note" style="margin:6px 0 0">Ainda não há versões.</p>'}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+      <input type="text" id="vlabel" placeholder="Nome da versão (opcional)" style="height:36px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font:inherit;color:var(--text);min-width:200px">
+      <label class="btn blue" style="cursor:pointer">${I.dl}Carregar áudio final<input type="file" id="vfile" accept="audio/*,.wav,.mp3,.m4a,.aif,.aiff,.flac" hidden></label>
+      <button class="btn" id="vgen" ${d.can_mix ? '' : 'disabled'} title="Mistura a narração do AutoTake com os sons e músicas da Estrutura Plus">${I.layers}Gerar a partir da Estrutura Plus</button>
+      <span class="note" id="vnote"></span></div></div>`;
+  box.querySelectorAll('[data-delv]').forEach(b => b.onclick = async () => {
+    if (!confirm('Apagar esta versão e as notas que lhe pertencem?')) return;
+    await api(`/api/episodes/${RV.id}/review/versions/${b.dataset.delv}`, { method: 'DELETE' }).catch(showErr); loadReview();
+  });
+  document.getElementById('vfile').onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    const fd = new FormData(); fd.append('audio', f); fd.append('label', document.getElementById('vlabel').value); fd.append('by', 'Sonoplastia');
+    const note = document.getElementById('vnote'), xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/episodes/${RV.id}/review/versions`);
+    xhr.upload.onprogress = ev => { if (ev.lengthComputable) note.textContent = `A carregar, ${Math.round(ev.loaded / ev.total * 100)}%`; };
+    xhr.onload = () => { if (xhr.status < 300) { note.textContent = 'Carregado. A converter…'; loadReview(); } else { let m = 'O envio falhou.'; try { m = JSON.parse(xhr.responseText).detail } catch {} note.textContent = m; } };
+    xhr.onerror = () => { note.textContent = 'O envio falhou. Verifica a ligação.'; };
+    xhr.send(fd);
+  };
+  document.getElementById('vgen').onclick = async () => {
+    if (!confirm('Gerar uma versão a partir da narração e das faixas de sons e música da Estrutura Plus? Pode demorar alguns minutos.')) return;
+    try { await api(`/api/episodes/${RV.id}/review/versions/from-app`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: document.getElementById('vlabel').value, by: 'Sonoplastia' }) }); } catch (e) { alert(e.message); return; }
+    loadReview();
+  };
+}
+
+function bindPlayer(ver) {
+  const role = getRole(), a = document.getElementById('rvaudio'), bar = document.getElementById('rvbar');
+  const dur = () => (a.duration && isFinite(a.duration)) ? a.duration : (ver.duration || 1);
+  const notes = () => RV.data.review.notes.filter(n => n.version === ver.id).sort((x, y) => x.t - y.t);
+  const paintPins = () => { document.getElementById('rvpins').innerHTML = notes().map(n => `<button class="rv-pin ${n.status === 'feita' ? 'feita' : ''} ${RV.active === n.id ? 'on' : ''}" style="left:${Math.min(100, n.t / dur() * 100)}%" data-pin="${n.id}" title="${mmss(n.t)} · ${esc(n.author)}: ${esc(n.text.slice(0, 80))}" aria-label="Nota aos ${mmss(n.t)}"></button>`).join(''); document.querySelectorAll('[data-pin]').forEach(p => p.onclick = e => { e.stopPropagation(); const n = notes().find(x => x.id === p.dataset.pin); seek(n.t); setActive(n.id, true); }); };
+  const seek = t => { a.currentTime = Math.max(0, Math.min(dur(), t)); tick(); };
+  const setActive = (id, scroll) => { RV.active = id; paintNotes(); paintPins(); if (scroll) document.querySelector(`[data-n="${id}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+  const tick = () => {
+    const t = a.currentTime || 0, p = Math.min(100, t / dur() * 100);
+    document.getElementById('rvfill').style.width = p + '%'; document.getElementById('rvhead').style.left = p + '%';
+    document.getElementById('rvtime').textContent = `${mmss(t)} / ${mmss(dur())}`;
+    const cur = notes().filter(n => n.t <= t + 0.2).pop(); const id = cur && t - cur.t < 8 ? cur.id : null;
+    if (id !== RV.active && !a.paused) { RV.active = id; paintNotes(); paintPins(); }
+  };
+  function paintNotes() {
+    const own = role.mode === 'direcao' ? role.name : null, son = role.mode === 'sonoplastia';
+    const list = notes().filter(n => RV.filter === 'todas' || n.status !== 'feita');
+    document.getElementById('rvcount').textContent = `${notes().length} notas${notes().some(n => n.status !== 'feita') ? `, ${notes().filter(n => n.status !== 'feita').length} abertas` : ''}`;
+    document.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === RV.filter));
+    document.getElementById('rvnotes').innerHTML = list.length ? list.map(n => `<div class="rv-note ${n.status === 'feita' ? 'feita' : ''} ${RV.active === n.id ? 'on' : ''}" data-n="${n.id}">
+      <button class="rv-t" data-seek="${n.t}" title="Ir para este momento">${mmss(n.t)}</button>
+      <div><div><span class="rv-au">${esc(n.author || 'Direção')}</span> ${n.status === 'feita' ? `<span class="pill ok">Feita${n.done_by ? ' por ' + esc(n.done_by) : ''}</span>` : ''}</div>
+        ${RV.editing === n.id ? `<textarea class="rv-edit" data-edit="${n.id}" style="width:100%;margin-top:6px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:8px 10px;font:inherit;color:var(--text)" rows="2">${esc(n.text)}</textarea>
+          <div style="display:flex;gap:8px;margin-top:6px"><button class="btn blue" data-save="${n.id}">Guardar</button><button class="btn" data-cancel>Cancelar</button></div>` : `<div class="rv-text">${esc(n.text)}</div>`}
+        ${n.reply ? `<div class="rv-reply"><b>${esc(n.reply_by || 'Sonoplastia')}:</b> ${esc(n.reply)}</div>` : ''}
+        ${RV.replying === n.id ? `<textarea class="rv-edit" data-reply="${n.id}" style="width:100%;margin-top:8px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:8px 10px;font:inherit;color:var(--text)" rows="2" placeholder="Resposta para a Direção">${esc(n.reply || '')}</textarea>
+          <div style="display:flex;gap:8px;margin-top:6px"><button class="btn blue" data-savereply="${n.id}">Enviar resposta</button><button class="btn" data-cancel>Cancelar</button></div>` : ''}</div>
+      <div class="rv-act">${son ? `<button data-done="${n.id}">${n.status === 'feita' ? 'Reabrir' : 'Marcar como feita'}</button><button data-rep="${n.id}">Responder</button>` : ''}
+        ${(son || own === n.author) ? `<button data-edit-btn="${n.id}">Editar</button><button data-del="${n.id}">Apagar</button>` : ''}</div></div>`).join('')
+      : `<p class="note" style="padding:18px 16px;margin:0">${RV.filter === 'abertas' ? 'Não há notas abertas.' : 'Ainda não há notas nesta versão.'}</p>`;
+    document.querySelectorAll('[data-seek]').forEach(b => b.onclick = () => { seek(+b.dataset.seek); a.play().catch(() => {}); });
+    const upd = async (id, body) => { try { const n = await api(`/api/episodes/${RV.id}/review/notes/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); Object.assign(RV.data.review.notes.find(x => x.id === id), n); } catch (e) { showErr(e); } RV.editing = RV.replying = null; paintNotes(); paintPins(); };
+    document.querySelectorAll('[data-done]').forEach(b => b.onclick = () => { const n = RV.data.review.notes.find(x => x.id === b.dataset.done); upd(n.id, { status: n.status === 'feita' ? 'aberta' : 'feita', by: 'Sonoplastia' }); });
+    document.querySelectorAll('[data-rep]').forEach(b => b.onclick = () => { RV.replying = b.dataset.rep; paintNotes(); document.querySelector('[data-reply]')?.focus(); });
+    document.querySelectorAll('[data-savereply]').forEach(b => b.onclick = () => upd(b.dataset.savereply, { reply: document.querySelector(`[data-reply="${b.dataset.savereply}"]`).value, by: 'Sonoplastia' }));
+    document.querySelectorAll('[data-edit-btn]').forEach(b => b.onclick = () => { RV.editing = b.dataset.editBtn; paintNotes(); document.querySelector('[data-edit]')?.focus(); });
+    document.querySelectorAll('[data-save]').forEach(b => b.onclick = () => upd(b.dataset.save, { text: document.querySelector(`[data-edit="${b.dataset.save}"]`).value }));
+    document.querySelectorAll('[data-cancel]').forEach(b => b.onclick = () => { RV.editing = RV.replying = null; paintNotes(); });
+    document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+      if (!confirm('Apagar esta nota?')) return;
+      await api(`/api/episodes/${RV.id}/review/notes/${b.dataset.del}`, { method: 'DELETE' }).catch(showErr);
+      RV.data.review.notes = RV.data.review.notes.filter(x => x.id !== b.dataset.del); paintNotes(); paintPins();
+    });
+  }
+  a.ontimeupdate = tick; a.onloadedmetadata = () => { tick(); paintPins(); };
+  a.onplay = a.onpause = () => { document.getElementById('rvplay').innerHTML = a.paused ? I.play : I.stop; };
+  document.getElementById('rvplay').onclick = () => a.paused ? a.play().catch(() => {}) : a.pause();
+  document.getElementById('rvb10').onclick = () => seek(a.currentTime - 10);
+  document.getElementById('rvf10').onclick = () => seek(a.currentTime + 10);
+  document.getElementById('rvspd').onchange = e => { a.playbackRate = +e.target.value; };
+  document.getElementById('rvver').onchange = e => { RV.v = e.target.value; RV.active = null; location.hash = `#/revisao/${RV.id}/${RV.v}`; };
+  document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { RV.filter = b.dataset.f; paintNotes(); });
+  bar.onclick = e => { const r = bar.getBoundingClientRect(); seek((e.clientX - r.left) / r.width * dur()); };
+  if (role.mode === 'direcao') {
+    const txt = document.getElementById('rvtxt'), nt = document.getElementById('rvnt');
+    const stamp = () => { RV.noteT = a.currentTime || 0; nt.textContent = `Nota aos ${mmss(RV.noteT)}`; };
+    txt.onfocus = () => { stamp(); if (document.getElementById('rvpause').checked && !a.paused) { a.pause(); RV.pausedByUs = true; } };
+    const add = async () => {
+      const text = txt.value.trim(); if (!text) return;
+      try {
+        const n = await api(`/api/episodes/${RV.id}/review/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: ver.id, t: RV.noteT, text, author: role.name }) });
+        RV.data.review.notes.push(n); txt.value = ''; RV.active = n.id; paintNotes(); paintPins();
+        if (RV.pausedByUs) { RV.pausedByUs = false; a.play().catch(() => {}); }
+      } catch (e) { alert(e.message); }
+    };
+    document.getElementById('rvadd').onclick = add;
+    txt.onkeydown = e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); add(); } };
+  }
+  paintNotes(); paintPins(); tick();
+}
+
+document.addEventListener('keydown', e => {
+  const a = document.getElementById('rvaudio');
+  if (!a || location.hash.indexOf('#/revisao') !== 0 || (e.target.closest && e.target.closest('input,textarea,select,[contenteditable]')) || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === ' ') { e.preventDefault(); a.paused ? a.play().catch(() => {}) : a.pause(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); a.currentTime = Math.max(0, a.currentTime - 5); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); a.currentTime = Math.min(a.duration || 1e9, a.currentTime + 5); }
+  else if ((e.key === 'n' || e.key === 'N') && document.getElementById('rvtxt')) { e.preventDefault(); document.getElementById('rvtxt').focus(); }
+});
 
 /* ---------- Maestro: músicas e stems por cena ---------- */
 const MA = { id: null, data: null, poll: null, scene: null, wasRunning: false };
@@ -1471,6 +1723,9 @@ const Demo = {
   async api(path) {
     if (!this.ep) this.ep = this.build();
     if (path === '/api/episodes') return [{ id: 'demo', title: this.ep.meta.title, created: Date.now() / 1000, state: { status: 'pronto' } }];
+    if (path === '/api/review') return [{ id: 'demo', title: this.ep.meta.title, versions: 1, latest: 'v1', latest_label: 'Versão 1', notes: 3, open: 2 }];
+    if (path === '/api/episodes/demo/review') return { meta: this.ep.meta, directors: ['Miguel', 'Sara', 'Tânia', 'João', 'Raquel'], can_mix: true, review: { versions: [{ id: 'v1', label: 'Versão 1', created: Date.now() / 1000, source: 'upload', by: 'Sonoplastia', state: 'pronto', duration: 1800 }],
+      notes: [{ id: 'n1', version: 'v1', t: 332.4, text: 'Ouve-se um tiro e não é suposto.', author: 'Miguel', status: 'aberta' }, { id: 'n2', version: 'v1', t: 65, text: 'A música está demasiado alta por cima da voz.', author: 'Sara', status: 'feita', done_by: 'Sonoplastia', reply: 'Baixei 4 dB.', reply_by: 'Sonoplastia' }, { id: 'n3', version: 'v1', t: 910, text: 'Falta uma pausa antes da entrevista.', author: 'Raquel', status: 'aberta' }] } };
     if (path === '/api/episodes/demo/maestro') return this.maestro();
     if (path === '/api/episodes/demo/analysis') return this.analysis();
     if (path === '/api/episodes/demo/structure') return this.structure();
