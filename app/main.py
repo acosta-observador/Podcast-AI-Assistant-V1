@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Res
 
 import numpy as np
 
-from autotake import analysis as analysis_tools, audio as audio_tools, maestro as maestro_tools, sounddesign
+from autotake import aaf_export, analysis as analysis_tools, audio as audio_tools, maestro as maestro_tools, sounddesign
 from autotake.export import to_reaper
 from autotake.pipeline import GAP_BETWEEN_BLOCKS, build_cuts, process, render_episode
 
@@ -1222,6 +1222,92 @@ def export_narration(eid: str, scene: int):
     audio_tools.render(d / meta["audio_file"], cuts, tmp, lead=sc["start"] - t0)
     return FileResponse(tmp, media_type="audio/wav", filename=f"{slug(meta['title'])}-narracao-cena-{scene}.wav",
                         background=BackgroundTask(shutil.rmtree, tmp.parent, ignore_errors=True))
+
+
+# ---------- AAF para o Pro Tools ----------
+def export_state(d: Path) -> dict:
+    return read_json(d / "export.json", {"status": None, "message": "", "done": 0, "total": 0, "file": None, "scene": None})
+
+
+def update_export(d: Path, **kw) -> None:
+    with _lock:
+        st = export_state(d)
+        st.update(kw, ts=time.time())
+        write_json(d / "export.json", st)
+
+
+def _aaf_tracks(d: Path, scene: int | None) -> tuple[list[dict], str]:
+    """Faixas do AAF: narração (um clip por take) e uma faixa por tipo de som, no tempo da Estrutura Plus."""
+    meta, result = read_json(d / "meta.json"), read_json(d / "result.json")
+    tl = _structure_timeline(d)
+    t0, t1, blocks = 0.0, 1e9, None
+    if scene:
+        sc = next((x for x in tl["scenes"] if x["n"] == scene), None)
+        if not sc:
+            raise RuntimeError("Cena não encontrada")
+        t0, t1, blocks = max(0.0, sc["start"] - 1.0), sc["end"] + 1.0, set(sc["blocks"])
+    raw, seen, narr = d / meta["audio_file"], {}, []
+    for s in tl["segments"]:
+        if blocks is not None and s["block"] not in blocks:
+            continue
+        seen[s["block"]] = seen.get(s["block"], 0) + 1
+        narr.append({"name": f"Bloco {s['block']}" + (f" · parte {seen[s['block']]}" if seen[s["block"]] > 1 else ""), "src": raw,
+                     "start": s["src"], "dur": s["end"] - s["start"], "pos": s["start"] - t0, "gain": 1.0})
+    tracks = [{"name": "Narração", "clips": narr}]
+    clips = repositioned([c for c in read_struct(d)["clips"] if c["state"] == "gerado"], tl)
+    for lane, lname in enumerate(sounddesign.LANE_NAMES):
+        mine = [{"name": c["label"] or "Som", "src": d / "sd" / f"{c['id']}.mp3", "start": 0.0, "dur": c["dur"], "pos": c["start"] - t0,
+                 "gain": c.get("gain") or 0.8} for c in clips
+                if c.get("lane") == lane and c["start"] + c["dur"] > t0 and c["start"] < t1 and (d / "sd" / f"{c['id']}.mp3").exists()]
+        if mine:
+            tracks.append({"name": lname, "clips": [x for x in mine if x["pos"] >= 0]})
+    if not narr and len(tracks) == 1:
+        raise RuntimeError("Não há nada para exportar")
+    return tracks, slug(meta["title"])
+
+
+def run_aaf(d: Path, scene: int | None) -> None:
+    try:
+        update_export(d, status="a preparar", message="", done=0, total=0, file=None, scene=scene)
+        tracks, base = _aaf_tracks(d, scene)
+        out = d / "export"
+        shutil.rmtree(out, ignore_errors=True)
+        out.mkdir()
+        dst = out / f"{base}-estrutura-plus{f'-cena-{scene}' if scene else ''}.aaf"
+        aaf_export.build_aaf(dst, f"{base}{f' cena {scene}' if scene else ''}", tracks, lambda a, b: update_export(d, done=a, total=b))
+        update_export(d, status="pronto", file=dst.name)
+    except Exception as e:
+        traceback.print_exc()
+        update_export(d, status="erro", message=str(e))
+
+
+@app.post("/api/episodes/{eid}/export/aaf")
+def start_aaf(eid: str, body: dict = Body(default={})):
+    """Prepara o AAF (episódio todo, ou só a cena {"scene": n}). Corre em segundo plano."""
+    d = ep_dir(eid)
+    if not read_json(d / "result.json"):
+        raise HTTPException(400, "O episódio ainda não foi processado")
+    st = export_state(d)
+    if st.get("status") == "a preparar" and time.time() - st.get("ts", 0) < 900:
+        raise HTTPException(409, "O AAF já está a ser preparado")
+    update_export(d, status="a preparar", message="", done=0, total=0, file=None, scene=body.get("scene") or None)
+    structure_jobs.submit(run_aaf, d, int(body["scene"]) if body.get("scene") else None)
+    return {"ok": True}
+
+
+@app.get("/api/episodes/{eid}/export/aaf/status")
+def aaf_status(eid: str):
+    return export_state(ep_dir(eid))
+
+
+@app.get("/api/episodes/{eid}/export/aaf/file")
+def aaf_file(eid: str):
+    d = ep_dir(eid)
+    st = export_state(d)
+    p = d / "export" / (st.get("file") or "")
+    if st.get("status") != "pronto" or not st.get("file") or not p.exists():
+        raise HTTPException(404, "O AAF ainda não está pronto")
+    return FileResponse(p, media_type="application/octet-stream", filename=p.name)
 
 
 @app.get("/api/episodes/{eid}/export/tracks")

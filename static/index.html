@@ -834,6 +834,7 @@ function renderStructure() {
         <p class="page-s">Cria o sound design do episódio cena a cena: efeitos e música em faixas por baixo dos takes.</p></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <select class="epsel" id="epsel" aria-label="Episódio">${epOpts}</select>
+          <button class="btn" id="expaaf" ${S.demo || !n ? 'disabled' : ''} title="Sessão para o Pro Tools: narração (um clip por take) e uma faixa por tipo de som${scene ? ' (' + scene.title + ')' : ' (episódio todo)'}">${I.dl}Exportar AAF</button>
           <button class="btn" id="exptr" ${S.demo || !n ? 'disabled' : ''} title="Uma WAV por faixa${scene ? ' (' + scene.title + ')' : ''}">${I.dl}Exportar faixas</button>
           <button class="btn" id="exp" ${S.demo || !n ? 'disabled' : ''}>${I.dl}Exportar Reaper</button>
           <button class="btn" id="createall" ${S.demo || busy || d.missing.length ? 'disabled' : ''}>${I.spark}Create todas as cenas</button>
@@ -908,6 +909,7 @@ function renderStructure() {
   });
   renderPop();
   document.getElementById('exp').onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/structure`; };
+  document.getElementById('expaaf').onclick = () => exportAaf(scene ? scene.n : null);
   const q = scene ? `?scene=${scene.n}` : '';
   document.getElementById('exptr').onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/tracks${q}`; };
   document.querySelector('[data-dlnar]').onclick = () => { if (S.demo) return; scene ? (location.href = `/api/episodes/${ST.id}/export/narration?scene=${scene.n}`) : downloadMontage(); };
@@ -1014,6 +1016,26 @@ function renderSelected() {
     c.gain = g.value / 100;
     await api(`/api/episodes/${ST.id}/structure/clips/${c.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ gain: c.gain }) }).catch(showErr);
   };
+}
+
+/* AAF para o Pro Tools: prepara em segundo plano e descarrega quando acabar */
+async function exportAaf(sceneN) {
+  const note = document.getElementById('stnote'), say = t => { if (note) note.textContent = t; };
+  const btn = document.getElementById('expaaf'); if (btn) btn.disabled = true;
+  try {
+    await api(`/api/episodes/${ST.id}/export/aaf`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: sceneN }) });
+    for (;;) {
+      await new Promise(r => setTimeout(r, 2000));
+      if (location.hash.indexOf('#/estrutura') !== 0) return;
+      const s = await api(`/api/episodes/${ST.id}/export/aaf/status`);
+      if (s.status === 'erro') throw new Error(s.message || 'a exportação falhou');
+      if (s.status === 'pronto') break;
+      say(`A preparar o AAF para o Pro Tools… ${s.done} de ${s.total || '?'} clips`);
+    }
+    say('AAF pronto. Importa no Pro Tools com File > Import > Session Data.');
+    location.href = `/api/episodes/${ST.id}/export/aaf/file`;
+  } catch (e) { say(''); showErr(e); alert(e.message); }
+  if (btn) btn.disabled = false;
 }
 
 /* narração do episódio todo = áudio montado (o mesmo do AutoTake): monta se ainda não estiver feito */
