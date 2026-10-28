@@ -1266,15 +1266,17 @@ def _aaf_tracks(d: Path, scene: int | None) -> tuple[list[dict], str]:
     return tracks, slug(meta["title"])
 
 
-def run_aaf(d: Path, scene: int | None) -> None:
+def run_aaf(d: Path, scene: int | None, bits: int = 16, big_endian: bool = False) -> None:
     try:
         update_export(d, status="a preparar", message="", done=0, total=0, file=None, scene=scene)
         tracks, base = _aaf_tracks(d, scene)
         out = d / "export"
         shutil.rmtree(out, ignore_errors=True)
         out.mkdir()
-        dst = out / f"{base}-estrutura-plus{f'-cena-{scene}' if scene else ''}.aaf"
-        aaf_export.build_aaf(dst, f"{base}{f' cena {scene}' if scene else ''}", tracks, lambda a, b: update_export(d, done=a, total=b))
+        tag = f"-{bits}bit" + ("-be" if big_endian else "")
+        dst = out / f"{base}-estrutura-plus{f'-cena-{scene}' if scene else ''}{tag}.aaf"
+        aaf_export.build_aaf(dst, f"{base}{f' cena {scene}' if scene else ''}", tracks, lambda a, b: update_export(d, done=a, total=b),
+                             bits=bits, big_endian=big_endian)
         update_export(d, status="pronto", file=dst.name)
     except Exception as e:
         traceback.print_exc()
@@ -1291,7 +1293,8 @@ def start_aaf(eid: str, body: dict = Body(default={})):
     if st.get("status") == "a preparar" and time.time() - st.get("ts", 0) < 900:
         raise HTTPException(409, "O AAF já está a ser preparado")
     update_export(d, status="a preparar", message="", done=0, total=0, file=None, scene=body.get("scene") or None)
-    structure_jobs.submit(run_aaf, d, int(body["scene"]) if body.get("scene") else None)
+    bits = 24 if int(body.get("bits") or 16) == 24 else 16
+    structure_jobs.submit(run_aaf, d, int(body["scene"]) if body.get("scene") else None, bits, body.get("endian") == "be")
     return {"ok": True}
 
 
