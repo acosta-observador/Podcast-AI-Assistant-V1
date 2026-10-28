@@ -1462,6 +1462,12 @@ def patch_note(eid: str, nid: str, body: dict = Body(...)):
                 if "reply" in body:
                     n["reply"] = str(body["reply"])[:1000]
                     n["reply_by"] = str(body.get("by", ""))[:40]
+                if isinstance(body.get("agree"), dict):          # "Também reparei": evita notas repetidas
+                    who = str(body["agree"].get("name", ""))[:40]
+                    people = [p for p in n.get("agree", []) if p != who]
+                    if body["agree"].get("on") and who and who != n.get("author"):
+                        people.append(who)
+                    n["agree"] = people
                 out.update(n)
     update_review(d, apply)
     if not out:
