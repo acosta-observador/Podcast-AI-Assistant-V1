@@ -20,10 +20,10 @@ from . import audio
 SR = 48000
 
 
-def pcm_wav(src: Path, dst: Path | None, start: float = 0.0, dur: float | None = None, gain: float = 1.0, fade: float = 0.012, bits: int = 16) -> int:
+def pcm_wav(src: Path, dst: Path | None, start: float = 0.0, dur: float | None = None, gain: float = 1.0, fade: float = 0.012, bits: int = 16, mono: bool = False) -> int:
     """Corta e converte para WAV PCM a 48 kHz, 16 ou 24 bits (cabeçalho simples, sem 'extensible'). Devolve o nº de amostras."""
     try:
-        ch = max(1, min(2, int(audio.probe(src).get("channels") or 1)))
+        ch = 1 if mono else max(1, min(2, int(audio.probe(src).get("channels") or 1)))
     except Exception:
         ch = 1
     af = []
@@ -170,3 +170,58 @@ def build_bwf_zip(dst: Path, name: str, tracks: list[dict], progress=lambda done
                     z.write(f, f"{folder}/{ci:03d} {safe(c['name'])}.wav")
                 done += 1
                 progress(done, total)
+
+
+def build_aaf_linked(dst_zip: Path, name: str, tracks: list[dict], progress=lambda done, total: None, bits: int = 24) -> None:
+    """ZIP com o .aaf (faixas, clips e posições) e a pasta 'Audio Files' com um WAV mono por clip. O AAF liga-se aos WAV
+    (áudio ligado, não embebido), que é o caminho que o Pro Tools aceita de forma fiável."""
+    laid = []
+    for t in tracks:
+        for k, items in enumerate(split_overlaps(t["clips"])):
+            laid.append({"name": t["name"] if k == 0 else f"{t['name']} ({k + 1})", "clips": items})
+    total, done = sum(len(t["clips"]) for t in laid), 0
+    safe = lambda s: re.sub(r"[^\w\- ]+", "", s, flags=re.U).strip()[:40] or "clip"
+    with tempfile.TemporaryDirectory() as tmp:
+        media = Path(tmp) / "Audio Files"
+        media.mkdir()
+        aaf_path = Path(tmp) / f"{safe(name)}.aaf"
+        with aaf2.open(str(aaf_path), "w") as f:
+            comp = f.create.CompositionMob(name)
+            f.content.mobs.append(comp)
+            for ti, t in enumerate(laid, 1):
+                slot = comp.create_sound_slot(edit_rate=SR)
+                slot.name = t["name"]
+                seq, pos = slot.segment, 0
+                for ci, c in enumerate(t["clips"], 1):
+                    fname = f"{ti:02d}-{ci:03d} {safe(c['name'])}.wav"
+                    wav = media / fname
+                    n = pcm_wav(Path(c["src"]), wav, c.get("start", 0.0), c.get("dur"), c.get("gain", 1.0), bits=bits, mono=True)
+                    meta = {"format": {"filename": str(wav), "format_name": "wav", "format_long_name": "WAV / WAVE (Waveform Audio)"},
+                            "streams": [{"codec_type": "audio", "codec_name": f"pcm_s{bits}le", "sample_rate": str(SR), "channels": 1,
+                                         "duration_ts": n}]}
+                    master, src_mob, _tape = f.content.link_external_wav(meta)
+                    master.name = c["name"]
+                    try:                                      # o caminho fica relativo à pasta 'Audio Files'
+                        src_mob.descriptor["Locator"][0]["URLString"].value = "file:///Audio%20Files/" + fname.replace(" ", "%20")
+                    except Exception:
+                        pass
+                    start = int(round(c["pos"] * SR))
+                    if start > pos:
+                        seq.components.append(f.create.Filler("sound", start - pos))
+                        pos = start
+                    seq.components.append(master.create_source_clip(slot_id=master.slots[0].slot_id, start=0, length=n))
+                    pos += n
+                    done += 1
+                    progress(done, total)
+        readme = ("Pacote para o Pro Tools (AAF com áudio ligado)\n\n"
+                  "1. Descomprime o zip. O .aaf e a pasta 'Audio Files' têm de ficar lado a lado.\n"
+                  "2. No Pro Tools: File > Import > Session Data... e escolhe o ficheiro .aaf.\n"
+                  "3. Se o Pro Tools disser que há ficheiros em falta, escolhe 'Manually Find & Relink', aponta para a pasta\n"
+                  "   'Audio Files' e carrega em Find/Relink para todos. Depois confirma a importação.\n"
+                  "4. Sessão a 48 kHz. Cada faixa do AAF é uma faixa mono; os clips ficam separados e nos sítios certos.\n\n"
+                  "Todo o áudio é WAV mono de %d bits a 48 kHz.\n" % bits)
+        with zipfile.ZipFile(dst_zip, "w", zipfile.ZIP_STORED) as z:
+            z.writestr("LEIA-ME.txt", readme)
+            z.write(aaf_path, aaf_path.name)
+            for p in sorted(media.iterdir()):
+                z.write(p, f"Audio Files/{p.name}")

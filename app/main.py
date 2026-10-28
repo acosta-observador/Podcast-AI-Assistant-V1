@@ -1266,7 +1266,7 @@ def _aaf_tracks(d: Path, scene: int | None) -> tuple[list[dict], str]:
     return tracks, slug(meta["title"])
 
 
-def run_aaf(d: Path, scene: int | None, bits: int = 16, big_endian: bool = True, fmt: str = "aaf") -> None:
+def run_aaf(d: Path, scene: int | None, bits: int = 16, big_endian: bool = True, fmt: str = "linked") -> None:
     try:
         update_export(d, status="a preparar", message="", done=0, total=0, file=None, scene=scene)
         tracks, base = _aaf_tracks(d, scene)
@@ -1274,7 +1274,10 @@ def run_aaf(d: Path, scene: int | None, bits: int = 16, big_endian: bool = True,
         shutil.rmtree(out, ignore_errors=True)
         out.mkdir()
         prog = lambda a, b: update_export(d, done=a, total=b)
-        if fmt == "bwf":
+        if fmt == "linked":
+            dst = out / f"{base}-protools-aaf{f'-cena-{scene}' if scene else ''}-{bits}bit.zip"
+            aaf_export.build_aaf_linked(dst, f"{base}{f' cena {scene}' if scene else ''}", tracks, prog, bits=bits)
+        elif fmt == "bwf":
             dst = out / f"{base}-protools-bwf{f'-cena-{scene}' if scene else ''}.zip"
             aaf_export.build_bwf_zip(dst, base, tracks, prog, bits=bits)
         else:
@@ -1299,7 +1302,7 @@ def start_aaf(eid: str, body: dict = Body(default={})):
     update_export(d, status="a preparar", message="", done=0, total=0, file=None, scene=body.get("scene") or None)
     bits = 24 if int(body.get("bits") or 16) == 24 else 16
     structure_jobs.submit(run_aaf, d, int(body["scene"]) if body.get("scene") else None, bits, body.get("endian", "be") != "le",
-                          "bwf" if body.get("format") == "bwf" else "aaf")
+                          body.get("format") if body.get("format") in ("linked", "bwf", "aaf") else "linked")
     return {"ok": True}
 
 

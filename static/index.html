@@ -834,10 +834,9 @@ function renderStructure() {
         <p class="page-s">Cria o sound design do episódio cena a cena: efeitos e música em faixas por baixo dos takes.</p></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <select class="epsel" id="epsel" aria-label="Episódio">${epOpts}</select>
-          <select class="epsel" id="aaffmt" aria-label="Formato da exportação para o Pro Tools" title="Se o Pro Tools mostrar o áudio com ruído, experimenta outro formato">
-            <option value="aaf-16-be">AAF 16-bit big-endian</option><option value="aaf-24-be">AAF 24-bit big-endian</option>
-            <option value="aaf-16-le">AAF 16-bit little-endian</option><option value="aaf-24-le">AAF 24-bit little-endian</option>
-            <option value="bwf-24-le">Ficheiros BWF (sem AAF)</option></select>
+          <select class="epsel" id="aaffmt" aria-label="Formato da exportação para o Pro Tools" title="AAF com os WAV numa pasta ao lado (recomendado)">
+            <option value="linked-24-le">AAF + WAV 24-bit</option><option value="linked-16-le">AAF + WAV 16-bit</option>
+            <option value="bwf-24-le">Só ficheiros BWF</option></select>
           <button class="btn" id="expaaf" ${S.demo || !n ? 'disabled' : ''} title="Para o Pro Tools: narração (um clip por take) e uma faixa por tipo de som${scene ? ' (' + scene.title + ')' : ' (episódio todo)'}">${I.dl}Exportar AAF</button>
           <button class="btn" id="exptr" ${S.demo || !n ? 'disabled' : ''} title="Uma WAV por faixa${scene ? ' (' + scene.title + ')' : ''}">${I.dl}Exportar faixas</button>
           <button class="btn" id="exp" ${S.demo || !n ? 'disabled' : ''}>${I.dl}Exportar Reaper</button>
@@ -1024,7 +1023,7 @@ function renderSelected() {
 
 /* AAF para o Pro Tools: prepara em segundo plano e descarrega quando acabar */
 async function exportAaf(sceneN, fmt) {
-  const [format, bits, endian] = (fmt || 'aaf-16-be').split('-');
+  const [format, bits, endian] = (fmt || 'linked-24-le').split('-');
   const note = document.getElementById('stnote'), say = t => { if (note) note.textContent = t; };
   const btn = document.getElementById('expaaf'); if (btn) btn.disabled = true;
   try {
@@ -1037,7 +1036,7 @@ async function exportAaf(sceneN, fmt) {
       if (s.status === 'pronto') break;
       say(`A preparar para o Pro Tools… ${s.done} de ${s.total || '?'} clips`);
     }
-    say(format === 'bwf' ? 'Pacote pronto. Lê o LEIA-ME.txt dentro do zip.' : 'AAF pronto. Importa no Pro Tools com File > Import > Session Data.');
+    say('Pacote pronto. Lê o LEIA-ME.txt dentro do zip.');
     location.href = `/api/episodes/${ST.id}/export/aaf/file`;
   } catch (e) { say(''); showErr(e); alert(e.message); }
   if (btn) btn.disabled = false;
