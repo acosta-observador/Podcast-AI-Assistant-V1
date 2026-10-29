@@ -220,6 +220,49 @@ a{color:var(--accent);text-decoration:none}
   .top-in{display:flex!important;justify-content:space-between;padding:0 14px}
   .top-actions{flex:none}
 }
+.tape{--bg1:#cbc2b8;--bg2:#bdb4a9;--disc:#e6dfd6;--ink:#111;--grey:#a29a90;background:var(--bg1);min-height:100vh;margin:0 -12px;padding:20px 20px 40px;color:var(--ink);color-scheme:light}
+.tape *{letter-spacing:-.01em}
+.tape-title{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.tape-title h1{margin:0;font-size:34px!important;line-height:1.05;font-weight:800;letter-spacing:-.04em;color:var(--ink)}
+.tape-title h1 .g{display:block;color:var(--grey)}
+.tape-ver{height:34px;border-radius:980px;border:1px solid rgba(0,0,0,.2);background:transparent;padding:0 10px;font:inherit;font-size:13px;color:var(--ink);max-width:42vw}
+.reels{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:18px 0 8px}
+.reel{aspect-ratio:1;border-radius:50%;background:var(--disc);display:grid;place-items:center}
+.reel svg{width:100%;height:100%;animation:reelspin 2.4s linear infinite;animation-play-state:paused}
+.reel.rev svg{animation-direction:reverse}
+.playing .reel svg{animation-play-state:running}
+@keyframes reelspin{to{transform:rotate(360deg)}}
+.tape-track{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:8px;margin:14px 0 6px;text-align:center}
+.tape-track b{display:block;font-size:17px;font-weight:800}.tape-track small{color:var(--grey);font-size:14px}
+.tape-ic{width:44px;height:44px;display:grid;place-items:center;color:var(--ink);border-radius:50%;position:relative}
+.tape-ic svg{width:22px;height:22px}
+.tape-ic em{position:absolute;top:2px;right:0;font-style:normal;font-size:11px;font-weight:800;background:#ff9f0a;color:#111;border-radius:980px;min-width:18px;height:18px;display:grid;place-items:center;padding:0 4px}
+.tape-wave{position:relative;height:112px;margin:6px -20px 4px;background:transparent;border-radius:0;cursor:pointer;touch-action:pan-y}
+.tape-wave canvas{position:absolute;inset:0;width:100%;height:100%}
+.tape .rv-head{width:2px;background:var(--ink);top:6px;bottom:6px}
+.tape .rv-pin{top:6px;bottom:6px;height:auto;width:12px;margin-left:-6px;border-radius:6px;background:rgba(255,159,10,.85);border:0}
+.tape .rv-pin.feita{background:rgba(31,138,58,.8)}.tape .rv-pin.on{background:var(--ink);outline:0}
+.tape-time{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;margin:4px 0 12px}
+.tape-time .tbtn{height:36px;padding:0 14px;border-radius:980px;background:rgba(0,0,0,.08);color:var(--ink);font-size:13px;font-weight:700}
+.tape-time select{height:36px;border-radius:980px;border:0;background:rgba(0,0,0,.08);padding:0 10px;font:inherit;font-size:13px;font-weight:700;color:var(--ink)}
+.tape .rv-now div{background:rgba(0,0,0,.08);color:var(--ink)}.tape .rv-now b{color:var(--ink)}
+.knobs{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:6px}
+.kpan{background:var(--bg2);border-radius:26px;padding:14px;display:grid;place-items:center}
+.knob{position:relative;width:100%;aspect-ratio:1;border-radius:50%;background:#111;color:var(--disc);display:grid;place-items:center;padding:0}
+.knob .tick{position:absolute;left:50%;top:10%;width:4px;height:16%;margin-left:-2px;border-radius:2px;background:var(--disc);transform-origin:50% 310%}
+.playing .knob.k1 .tick{animation:reelspin 6s linear infinite}
+.knob .kic{position:absolute;inset:0;display:grid;place-items:center;color:var(--disc)}
+.knob .kic svg{width:34%;height:34%}
+.knob em{display:block;font-style:normal;font-size:13px;font-weight:700;margin-top:4px}
+.knob.k2 .kic svg{width:46%;height:46%}
+.tape .rv-compose{border-top:0}
+.tape-notes{margin:22px -8px 0;background:var(--bg2)!important;border:0!important;border-radius:22px;overflow:hidden;color:var(--ink)}
+.tape-notes .rv-note{border-top:1px solid rgba(0,0,0,.1)}.tape-notes .rv-t{background:rgba(0,0,0,.1);color:var(--ink)}
+.tape-notes .rv-text{color:var(--ink)}.tape-notes .note,.tape-notes .rv-au{color:var(--ink)}
+.tape-notes .rv-reply{background:rgba(0,0,0,.08)}
+.tape-notes .chip{background:rgba(0,0,0,.1);color:var(--ink)}.tape-notes .chip.on{background:var(--ink);color:var(--disc)}
+.tape-sheet{position:fixed!important;left:0;right:0;bottom:0;z-index:30;transform:translateY(110%);transition:transform .22s ease;background:var(--card)!important;color:var(--text)!important;border-radius:22px 22px 0 0;padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px))!important;box-shadow:0 -12px 40px rgba(0,0,0,.25)}
+.tape-sheet.open{transform:none}
 .snd-wrap{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .snd{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:5px 6px 5px 12px;border-radius:980px;background:var(--panel);border:1px solid var(--line);font-size:14px;line-height:1.3}
 .snd.music{background:rgba(125,92,255,.12);border-color:rgba(125,92,255,.3);color:#6b4cf0}
@@ -741,6 +784,8 @@ async function notesHome() {
 }
 
 /* ---------- Revisão: player com notas na timeline ---------- */
+const REEL_SVG = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="49" fill="#e6dfd6"/><g fill="none" stroke="#111" stroke-width="13" stroke-linecap="round"><path d="M50 18 A32 32 0 0 1 77 34"/><path d="M80 62 A32 32 0 0 1 56 81"/><path d="M26 71 A32 32 0 0 1 23 38"/></g><circle cx="50" cy="50" r="17" fill="#111"/><path d="M46 43 L58 50 L46 57 Z" fill="#cbc2b8"/></svg>';
+const isMobile = () => window.matchMedia('(max-width: 640px)').matches;
 const RV = { id: null, v: null, data: null, poll: null, noteT: 0, pausedByUs: false, editing: null, replying: null, filter: 'todas', active: null };
 const mmss = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s % 60).padStart(2, '0'); };
 function stopReviewAudio() { const a = document.getElementById('rvaudio'); if (a) a.pause(); }
@@ -761,6 +806,32 @@ async function loadReview(vid) {
 function renderReview() {
   const role = getRole(), d = RV.data, rv = d.review, son = role.mode === 'sonoplastia';
   const ready = rv.versions.filter(v => v.state === 'pronto'), ver = ready.find(v => v.id === RV.v);
+  const tapeMode = isMobile() && role.mode === 'direcao' && ver;
+  if (tapeMode) {
+    const parts = d.meta.title.split(/\s*[,:·|–-]\s*/), first = parts[0], rest = parts.slice(1).join(' · ') || ver.label;
+    $app.innerHTML = dirTop(role) + `<div id="rvpage" class="rv-wrap" style="padding:0 12px"><div class="tape" id="rvtape">
+      <div class="tape-title"><h1>${esc(first)}<span class="g">${esc(rest)}</span></h1>
+        <select id="rvver" class="tape-ver" aria-label="Versão">${ready.map(v => `<option value="${v.id}" ${v.id === ver.id ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select></div>
+      <div class="reels"><div class="reel">${REEL_SVG}</div><div class="reel rev">${REEL_SVG}</div></div>
+      <div class="tape-track"><button class="tape-ic" id="rvnotesbtn" aria-label="Ver notas">${I.note}<em id="rvbadge">0</em></button>
+        <div><b>${esc(ver.label)}</b><small>${ver.source === 'app' ? 'Gerada pela app' : 'Carregada por ' + esc(ver.by || 'Sonoplastia')}</small></div><span></span></div>
+      <audio id="rvaudio" data-v="${ver.id}" preload="metadata" src="/api/episodes/${RV.id}/review/versions/${ver.id}/audio"></audio>
+      <div class="tape-wave" id="rvbar" aria-label="Forma de onda"><canvas id="rvcanvas"></canvas><div class="rv-fill" id="rvfill" hidden></div><div id="rvpins"></div><div class="rv-head" id="rvhead"></div></div>
+      <div class="tape-time"><button class="tbtn" id="rvb10">−10 s</button><span id="rvtime">0:00 / ${mmss(ver.duration || 0)}</span>
+        <select id="rvspd" aria-label="Velocidade"><option value="1">1×</option><option value="1.25">1,25×</option><option value="1.5">1,5×</option><option value="0.75">0,75×</option></select><button class="tbtn" id="rvf10">+10 s</button></div>
+      <div class="rv-now" id="rvnow"></div>
+      <div class="knobs"><div class="kpan"><button class="knob k1" aria-label="Ouvir ou pausar"><i class="tick"></i><span class="kic" id="rvplay">${I.play}</span></button></div>
+        <div class="kpan"><button class="knob k2" id="rvnoteknob" aria-label="Nova nota"><i class="tick" style="transform:rotate(40deg)"></i><span class="kic">${I.note}</span></button></div></div>
+      <div class="rv-compose tape-sheet" id="rvsheet"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b id="rvnt">Nota aos 0:00</b>
+        <label class="note" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rvpause" checked> Pausar ao escrever</label></div>
+        <textarea id="rvtxt" placeholder="Ex.: ouve-se um tiro e não é suposto."></textarea>
+        <div style="display:flex;gap:8px"><button class="btn blue" id="rvadd" style="flex:1">${I.note}Adicionar nota</button><button class="btn" id="rvcancel">Fechar</button></div><div class="rv-near" id="rvnear"></div></div>
+      <div class="card tape-notes" id="rvnotesbox"><div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;flex-wrap:wrap;gap:8px"><b id="rvcount"></b>
+        <div style="display:flex;gap:6px"><button class="chip" data-f="todas">Todas</button><button class="chip" data-f="abertas">Abertas</button><button class="chip" data-f="minhas">Minhas</button></div></div><div id="rvnotes"></div></div>
+    </div></div>`;
+    bindPlayer(ver); bindTape(ver);
+    return;
+  }
   const inner = `<div id="rvpage" class="rv-wrap">
     <p style="margin:0 0 8px"><a class="back" href="${son ? '#/notas' : '#/direcao'}">${I.chevL}${son ? 'Notas da Direção' : 'Episódios'}</a></p>
     <h1 class="page-t" style="font-size:30px">${esc(d.meta.title)}</h1>
@@ -830,6 +901,36 @@ function renderVersions() {
     try { await api(`/api/episodes/${RV.id}/review/versions/from-app`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: document.getElementById('vlabel').value, by: 'Sonoplastia' }) }); } catch (e) { alert(e.message); return; }
     loadReview();
   };
+}
+
+function bindTape(ver) {
+  const a = document.getElementById('rvaudio'), tape = document.getElementById('rvtape'), cv = document.getElementById('rvcanvas'), wave = document.getElementById('rvbar');
+  const peaks = (ver.peaks && ver.peaks.length) ? ver.peaks : Array.from({ length: 160 }, (_, i) => 20 + 30 * Math.abs(Math.sin(i * .4)));
+  const draw = () => {
+    const w = wave.clientWidth, h = wave.clientHeight, r = window.devicePixelRatio || 1;
+    if (!w) return; cv.width = w * r; cv.height = h * r;
+    const c = cv.getContext('2d'); c.scale(r, r); c.clearRect(0, 0, w, h);
+    const dur = (a.duration && isFinite(a.duration)) ? a.duration : (ver.duration || 1), p = (a.currentTime || 0) / dur, n = Math.floor(w / 5);
+    for (let i = 0; i < n; i++) {
+      const v = peaks[Math.min(peaks.length - 1, Math.floor(i / n * peaks.length))] / 100, bh = Math.max(4, v * (h - 16));
+      c.fillStyle = i / n <= p ? '#111' : '#a29a90'; c.fillRect(i * 5 + 1, (h - bh) / 2, 3, bh);
+    }
+  };
+  RV.tapeDraw = draw; draw(); window.addEventListener('resize', draw, { once: true });
+  const base = a.onplay; a.onplay = a.onpause = () => { base(); tape.classList.toggle('playing', !a.paused); };
+  a.addEventListener('timeupdate', () => RV.tapeDraw && RV.tapeDraw()); a.addEventListener('loadedmetadata', () => draw());
+  const sheet = document.getElementById('rvsheet'), txt = document.getElementById('rvtxt');
+  document.getElementById('rvnoteknob').onclick = () => { sheet.classList.add('open'); txt.focus(); };
+  document.getElementById('rvcancel').onclick = () => { sheet.classList.remove('open'); txt.blur(); };
+  document.getElementById('rvadd').addEventListener('click', () => setTimeout(() => { if (!txt.value.trim()) sheet.classList.remove('open'); }, 400));
+  document.getElementById('rvnotesbtn').onclick = () => document.getElementById('rvnotesbox').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // arrastar na forma de onda = andar na fita
+  let drag = null;
+  wave.addEventListener('pointerdown', e => { drag = { x: e.clientX, t: a.currentTime, moved: false }; wave.setPointerCapture(e.pointerId); });
+  wave.addEventListener('pointermove', e => { if (!drag) return; const dx = e.clientX - drag.x; if (Math.abs(dx) > 6) drag.moved = true; if (drag.moved) { const dur = a.duration || ver.duration || 1; a.currentTime = Math.max(0, Math.min(dur, drag.t + dx / wave.clientWidth * dur)); } });
+  wave.addEventListener('pointerup', () => { drag = null; });
+  const badge = () => { const n = RV.data.review.notes.filter(x => x.version === ver.id && x.status !== 'feita').length; document.getElementById('rvbadge').textContent = n; document.getElementById('rvbadge').style.display = n ? '' : 'none'; };
+  badge(); setInterval(() => { if (document.getElementById('rvbadge')) badge(); }, 1500);
 }
 
 function bindPlayer(ver) {

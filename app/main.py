@@ -1247,6 +1247,14 @@ def _version(rv: dict, vid: str):
     return next((v for v in rv["versions"] if v["id"] == vid), None)
 
 
+def _safe_peaks(path: Path, n: int = 240) -> list:
+    """Forma de onda do episódio (n barras) para o player do telemóvel."""
+    try:
+        return sounddesign.audio_peaks(path, n)
+    except Exception:
+        return []
+
+
 def run_review_convert(d: Path, vid: str, src: Path) -> None:
     """Converte o ficheiro carregado para MP3 (leve e compatível com todos os browsers)."""
     try:
@@ -1254,7 +1262,8 @@ def run_review_convert(d: Path, vid: str, src: Path) -> None:
         audio_tools.run(["ffmpeg", "-y", "-v", "error", "-i", str(src), "-vn", "-ac", "2", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "160k", str(dst)])
         dur = audio_tools.probe(dst)["duration"]
         src.unlink(missing_ok=True)
-        update_review(d, lambda rv: (_version(rv, vid) or {}).update(state="pronto", file=dst.name, duration=round(dur, 1), message=""))
+        peaks = _safe_peaks(dst)
+        update_review(d, lambda rv: (_version(rv, vid) or {}).update(state="pronto", file=dst.name, duration=round(dur, 1), message="", peaks=peaks))
     except Exception as e:
         traceback.print_exc()
         update_review(d, lambda rv: (_version(rv, vid) or {}).update(state="erro", message=str(e)))
@@ -1286,7 +1295,8 @@ def run_review_mix(d: Path, vid: str) -> None:
         audio_tools.run(cmd + ["-filter_complex", flt, "-map", "[out]", "-c:a", "libmp3lame", "-b:a", "160k", str(dst)])
         shutil.rmtree(work, ignore_errors=True)
         dur = audio_tools.probe(dst)["duration"]
-        update_review(d, lambda rv: (_version(rv, vid) or {}).update(state="pronto", file=dst.name, duration=round(dur, 1), message=""))
+        peaks = _safe_peaks(dst)
+        update_review(d, lambda rv: (_version(rv, vid) or {}).update(state="pronto", file=dst.name, duration=round(dur, 1), message="", peaks=peaks))
     except Exception as e:
         traceback.print_exc()
         update_review(d, lambda rv: (_version(rv, vid) or {}).update(state="erro", message=str(e)))
@@ -1365,7 +1375,14 @@ def delete_review_episode(eid: str):
 @app.get("/api/episodes/{eid}/review")
 def get_review(eid: str):
     d = ep_dir(eid)
-    return {"meta": read_json(d / "meta.json"), "review": read_review(d), "directors": DIRECTORS,
+    rv = read_review(d)
+    for v in rv["versions"]:                       # versões antigas ainda sem forma de onda: calcula uma vez
+        p = d / "review" / f"{v['id']}.mp3"
+        if v["state"] == "pronto" and "peaks" not in v and p.exists():
+            peaks = _safe_peaks(p)
+            update_review(d, lambda r, vid=v["id"], pk=peaks: (_version(r, vid) or {}).update(peaks=pk))
+            v["peaks"] = peaks
+    return {"meta": read_json(d / "meta.json"), "review": rv, "directors": DIRECTORS,
             "can_mix": bool(read_json(d / "result.json"))}
 
 
