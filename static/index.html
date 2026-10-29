@@ -6,26 +6,15 @@
 <title>Podcast Plus AI Assistant</title>
 <style>
 :root{
-  --bg:#ffffff; --panel:#f5f5f7; --card:#ffffff; --line:#e3e3e8; --hover:#ececf0;
-  --text:#1d1d1f; --muted:#6e6e73; --faint:#aeaeb2;
-  --accent:#0071e3; --accent-soft:#e8f1fc; --warn:#c96a00; --warn-soft:#fff4e5; --ok:#248a3d;
-  --r:14px;
-  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","Helvetica Neue",Arial,sans-serif;
-  color-scheme:light dark;
+  --bg:#cbc2b8; --panel:#bdb4a9; --card:#e6dfd6; --line:rgba(0,0,0,.13); --hover:#b4ab9f;
+  --text:#111111; --muted:#6a635a; --faint:#8f877d;
+  --accent:#111111; --accent-soft:rgba(0,0,0,.09); --warn:#a85a00; --warn-soft:#e3cfae; --ok:#1f7a38;
+  --disc:#e6dfd6; --ink:#111; --grey:#a29a90;
+  --r:22px;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI","Helvetica Neue",Arial,sans-serif;
+  color-scheme:light;
   box-sizing:border-box;
   padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#000000; --panel:#1c1c1e; --card:#1c1c1e; --line:#2c2c2e; --hover:#2a2a2d;
-    --text:#f5f5f7; --muted:#a1a1a6; --faint:#636366;
-    --accent:#2997ff; --accent-soft:#0b2a4a; --warn:#ffb340; --warn-soft:#2e2208; --ok:#30d158;
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#000000; --panel:#1c1c1e; --card:#1c1c1e; --line:#2c2c2e; --hover:#2a2a2d;
-  --text:#f5f5f7; --muted:#a1a1a6; --faint:#636366;
-  --accent:#2997ff; --accent-soft:#0b2a4a; --warn:#ffb340; --warn-soft:#2e2208; --ok:#30d158;
 }
 *,*::before,*::after{box-sizing:inherit}
 html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
@@ -468,6 +457,68 @@ kbd{font-family:var(--font);font-size:11px;border:1px solid var(--line);border-r
   .page-t{font-size:32px}
 }
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+
+/* ===== desenho gravador de fita em toda a app ===== */
+body{letter-spacing:-.015em}
+.side{background:var(--panel);border-right:0}
+.logo i{background:var(--ink);color:var(--disc);border-radius:50%}
+.logo span{font-weight:800;letter-spacing:-.03em}.logo span em{color:var(--grey);font-weight:800}
+.sec{color:var(--muted);letter-spacing:.06em}
+.nav-i{border-radius:980px;font-weight:600}
+.nav-i:hover{background:rgba(0,0,0,.07)}
+.nav-i.on{background:var(--ink);color:var(--disc)}
+.page-t,.intro h1{font-weight:800;letter-spacing:-.04em}
+.page-s,.intro p{color:var(--muted)}
+.card,.pcard,.fcard,.gate-card,.audio,.an-sc,.mp,.sel-card,.tl{border:0;border-radius:24px;background:var(--card);box-shadow:none}
+.pcard:hover,.fcard:hover,.gate-card:hover{background:#efe9e0;border:0}
+.pcard .cov{background:var(--panel);color:var(--ink)}
+.fcard .ico{background:var(--ink);color:var(--disc);border-radius:50%}
+.btn{background:rgba(0,0,0,.1);color:var(--ink);font-weight:700}
+.btn:hover:not(:disabled){background:rgba(0,0,0,.18)}
+.btn.blue,.primary{background:var(--ink);color:var(--disc)}
+.btn.blue:hover:not(:disabled),.primary:hover:not(:disabled){background:#2a2a2a}
+.primary{border-radius:980px}
+.chip,.sc-chip{background:rgba(0,0,0,.09);color:var(--ink);font-weight:700}
+.chip:hover:not(:disabled),.sc-chip:hover{background:rgba(0,0,0,.17)}
+.sc-chip.on{background:var(--ink);color:var(--disc)}.sc-chip.on svg{color:var(--disc)}
+.pill{background:rgba(0,0,0,.09);color:var(--muted);font-weight:700}
+.pill.run{background:var(--ink);color:var(--disc)}
+.pill.ok{background:rgba(31,122,56,.18);color:#175e2b}
+.play{background:var(--ink);color:var(--disc)}
+.play:hover:not(:disabled){background:#2a2a2a}
+.play:disabled{background:rgba(0,0,0,.12);color:var(--faint)}
+.prog{background:rgba(0,0,0,.12)}.prog i{background:var(--ink)}
+.wave i{background:rgba(0,0,0,.18)}.wave i.on{background:var(--ink)}
+.segctl{background:rgba(0,0,0,.1);border-radius:980px}
+.segctl button{border-radius:980px;font-weight:700}
+.segctl button:hover:not([aria-pressed="true"]){background:rgba(0,0,0,.08)}
+.segctl button[aria-pressed="true"]{background:var(--ink);color:var(--disc);box-shadow:none}
+.segctl button[aria-pressed="true"] small{color:var(--grey)}
+.epsel,.tl-pop input[type=text],.tl-pop input[type=number],.sel-card textarea,.mp textarea,.mp input[type=number],.rv-compose textarea{background:var(--disc);border:0;color:var(--ink)}
+.epsel{border-radius:980px;font-weight:600;background:rgba(0,0,0,.1)}
+.tl-pop{background:var(--bg);border:0;border-radius:22px;box-shadow:0 18px 50px rgba(0,0,0,.3)}
+.tl-lbl{background:var(--card)}.tl-lbl.rl,.tl-ruler{background:var(--panel)}
+.tl-ph{background:var(--ink)}
+.clip.sel{box-shadow:0 0 0 2px var(--ink)}
+.clip.nar{background:rgba(0,0,0,.14);color:var(--ink)}
+.cue-e{background:rgba(0,0,0,.07)}
+.cue-e textarea:focus,.cue-e input:focus,.mp textarea:focus,.rv-compose textarea:focus{outline:2px solid var(--ink);background:var(--disc)}
+.rchip{background:rgba(0,0,0,.1);color:var(--ink)}
+.gate{background:var(--bg)}
+.gate-in h1{font-weight:800;letter-spacing:-.04em}
+.gate-names button{background:var(--card);border:0;border-radius:24px;font-weight:800}
+.gate-names button:hover{background:var(--ink);color:var(--disc)}
+.gate-card:hover b,.gate-card:hover span{color:inherit}
+.rv-bar{background:rgba(0,0,0,.1)}.rv-fill{background:rgba(0,0,0,.12)}.rv-head{background:var(--ink)}
+.rv-t{background:rgba(0,0,0,.1)}
+.rv-agree{background:transparent;border:1.5px solid var(--ink);color:var(--ink)}.rv-agree.on{background:var(--ink);color:var(--disc)}
+.who{border-top:1px solid rgba(0,0,0,.12)}.who a,.link,a{color:var(--ink);font-weight:600;text-decoration:underline;text-underline-offset:2px}
+.nav-i,.fcard,.pcard,.gate-card,.logo,.ep,.back{text-decoration:none}
+.eps{background:var(--card)}.ep-row:hover{background:#efe9e0}
+.drop{background:rgba(0,0,0,.06)}
+.flags,.banner{background:var(--warn-soft);color:var(--warn)}
+:focus-visible{outline:3px solid rgba(0,0,0,.4)}
+@media (max-width:900px){.side{border-bottom:0}}
 </style>
 </head>
 <body>
