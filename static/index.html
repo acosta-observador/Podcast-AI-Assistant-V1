@@ -263,6 +263,41 @@ a{color:var(--accent);text-decoration:none}
 .tape-notes .chip{background:rgba(0,0,0,.1);color:var(--ink)}.tape-notes .chip.on{background:var(--ink);color:var(--disc)}
 .tape-sheet{position:fixed!important;left:0;right:0;bottom:0;z-index:30;transform:translateY(110%);transition:transform .22s ease;background:var(--card)!important;color:var(--text)!important;border-radius:22px 22px 0 0;padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px))!important;box-shadow:0 -12px 40px rgba(0,0,0,.25)}
 .tape-sheet.open{transform:none}
+.rv-wrap.wide{max-width:1120px}
+.tape{--pad:20px}
+.tape-wave{margin-left:calc(var(--pad) * -1)!important;margin-right:calc(var(--pad) * -1)!important}
+.tape-hint{margin:14px 0 0;font-size:13px;color:var(--grey);display:none}
+.tape-nh{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:16px 18px}
+.tape-sub{font-size:13px;color:rgba(0,0,0,.55);flex:1;min-width:120px}
+@media (min-width:641px){
+  .tape{--pad:34px;margin:0 auto;max-width:1120px;border-radius:34px;padding:34px;min-height:0}
+  .tape.cols{display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);gap:0 40px;align-items:start}
+  .tape:not(.cols) .tape-notes{margin-top:22px!important}
+  .tape:not(.cols) .tape-main,.tape:not(.cols) .tape-side{max-width:560px;margin-left:auto;margin-right:auto}
+  .tape-title h1{font-size:44px!important}
+  .tape-hint{display:block}
+  .tape.cols .tape-side{position:sticky;top:20px;max-height:calc(100vh - 40px);display:flex;flex-direction:column}
+  .tape-notes{margin:0!important;overflow:auto}
+  .tape-sheet{left:50%!important;right:auto!important;width:min(560px,94vw);margin-left:calc(min(560px,94vw) / -2);border-radius:24px 24px 0 0}
+  .tape-ver{max-width:200px}
+  .tape-wave{height:128px;margin-left:0!important;margin-right:0!important}
+}
+.tape-sheet{background:var(--bg1)!important;color:var(--ink)!important}
+.tape-sheet textarea{background:var(--disc)!important;border:0!important;color:var(--ink)!important;border-radius:16px!important}
+.tape-sheet textarea:focus{outline:2px solid var(--ink)!important}
+.tape-sheet .btn{background:rgba(0,0,0,.1)!important;color:var(--ink)!important;border:0}
+.tape-sheet .btn.blue{background:var(--ink)!important;color:var(--disc)!important}
+.tape-sheet .note,.tape-sheet b{color:var(--ink)}
+.tape-sheet .rv-near .it{background:rgba(0,0,0,.08)}
+.tape .rv-agree{background:transparent;border:1.5px solid var(--ink);color:var(--ink)}
+.tape .rv-agree.on{background:var(--ink);color:var(--disc)}
+.tape .rv-act button{color:var(--ink);font-weight:600}.tape .rv-act button:hover{background:rgba(0,0,0,.08)}
+.tape .rv-mine{color:var(--ink);background:rgba(0,0,0,.1);border-radius:980px;padding:1px 8px}
+.tape .rv-note.on{background:rgba(0,0,0,.08)}.tape .rv-note.feita .rv-text{color:rgba(0,0,0,.5)}
+.tape .rv-edit,.tape-notes textarea{background:var(--disc)!important;color:var(--ink)!important;border:0!important}
+.tape-notes .btn{background:rgba(0,0,0,.1);color:var(--ink);border:0}.tape-notes .btn.blue{background:var(--ink);color:var(--disc)}
+.tape .pill.ok{background:rgba(31,138,58,.18);color:#1b6e30}
+.tape-notes .rv-note{padding:14px 18px}
 .snd-wrap{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .snd{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:5px 6px 5px 12px;border-radius:980px;background:var(--panel);border:1px solid var(--line);font-size:14px;line-height:1.3}
 .snd.music{background:rgba(125,92,255,.12);border-color:rgba(125,92,255,.3);color:#6b4cf0}
@@ -443,6 +478,7 @@ kbd{font-family:var(--font);font-size:11px;border:1px solid var(--line);border-r
 /* ---------- ícones ---------- */
 const I = {
   chevL:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  chevR:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
   up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>',
   down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
   play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.2v13.6c0 .8.9 1.3 1.6.8l10.2-6.8c.6-.4.6-1.2 0-1.6L9.6 4.4C8.9 3.9 8 4.4 8 5.2z"/></svg>',
@@ -806,60 +842,39 @@ async function loadReview(vid) {
 function renderReview() {
   const role = getRole(), d = RV.data, rv = d.review, son = role.mode === 'sonoplastia';
   const ready = rv.versions.filter(v => v.state === 'pronto'), ver = ready.find(v => v.id === RV.v);
-  const tapeMode = isMobile() && role.mode === 'direcao' && ver;
-  if (tapeMode) {
+  const back = `<p style="margin:0 0 10px"><a class="back" href="${son ? '#/notas' : '#/direcao'}">${I.chevL}${son ? 'Notas da Direção' : 'Episódios'}</a></p>`;
+  let body;
+  if (ver) {
     const parts = d.meta.title.split(/\s*[,:·|–-]\s*/), first = parts[0], rest = parts.slice(1).join(' · ') || ver.label;
-    $app.innerHTML = dirTop(role) + `<div id="rvpage" class="rv-wrap" style="padding:0 12px"><div class="tape" id="rvtape">
-      <div class="tape-title"><h1>${esc(first)}<span class="g">${esc(rest)}</span></h1>
-        <select id="rvver" class="tape-ver" aria-label="Versão">${ready.map(v => `<option value="${v.id}" ${v.id === ver.id ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select></div>
-      <div class="reels"><div class="reel">${REEL_SVG}</div><div class="reel rev">${REEL_SVG}</div></div>
-      <div class="tape-track"><button class="tape-ic" id="rvnotesbtn" aria-label="Ver notas">${I.note}<em id="rvbadge">0</em></button>
-        <div><b>${esc(ver.label)}</b><small>${ver.source === 'app' ? 'Gerada pela app' : 'Carregada por ' + esc(ver.by || 'Sonoplastia')}</small></div><span></span></div>
-      <audio id="rvaudio" data-v="${ver.id}" preload="metadata" src="/api/episodes/${RV.id}/review/versions/${ver.id}/audio"></audio>
-      <div class="tape-wave" id="rvbar" aria-label="Forma de onda"><canvas id="rvcanvas"></canvas><div class="rv-fill" id="rvfill" hidden></div><div id="rvpins"></div><div class="rv-head" id="rvhead"></div></div>
-      <div class="tape-time"><button class="tbtn" id="rvb10">−10 s</button><span id="rvtime">0:00 / ${mmss(ver.duration || 0)}</span>
-        <select id="rvspd" aria-label="Velocidade"><option value="1">1×</option><option value="1.25">1,25×</option><option value="1.5">1,5×</option><option value="0.75">0,75×</option></select><button class="tbtn" id="rvf10">+10 s</button></div>
-      <div class="rv-now" id="rvnow"></div>
-      <div class="knobs"><div class="kpan"><button class="knob k1" aria-label="Ouvir ou pausar"><i class="tick"></i><span class="kic" id="rvplay">${I.play}</span></button></div>
-        <div class="kpan"><button class="knob k2" id="rvnoteknob" aria-label="Nova nota"><i class="tick" style="transform:rotate(40deg)"></i><span class="kic">${I.note}</span></button></div></div>
-      <div class="rv-compose tape-sheet" id="rvsheet"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b id="rvnt">Nota aos 0:00</b>
+    const cols = (window.innerWidth - (son ? 260 : 0)) >= 900;
+    body = `<div class="tape${cols ? ' cols' : ''}" id="rvtape"><div class="tape-main">
+        <div class="tape-title"><h1>${esc(first)}<span class="g">${esc(rest)}</span></h1>
+          <select id="rvver" class="tape-ver" aria-label="Versão">${ready.map(v => `<option value="${v.id}" ${v.id === ver.id ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select></div>
+        <div class="reels"><div class="reel">${REEL_SVG}</div><div class="reel rev">${REEL_SVG}</div></div>
+        <div class="tape-track"><button class="tape-ic" id="rvnotesbtn" aria-label="Ver notas">${I.note}<em id="rvbadge">0</em></button>
+          <div><b>${esc(ver.label)}</b><small>${ver.source === 'app' ? 'Gerada pela app' : 'Carregada por ' + esc(ver.by || 'Sonoplastia')}</small></div><span></span></div>
+        <audio id="rvaudio" data-v="${ver.id}" preload="metadata" src="/api/episodes/${RV.id}/review/versions/${ver.id}/audio"></audio>
+        <div class="tape-wave" id="rvbar" aria-label="Forma de onda"><canvas id="rvcanvas"></canvas><div class="rv-fill" id="rvfill" hidden></div><div id="rvpins"></div><div class="rv-head" id="rvhead"></div></div>
+        <div class="tape-time"><button class="tbtn" id="rvb10">−10 s</button><span id="rvtime">0:00 / ${mmss(ver.duration || 0)}</span>
+          <select id="rvspd" aria-label="Velocidade"><option value="1">1×</option><option value="1.25">1,25×</option><option value="1.5">1,5×</option><option value="0.75">0,75×</option></select><button class="tbtn" id="rvf10">+10 s</button></div>
+        <div class="rv-now" id="rvnow"></div>
+        <div class="knobs"><div class="kpan"><button class="knob k1" aria-label="Ouvir ou pausar"><i class="tick"></i><span class="kic" id="rvplay">${I.play}</span></button></div>
+          <div class="kpan"><button class="knob k2" id="rvnoteknob" aria-label="${son ? 'Próxima nota' : 'Nova nota'}"><i class="tick" style="transform:rotate(40deg)"></i><span class="kic">${son ? I.chevR : I.note}</span></button></div></div>
+        <p class="tape-hint">${son ? 'O botão da direita salta para a nota seguinte.' : 'O botão da direita abre uma nota para o momento em que estás a ouvir.'} Espaço = ouvir/pausar, ← → = 5 s.</p></div>
+      <div class="tape-side"><div class="card tape-notes" id="rvnotesbox"><div class="tape-nh"><b id="rvcount"></b><span class="tape-sub">Todos veem as notas de todos.</span>
+        <div style="display:flex;gap:6px"><button class="chip" data-f="todas">Todas</button><button class="chip" data-f="abertas">Abertas</button>${son ? '' : '<button class="chip" data-f="minhas">Minhas</button>'}</div></div><div id="rvnotes"></div></div></div>
+      ${son ? '' : `<div class="rv-compose tape-sheet" id="rvsheet"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b id="rvnt">Nota aos 0:00</b>
         <label class="note" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rvpause" checked> Pausar ao escrever</label></div>
         <textarea id="rvtxt" placeholder="Ex.: ouve-se um tiro e não é suposto."></textarea>
-        <div style="display:flex;gap:8px"><button class="btn blue" id="rvadd" style="flex:1">${I.note}Adicionar nota</button><button class="btn" id="rvcancel">Fechar</button></div><div class="rv-near" id="rvnear"></div></div>
-      <div class="card tape-notes" id="rvnotesbox"><div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;flex-wrap:wrap;gap:8px"><b id="rvcount"></b>
-        <div style="display:flex;gap:6px"><button class="chip" data-f="todas">Todas</button><button class="chip" data-f="abertas">Abertas</button><button class="chip" data-f="minhas">Minhas</button></div></div><div id="rvnotes"></div></div>
-    </div></div>`;
-    bindPlayer(ver); bindTape(ver);
-    return;
-  }
-  const inner = `<div id="rvpage" class="rv-wrap">
-    <p style="margin:0 0 8px"><a class="back" href="${son ? '#/notas' : '#/direcao'}">${I.chevL}${son ? 'Notas da Direção' : 'Episódios'}</a></p>
-    <h1 class="page-t" style="font-size:30px">${esc(d.meta.title)}</h1>
-    ${son ? '<div id="rvvers"></div>' : ''}
-    ${ver ? `<div class="card rv-player" id="rvplayer">
-      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
-        <select class="epsel" id="rvver" aria-label="Versão">${ready.map(v => `<option value="${v.id}" ${v.id === ver.id ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select>
-        <span class="st-note">${ver.source === 'app' ? 'Gerada pela app (narração e sons)' : 'Carregada por ' + esc(ver.by || 'Sonoplastia')} · ${new Date(ver.created * 1000).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long' })}</span></div>
-      <audio id="rvaudio" data-v="${ver.id}" preload="metadata" src="/api/episodes/${RV.id}/review/versions/${ver.id}/audio"></audio>
-      <div class="rv-ctl"><button class="play" id="rvplay" aria-label="Ouvir">${I.play}</button>
-        <button class="chip" id="rvb10">−10 s</button><button class="chip" id="rvf10">+10 s</button>
-        <span class="rv-time" id="rvtime">0:00 / ${mmss(ver.duration || 0)}</span>
-        <select class="epsel" id="rvspd" aria-label="Velocidade"><option value="1">1×</option><option value="1.25">1,25×</option><option value="1.5">1,5×</option><option value="0.75">0,75×</option></select></div>
-      <div class="rv-now" id="rvnow"></div>
-      <div class="rv-bar" id="rvbar" aria-label="Linha do tempo"><div class="rv-fill" id="rvfill"></div><div id="rvpins"></div><div class="rv-head" id="rvhead"></div></div>
-      ${role.mode === 'direcao' ? `<div class="rv-compose"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center">
-          <b id="rvnt">Nota aos 0:00</b><label class="note" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rvpause" checked> Pausar ao escrever</label></div>
-        <textarea id="rvtxt" placeholder="Escreve a nota para a hora em que estás a ouvir. Ex.: ouve-se um tiro e não é suposto."></textarea>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn blue" id="rvadd">${I.note}Adicionar nota</button>
-          <span class="note rv-hint">Atalhos: espaço = ouvir/pausar, N = nota, ← → = 5 s, Cmd/Ctrl+Enter = guardar</span></div>
-        <div class="rv-near" id="rvnear"></div></div>` : ''}</div>
-      <div class="card" style="margin-top:20px;overflow:hidden"><div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:8px">
-        <b id="rvcount"></b><span class="note" style="flex:1;min-width:140px">Todos veem as notas de todos.</span><div style="display:flex;gap:6px"><button class="chip" data-f="todas">Todas</button><button class="chip" data-f="abertas">Abertas</button>${role.mode === 'direcao' ? '<button class="chip" data-f="minhas">Minhas</button>' : ''}</div></div><div id="rvnotes"></div></div>`
-      : `<div class="card empty" style="margin-top:20px">${rv.versions.some(v => v.state !== 'pronto' && v.state !== 'erro') ? 'A versão está a ser preparada…' : (son ? 'Ainda não há nenhuma versão para a Direção ouvir. Carrega uma acima.' : 'Ainda não há versão deste episódio para ouvir.')}</div>`}
+        <div style="display:flex;gap:8px"><button class="btn blue" id="rvadd" style="flex:1">${I.note}Adicionar nota</button><button class="btn" id="rvcancel">Fechar</button></div><div class="rv-near" id="rvnear"></div></div>`}
     </div>`;
+  } else {
+    body = `<h1 class="page-t" style="font-size:30px">${esc(d.meta.title)}</h1><div class="card empty" style="margin-top:20px">${rv.versions.some(v => v.state !== 'pronto' && v.state !== 'erro') ? 'A versão está a ser preparada…' : (son ? 'Ainda não há nenhuma versão para a Direção ouvir. Carrega uma acima.' : 'Ainda não há versão deste episódio para ouvir.')}</div>`;
+  }
+  const inner = `<div id="rvpage" class="rv-wrap wide">${back}${son ? '<div id="rvvers"></div>' : ''}${body}</div>`;
   $app.innerHTML = son ? shell('notas', inner) : dirTop(role) + inner;
   if (son) renderVersions();
-  if (ver) bindPlayer(ver);
+  if (ver) { bindPlayer(ver); bindTape(ver); }
 }
 
 function renderVersions() {
@@ -920,9 +935,17 @@ function bindTape(ver) {
   const base = a.onplay; a.onplay = a.onpause = () => { base(); tape.classList.toggle('playing', !a.paused); };
   a.addEventListener('timeupdate', () => RV.tapeDraw && RV.tapeDraw()); a.addEventListener('loadedmetadata', () => draw());
   const sheet = document.getElementById('rvsheet'), txt = document.getElementById('rvtxt');
-  document.getElementById('rvnoteknob').onclick = () => { sheet.classList.add('open'); txt.focus(); };
-  document.getElementById('rvcancel').onclick = () => { sheet.classList.remove('open'); txt.blur(); };
-  document.getElementById('rvadd').addEventListener('click', () => setTimeout(() => { if (!txt.value.trim()) sheet.classList.remove('open'); }, 400));
+  if (sheet) {
+    document.getElementById('rvnoteknob').onclick = () => { sheet.classList.add('open'); txt.focus(); };
+    document.getElementById('rvcancel').onclick = () => { sheet.classList.remove('open'); txt.blur(); };
+    document.getElementById('rvadd').addEventListener('click', () => setTimeout(() => { if (!txt.value.trim()) sheet.classList.remove('open'); }, 400));
+  } else {
+    document.getElementById('rvnoteknob').onclick = () => {       // Sonoplastia: salta para a nota seguinte
+      const ns = RV.data.review.notes.filter(x => x.version === ver.id).sort((x, y) => x.t - y.t); if (!ns.length) return;
+      const nx = ns.find(x => x.t > (a.currentTime || 0) + 0.5) || ns[0]; a.currentTime = Math.max(0, nx.t - 1); RV.active = nx.id;
+      document.querySelector(`[data-n="${nx.id}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    };
+  }
   document.getElementById('rvnotesbtn').onclick = () => document.getElementById('rvnotesbox').scrollIntoView({ behavior: 'smooth', block: 'start' });
   // arrastar na forma de onda = andar na fita
   let drag = null;
@@ -1019,7 +1042,7 @@ document.addEventListener('keydown', e => {
   if (e.key === ' ') { e.preventDefault(); a.paused ? a.play().catch(() => {}) : a.pause(); }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); a.currentTime = Math.max(0, a.currentTime - 5); }
   else if (e.key === 'ArrowRight') { e.preventDefault(); a.currentTime = Math.min(a.duration || 1e9, a.currentTime + 5); }
-  else if ((e.key === 'n' || e.key === 'N') && document.getElementById('rvtxt')) { e.preventDefault(); document.getElementById('rvtxt').focus(); }
+  else if ((e.key === 'n' || e.key === 'N') && document.getElementById('rvsheet')) { e.preventDefault(); document.getElementById('rvnoteknob').click(); }
 });
 
 /* ---------- Maestro: músicas e stems por cena ---------- */
