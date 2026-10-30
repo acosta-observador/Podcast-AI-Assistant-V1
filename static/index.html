@@ -831,6 +831,7 @@ const dirTop = role => `<div class="top"><div class="top-in"><a class="logo" hre
 async function directorHome() {
   const role = getRole();
   let list; try { list = await api('/api/review'); } catch { list = []; }
+  list = list.filter(e => e.kind === 'review' || e.versions);
   $app.innerHTML = dirTop(role) + `<div class="wrap"><h1 class="page-t">Olá, ${esc(role.name)}</h1>
     <p class="page-s">Escolhe um episódio para ouvir. Podes deixar notas na timeline enquanto ouves, e a Sonoplastia vê-as todas.</p>
     <div class="projs">${list.length ? list.map(e => e.latest ? `<a class="card fcard" href="#/revisao/${e.id}/${e.latest}"><b style="font-size:13px;color:var(--muted);letter-spacing:.04em">${esc(e.latest_label)}</b>
