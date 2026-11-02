@@ -1046,7 +1046,7 @@ function bindTape(ver) {
     const w = wave.clientWidth, h = wave.clientHeight, r = window.devicePixelRatio || 1;
     if (!w) return; cv.width = w * r; cv.height = h * r;
     const c = cv.getContext('2d'); c.scale(r, r); c.clearRect(0, 0, w, h);
-    const dur = (a.duration && isFinite(a.duration)) ? a.duration : (ver.duration || 1), p = (a.currentTime || 0) / dur, n = Math.floor(w / 5);
+    const dur = (a.duration && isFinite(a.duration)) ? a.duration : (ver.duration || 1), p = (RV.scrubT ?? (a.currentTime || 0)) / dur, n = Math.floor(w / 5);
     for (let i = 0; i < n; i++) {
       const v = peaks[Math.min(peaks.length - 1, Math.floor(i / n * peaks.length))] / 100, bh = Math.max(4, v * (h - 16));
       c.fillStyle = i / n <= p ? '#111' : '#a29a90'; c.fillRect(i * 5 + 1, (h - bh) / 2, 3, bh);
@@ -1069,10 +1069,13 @@ function bindTape(ver) {
   document.getElementById('rvnotesbtn').onclick = () => { if (compact()) side.classList.toggle('open'); else document.getElementById('rvnotesbox').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
   document.getElementById('rvnclose').onclick = () => side.classList.remove('open');
   // arrastar na forma de onda = andar na fita
+  // arrastar a fita: durante o gesto só mexe a imagem (o áudio salta uma vez, ao largar), senão o iPhone engasga a tocar
   let drag = null;
+  const scrubTo = e => { const dur = a.duration || ver.duration || 1; RV.scrubT = Math.max(0, Math.min(dur, drag.t + (e.clientX - drag.x) / wave.clientWidth * dur)); RV.tick && RV.tick(); draw(); };
   wave.addEventListener('pointerdown', e => { drag = { x: e.clientX, t: a.currentTime, moved: false }; wave.setPointerCapture(e.pointerId); });
-  wave.addEventListener('pointermove', e => { if (!drag) return; const dx = e.clientX - drag.x; if (Math.abs(dx) > 6) drag.moved = true; if (drag.moved) { const dur = a.duration || ver.duration || 1; a.currentTime = Math.max(0, Math.min(dur, drag.t + dx / wave.clientWidth * dur)); } });
-  wave.addEventListener('pointerup', () => { drag = null; });
+  wave.addEventListener('pointermove', e => { if (!drag) return; if (Math.abs(e.clientX - drag.x) > 6) drag.moved = true; if (drag.moved) scrubTo(e); });
+  const endDrag = () => { if (!drag) return; if (RV.scrubT != null) { a.currentTime = RV.scrubT; RV.scrubT = null; RV.tick && RV.tick(); draw(); } drag = null; };
+  wave.addEventListener('pointerup', endDrag); wave.addEventListener('pointercancel', endDrag);
   const badge = () => { const n = RV.data.review.notes.filter(x => x.version === ver.id && x.status !== 'feita').length; document.getElementById('rvbadge').textContent = n; document.getElementById('rvbadge').style.display = n ? '' : 'none'; };
   badge(); setInterval(() => { if (document.getElementById('rvbadge')) badge(); }, 1500);
 }
@@ -1085,7 +1088,7 @@ function bindPlayer(ver) {
   const seek = t => { a.currentTime = Math.max(0, Math.min(dur(), t)); tick(); };
   const setActive = (id, scroll) => { RV.active = id; paintNotes(); paintPins(); if (scroll) document.querySelector(`[data-n="${id}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
   const tick = () => {
-    const t = a.currentTime || 0, p = Math.min(100, t / dur() * 100);
+    const t = RV.scrubT ?? (a.currentTime || 0), p = Math.min(100, t / dur() * 100);
     document.getElementById('rvfill').style.width = p + '%'; document.getElementById('rvhead').style.left = p + '%';
     document.getElementById('rvtime').textContent = `${mmss(t)} / ${mmss(dur())}`;
     const stp = document.getElementById('rvnt'), tx = document.getElementById('rvtxt'); if (stp && document.activeElement !== tx) stp.textContent = mmss(t);
@@ -1126,7 +1129,7 @@ function bindPlayer(ver) {
       RV.data.review.notes = RV.data.review.notes.filter(x => x.id !== b.dataset.del); paintNotes(); paintPins();
     });
   }
-  a.ontimeupdate = tick; a.onloadedmetadata = () => { tick(); paintPins(); };
+  RV.tick = tick; a.ontimeupdate = tick; a.onloadedmetadata = () => { tick(); paintPins(); };
   a.onplay = a.onpause = () => { document.getElementById('rvplay').innerHTML = a.paused ? I.play : I.stop; };
   document.getElementById('rvplay').onclick = () => a.paused ? a.play().catch(() => {}) : a.pause();
   document.getElementById('rvb10').onclick = () => seek(a.currentTime - 10);
