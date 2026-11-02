@@ -571,6 +571,15 @@ body{letter-spacing:-.015em}
   .tape-bar textarea{height:44px;padding:12px 16px}
   .tape-bar .tb-send{height:44px;width:44px;padding:0;justify-content:center}.tape-bar .tb-send span{display:none}
 }
+
+.tape-clock{text-align:center;font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;margin:2px 0 0}
+.kpan:has(.gone){display:none}
+.knobs:has(.gone){grid-template-columns:1fr;max-width:150px}
+.tape-time{justify-content:space-between}
+@media (max-width:640px){.rv-wrap.dir .tape-clock{font-size:22px}.rv-wrap.dir .tape-track{margin:0}}
+.knobs:has(.gone){margin-left:auto;margin-right:auto}
+.rv-wrap .knobs:has(.gone){max-width:none;display:flex;justify-content:center}
+.tape-time #rvb10{order:1}.tape-time #rvspd{order:2}.tape-time #rvf10{order:3}
 </style>
 </head>
 <body>
@@ -885,7 +894,7 @@ async function directorHome() {
   let list; try { list = await api('/api/review'); } catch { list = []; }
   list = list.filter(e => e.kind === 'review' || e.versions);
   $app.innerHTML = dirTop(role) + `<div class="wrap"><h1 class="page-t">Olá, ${esc(role.name)}</h1>
-    <p class="page-s">Escolhe um episódio para ouvir. Podes deixar notas na timeline enquanto ouves, e a Sonoplastia vê-as todas.</p>
+    
     <div class="projs">${list.length ? list.map(e => e.latest ? `<a class="card fcard" href="#/revisao/${e.id}/${e.latest}"><b style="font-size:13px;color:var(--muted);letter-spacing:.04em">${esc(e.latest_label)}</b>
       <b style="font-size:18px;line-height:1.3">${esc(e.title)}</b><span>${e.notes ? `${e.notes} notas` : 'Sem notas ainda'}${e.open ? ` · ${e.open} abertas` : ''}</span></a>`
       : `<div class="card fcard" style="opacity:.6"><b style="font-size:18px">${esc(e.title)}</b><span>Ainda sem versão para ouvir.</span></div>`).join('') : '<div class="card empty">Ainda não há episódios.</div>'}</div></div>`;
@@ -955,17 +964,17 @@ function renderReview() {
         <div class="tape-title"><h1>${esc(first)}<span class="g">${esc(rest)}</span></h1>
           <select id="rvver" class="tape-ver" aria-label="Versão">${ready.map(v => `<option value="${v.id}" ${v.id === ver.id ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}</select></div>
         <div class="reels"><div class="reel">${REEL_SVG}</div><div class="reel rev">${REEL_SVG}</div></div>
+        <div class="tape-clock" id="rvtime">0:00 / ${mmss(ver.duration || 0)}</div>
         <div class="tape-track"><button class="tape-ic" id="rvnotesbtn" aria-label="Ver notas">${I.note}<em id="rvbadge">0</em></button>
-          <div><b>${esc(ver.label)}</b><small>${ver.source === 'app' ? 'Gerada pela app' : 'Carregada por ' + esc(ver.by || 'Sonoplastia')}</small></div><span></span></div>
+          <div><b>${esc(ver.label)}</b></div><span></span></div>
         <audio id="rvaudio" data-v="${ver.id}" preload="metadata" src="/api/episodes/${RV.id}/review/versions/${ver.id}/audio"></audio>
         <div class="tape-wave" id="rvbar" aria-label="Forma de onda"><canvas id="rvcanvas"></canvas><div class="rv-fill" id="rvfill" hidden></div><div id="rvpins"></div><div class="rv-head" id="rvhead"></div></div>
-        <div class="tape-time"><button class="tbtn" id="rvb10">−10 s</button><span id="rvtime">0:00 / ${mmss(ver.duration || 0)}</span>
-          <select id="rvspd" aria-label="Velocidade"><option value="1">1×</option><option value="1.25">1,25×</option><option value="1.5">1,5×</option><option value="0.75">0,75×</option></select><button class="tbtn" id="rvf10">+10 s</button></div>
+        <div class="tape-time"><button class="tbtn" id="rvb10">−10 s</button><select id="rvspd" aria-label="Velocidade"><option value="1">1×</option><option value="1.25">1,25×</option><option value="1.5">1,5×</option><option value="0.75">0,75×</option></select><button class="tbtn" id="rvf10">+10 s</button></div>
         <div class="rv-now" id="rvnow"></div>
         <div class="knobs"><div class="kpan"><button class="knob k1" aria-label="Ouvir ou pausar"><i class="tick"></i><span class="kic" id="rvplay">${I.play}</span></button></div>
-          <div class="kpan"><button class="knob k2" id="rvnoteknob" aria-label="${son ? 'Próxima nota' : 'Nova nota'}"><i class="tick" style="transform:rotate(40deg)"></i><span class="kic">${son ? I.chevR : I.note}</span></button></div></div>
-        <p class="tape-hint">${son ? 'O botão da direita salta para a nota seguinte.' : 'O botão da direita abre uma nota para o momento em que estás a ouvir.'} Espaço = ouvir/pausar, ← → = 5 s.</p></div>
-      <div class="tape-side" id="rvside"><div class="card tape-notes" id="rvnotesbox"><div class="tape-nh"><b id="rvcount"></b><button class="tape-x" id="rvnclose" aria-label="Fechar notas">×</button><span class="tape-sub">Todos veem as notas de todos.</span>
+          <div class="kpan"><button class="knob k2${son ? '' : ' gone'}" id="rvnoteknob" aria-label="${son ? 'Próxima nota' : 'Nova nota'}"><i class="tick" style="transform:rotate(40deg)"></i><span class="kic">${son ? I.chevR : I.note}</span></button></div></div>
+        </div>
+      <div class="tape-side" id="rvside"><div class="card tape-notes" id="rvnotesbox"><div class="tape-nh"><b id="rvcount"></b><button class="tape-x" id="rvnclose" aria-label="Fechar notas">×</button>
         <div style="display:flex;gap:6px"><button class="chip" data-f="todas">Todas</button><button class="chip" data-f="abertas">Abertas</button>${son ? '' : '<button class="chip" data-f="minhas">Minhas</button>'}</div></div><div id="rvnotes"></div></div></div>
       ${son ? '' : `<div class="tape-bar" id="rvsheet"><div class="rv-near" id="rvnear"></div>
         <div class="tb-row"><span class="tb-stamp" id="rvnt">0:00</span>
@@ -1122,7 +1131,7 @@ function bindPlayer(ver) {
     const txt = document.getElementById('rvtxt'), nt = document.getElementById('rvnt'), bar2 = document.getElementById('rvsheet');
     const paintNear = () => {
       const near = notes().filter(n => Math.abs(n.t - RV.noteT) <= 20), box = document.getElementById('rvnear');
-      box.innerHTML = near.length ? `<div class="hd">Já há notas por perto. Se é a mesma coisa, carrega em <b>Também reparei</b> em vez de repetir:</div>` + near.map(n => `<div class="it"><span><b>${esc(n.author)} · ${mmss(n.t)}</b> ${esc(n.text)}</span>${n.author !== role.name ? `<button class="rv-agree ${(n.agree || []).includes(role.name) ? 'on' : ''}" data-near="${n.id}">Também reparei${(n.agree || []).length ? ' · ' + n.agree.length : ''}</button>` : ''}</div>`).join('') : '';
+      box.innerHTML = near.length ? near.map(n => `<div class="it"><span><b>${esc(n.author)} · ${mmss(n.t)}</b> ${esc(n.text)}</span>${n.author !== role.name ? `<button class="rv-agree ${(n.agree || []).includes(role.name) ? 'on' : ''}" data-near="${n.id}">Também reparei${(n.agree || []).length ? ' · ' + n.agree.length : ''}</button>` : ''}</div>`).join('') : '';
       box.querySelectorAll('[data-near]').forEach(b => b.onclick = async () => { const n = RV.data.review.notes.find(x => x.id === b.dataset.near); try { Object.assign(n, await api(`/api/episodes/${RV.id}/review/notes/${n.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agree: { name: role.name, on: !(n.agree || []).includes(role.name) } }) })); } catch (e) { showErr(e); } paintNear(); paintNotes(); });
     };
     const stamp = () => { RV.noteT = a.currentTime || 0; nt.textContent = mmss(RV.noteT); paintNear(); };
