@@ -519,6 +519,58 @@ body{letter-spacing:-.015em}
 .flags,.banner{background:var(--warn-soft);color:var(--warn)}
 :focus-visible{outline:3px solid rgba(0,0,0,.4)}
 @media (max-width:900px){.side{border-bottom:0}}
+
+/* ===== revisão: caixa de notas em baixo e ecrã compacto ===== */
+.tape-x{display:none}
+.rv-wrap.dir{padding-bottom:120px}
+.tape-bar{position:fixed;left:0;right:0;bottom:0;z-index:35;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:#cbc2b8;box-shadow:0 -8px 26px rgba(0,0,0,.14)}
+.tape-bar .tb-row{max-width:1120px;margin:0 auto;display:flex;gap:10px;align-items:flex-end}
+.tape-bar .tb-stamp{flex:none;height:46px;min-width:58px;padding:0 14px;border-radius:980px;background:#111;color:#e6dfd6;font-weight:800;font-size:15px;display:grid;place-items:center;font-variant-numeric:tabular-nums}
+.tape-bar textarea{overflow:hidden;flex:1;min-width:0;height:46px;max-height:110px;border:0;border-radius:23px;background:#e6dfd6;color:#111;padding:13px 18px;font:inherit;font-size:16px;line-height:20px;resize:none;box-sizing:border-box;margin:0}
+.tape-bar textarea:focus{outline:2px solid #111}
+.tape-bar .tb-send{flex:none;height:46px;padding:0 20px;border-radius:980px;background:#111;color:#e6dfd6;font-weight:800;font-size:15px;display:inline-flex;align-items:center;gap:8px}
+.tape-bar .tb-send svg{width:18px;height:18px}
+.tape-bar .rv-near{max-width:1120px;margin:0 auto 10px;max-height:28vh;overflow:auto}
+.tape-bar .rv-near:empty{display:none}
+.tape-bar .rv-near .hd{color:rgba(0,0,0,.6)}
+.tape-bar .rv-near .it{background:rgba(0,0,0,.08);color:#111}
+@media (min-width:641px){
+  .tape .reels{width:150px;margin:16px 0 4px;gap:14px;display:flex}.tape .reel{width:68px;aspect-ratio:1}
+  .tape-wave{height:96px!important}
+  .knobs{max-width:230px;margin-left:auto;margin-right:auto}
+}
+@media (max-width:640px){
+  .rv-wrap.dir{padding:6px 12px 0!important;height:calc(100dvh - 60px);display:flex;flex-direction:column;box-sizing:border-box}
+  .rv-wrap.dir .rv-back{margin:0 0 4px!important;font-size:13px}
+  .rv-wrap.dir .tape{flex:1;min-height:0;height:auto;margin:0 -12px;padding:10px 16px 88px;display:flex;flex-direction:column}
+  .rv-wrap.dir .tape-main{flex:1;min-height:0;display:flex;flex-direction:column}
+  .rv-wrap.dir .tape-title h1{font-size:21px!important;line-height:1.1}
+  .rv-wrap.dir .tape-title{align-items:center}
+  .rv-wrap.dir .tape-ver{height:30px;font-size:12px}
+  .rv-wrap.dir .reels{display:flex;justify-content:center;gap:14px;margin:8px 0 2px;width:auto}
+  .rv-wrap.dir .reel{width:52px;height:52px;aspect-ratio:auto}
+  .rv-wrap.dir .tape-track{margin:2px 0;grid-template-columns:42px 1fr 42px}
+  .rv-wrap.dir .tape-track b{font-size:14px}.rv-wrap.dir .tape-track small{font-size:12px}
+  .rv-wrap.dir .tape-ic{width:42px;height:42px;background:rgba(0,0,0,.1)}
+  .rv-wrap.dir .tape-wave{flex:1;min-height:60px;max-height:210px;height:auto!important;margin:2px calc(var(--pad) * -1)!important}
+  .rv-wrap.dir .tape-time{margin:2px 0 4px;font-size:13px}
+  .rv-wrap.dir .tape-time .tbtn,.rv-wrap.dir .tape-time select{height:32px;padding:0 10px}
+  .rv-wrap.dir .rv-now{height:36px;margin:0 0 4px;overflow:hidden}
+  .rv-wrap.dir .rv-now div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:8px 12px;font-size:13px}
+  .rv-wrap.dir .knobs{display:flex;justify-content:center;gap:30px;margin:2px 0 0}
+  .rv-wrap.dir .kpan{background:none;padding:0;width:80px}
+  .rv-wrap.dir .knob em{display:none}
+  .rv-wrap.dir .tape-hint{display:none}
+  .rv-wrap.dir .tape-side{position:fixed;left:0;right:0;bottom:0;height:74dvh;z-index:50;background:#cbc2b8;border-radius:24px 24px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.3);transform:translateY(108%);transition:transform .24s ease;padding-top:6px}
+  .rv-wrap.dir .tape-side.open{transform:none}
+  .rv-wrap.dir .tape-notes{margin:0!important;height:100%;overflow:auto;border-radius:24px 24px 0 0!important;background:transparent!important}
+  .rv-wrap.dir .tape-x{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:#111;color:#e6dfd6;font-size:22px;line-height:1;order:3}
+  .rv-wrap.dir .tape-sub{display:none}
+  .tape-bar{padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px))}
+  .tape-bar .tb-stamp{height:44px;min-width:52px;padding:0 10px;font-size:14px}
+  .tape-bar textarea{height:44px;padding:12px 16px}
+  .tape-bar .tb-send{height:44px;width:44px;padding:0;justify-content:center}.tape-bar .tb-send span{display:none}
+}
 </style>
 </head>
 <body>
@@ -894,7 +946,7 @@ async function loadReview(vid) {
 function renderReview() {
   const role = getRole(), d = RV.data, rv = d.review, son = role.mode === 'sonoplastia';
   const ready = rv.versions.filter(v => v.state === 'pronto'), ver = ready.find(v => v.id === RV.v);
-  const back = `<p style="margin:0 0 10px"><a class="back" href="${son ? '#/notas' : '#/direcao'}">${I.chevL}${son ? 'Notas da Direção' : 'Episódios'}</a></p>`;
+  const back = `<p class="rv-back" style="margin:0 0 10px"><a class="back" href="${son ? '#/notas' : '#/direcao'}">${I.chevL}${son ? 'Notas da Direção' : 'Episódios'}</a></p>`;
   let body;
   if (ver) {
     const parts = d.meta.title.split(/\s*[,:·|–-]\s*/), first = parts[0], rest = parts.slice(1).join(' · ') || ver.label;
@@ -913,17 +965,17 @@ function renderReview() {
         <div class="knobs"><div class="kpan"><button class="knob k1" aria-label="Ouvir ou pausar"><i class="tick"></i><span class="kic" id="rvplay">${I.play}</span></button></div>
           <div class="kpan"><button class="knob k2" id="rvnoteknob" aria-label="${son ? 'Próxima nota' : 'Nova nota'}"><i class="tick" style="transform:rotate(40deg)"></i><span class="kic">${son ? I.chevR : I.note}</span></button></div></div>
         <p class="tape-hint">${son ? 'O botão da direita salta para a nota seguinte.' : 'O botão da direita abre uma nota para o momento em que estás a ouvir.'} Espaço = ouvir/pausar, ← → = 5 s.</p></div>
-      <div class="tape-side"><div class="card tape-notes" id="rvnotesbox"><div class="tape-nh"><b id="rvcount"></b><span class="tape-sub">Todos veem as notas de todos.</span>
+      <div class="tape-side" id="rvside"><div class="card tape-notes" id="rvnotesbox"><div class="tape-nh"><b id="rvcount"></b><button class="tape-x" id="rvnclose" aria-label="Fechar notas">×</button><span class="tape-sub">Todos veem as notas de todos.</span>
         <div style="display:flex;gap:6px"><button class="chip" data-f="todas">Todas</button><button class="chip" data-f="abertas">Abertas</button>${son ? '' : '<button class="chip" data-f="minhas">Minhas</button>'}</div></div><div id="rvnotes"></div></div></div>
-      ${son ? '' : `<div class="rv-compose tape-sheet" id="rvsheet"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b id="rvnt">Nota aos 0:00</b>
-        <label class="note" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rvpause" checked> Pausar ao escrever</label></div>
-        <textarea id="rvtxt" placeholder="Ex.: ouve-se um tiro e não é suposto."></textarea>
-        <div style="display:flex;gap:8px"><button class="btn blue" id="rvadd" style="flex:1">${I.note}Adicionar nota</button><button class="btn" id="rvcancel">Fechar</button></div><div class="rv-near" id="rvnear"></div></div>`}
+      ${son ? '' : `<div class="tape-bar" id="rvsheet"><div class="rv-near" id="rvnear"></div>
+        <div class="tb-row"><span class="tb-stamp" id="rvnt">0:00</span>
+          <textarea id="rvtxt" rows="1" placeholder="Escreve uma nota…" enterkeyhint="send"></textarea>
+          <button class="tb-send" id="rvadd" aria-label="Adicionar nota">${I.note}<span>Adicionar</span></button></div></div>`}
     </div>`;
   } else {
     body = `<h1 class="page-t" style="font-size:30px">${esc(d.meta.title)}</h1><div class="card empty" style="margin-top:20px">${rv.versions.some(v => v.state !== 'pronto' && v.state !== 'erro') ? 'A versão está a ser preparada…' : (son ? 'Ainda não há nenhuma versão para a Direção ouvir. Carrega uma acima.' : 'Ainda não há versão deste episódio para ouvir.')}</div>`;
   }
-  const inner = `<div id="rvpage" class="rv-wrap wide">${back}${son ? '<div id="rvvers"></div>' : ''}${body}</div>`;
+  const inner = `<div id="rvpage" class="rv-wrap wide${son ? '' : ' dir'}">${back}${son ? '<div id="rvvers"></div>' : ''}${body}</div>`;
   $app.innerHTML = son ? shell('notas', inner) : dirTop(role) + inner;
   if (son) renderVersions();
   if (ver) { bindPlayer(ver); bindTape(ver); }
@@ -988,9 +1040,7 @@ function bindTape(ver) {
   a.addEventListener('timeupdate', () => RV.tapeDraw && RV.tapeDraw()); a.addEventListener('loadedmetadata', () => draw());
   const sheet = document.getElementById('rvsheet'), txt = document.getElementById('rvtxt');
   if (sheet) {
-    document.getElementById('rvnoteknob').onclick = () => { sheet.classList.add('open'); txt.focus(); };
-    document.getElementById('rvcancel').onclick = () => { sheet.classList.remove('open'); txt.blur(); };
-    document.getElementById('rvadd').addEventListener('click', () => setTimeout(() => { if (!txt.value.trim()) sheet.classList.remove('open'); }, 400));
+    document.getElementById('rvnoteknob').onclick = () => txt.focus();
   } else {
     document.getElementById('rvnoteknob').onclick = () => {       // Sonoplastia: salta para a nota seguinte
       const ns = RV.data.review.notes.filter(x => x.version === ver.id).sort((x, y) => x.t - y.t); if (!ns.length) return;
@@ -998,7 +1048,9 @@ function bindTape(ver) {
       document.querySelector(`[data-n="${nx.id}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     };
   }
-  document.getElementById('rvnotesbtn').onclick = () => document.getElementById('rvnotesbox').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const side = document.getElementById('rvside'), compact = () => sheet && isMobile();
+  document.getElementById('rvnotesbtn').onclick = () => { if (compact()) side.classList.toggle('open'); else document.getElementById('rvnotesbox').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  document.getElementById('rvnclose').onclick = () => side.classList.remove('open');
   // arrastar na forma de onda = andar na fita
   let drag = null;
   wave.addEventListener('pointerdown', e => { drag = { x: e.clientX, t: a.currentTime, moved: false }; wave.setPointerCapture(e.pointerId); });
@@ -1019,6 +1071,7 @@ function bindPlayer(ver) {
     const t = a.currentTime || 0, p = Math.min(100, t / dur() * 100);
     document.getElementById('rvfill').style.width = p + '%'; document.getElementById('rvhead').style.left = p + '%';
     document.getElementById('rvtime').textContent = `${mmss(t)} / ${mmss(dur())}`;
+    const stp = document.getElementById('rvnt'), tx = document.getElementById('rvtxt'); if (stp && document.activeElement !== tx) stp.textContent = mmss(t);
     const cur = notes().filter(n => n.t <= t + 0.2).pop(); const id = cur && t - cur.t < 8 ? cur.id : null;
     const now = document.getElementById('rvnow');
     if (now) { const sig = id || ''; if (now.dataset.s !== sig) { now.dataset.s = sig; now.innerHTML = cur && id ? `<div data-nowid="${cur.id}"><b>${esc(cur.author || 'Direção')} · ${mmss(cur.t)}</b> ${esc(cur.text.length > 140 ? cur.text.slice(0, 140) + '…' : cur.text)}</div>` : ''; now.querySelector('[data-nowid]')?.addEventListener('click', () => setActive(cur.id, true)); } }
@@ -1066,24 +1119,27 @@ function bindPlayer(ver) {
   document.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { RV.filter = b.dataset.f; paintNotes(); });
   bar.onclick = e => { const r = bar.getBoundingClientRect(); seek((e.clientX - r.left) / r.width * dur()); };
   if (role.mode === 'direcao') {
-    const txt = document.getElementById('rvtxt'), nt = document.getElementById('rvnt');
+    const txt = document.getElementById('rvtxt'), nt = document.getElementById('rvnt'), bar2 = document.getElementById('rvsheet');
     const paintNear = () => {
       const near = notes().filter(n => Math.abs(n.t - RV.noteT) <= 20), box = document.getElementById('rvnear');
       box.innerHTML = near.length ? `<div class="hd">Já há notas por perto. Se é a mesma coisa, carrega em <b>Também reparei</b> em vez de repetir:</div>` + near.map(n => `<div class="it"><span><b>${esc(n.author)} · ${mmss(n.t)}</b> ${esc(n.text)}</span>${n.author !== role.name ? `<button class="rv-agree ${(n.agree || []).includes(role.name) ? 'on' : ''}" data-near="${n.id}">Também reparei${(n.agree || []).length ? ' · ' + n.agree.length : ''}</button>` : ''}</div>`).join('') : '';
       box.querySelectorAll('[data-near]').forEach(b => b.onclick = async () => { const n = RV.data.review.notes.find(x => x.id === b.dataset.near); try { Object.assign(n, await api(`/api/episodes/${RV.id}/review/notes/${n.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agree: { name: role.name, on: !(n.agree || []).includes(role.name) } }) })); } catch (e) { showErr(e); } paintNear(); paintNotes(); });
     };
-    const stamp = () => { RV.noteT = a.currentTime || 0; nt.textContent = `Nota aos ${mmss(RV.noteT)}`; paintNear(); };
-    txt.onfocus = () => { stamp(); if (document.getElementById('rvpause').checked && !a.paused) { a.pause(); RV.pausedByUs = true; } };
+    const stamp = () => { RV.noteT = a.currentTime || 0; nt.textContent = mmss(RV.noteT); paintNear(); };
+    txt.onfocus = () => { stamp(); if (!a.paused) { a.pause(); RV.pausedByUs = true; } };
+    txt.onblur = () => setTimeout(() => { if (document.activeElement !== txt && !txt.value.trim() && RV.pausedByUs) { RV.pausedByUs = false; a.play().catch(() => {}); } }, 200);
+    txt.oninput = () => { txt.style.height = 'auto'; txt.style.height = Math.min(110, txt.scrollHeight) + 'px'; txt.style.overflowY = txt.scrollHeight > 110 ? 'auto' : 'hidden'; };
+    bar2.addEventListener('mousedown', e => { if (e.target.closest('button')) e.preventDefault(); });
     const add = async () => {
       const text = txt.value.trim(); if (!text) return;
       try {
         const n = await api(`/api/episodes/${RV.id}/review/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: ver.id, t: RV.noteT, text, author: role.name }) });
-        RV.data.review.notes.push(n); txt.value = ''; RV.active = n.id; paintNotes(); paintPins();
+        RV.data.review.notes.push(n); txt.value = ''; txt.style.height = ''; txt.blur(); RV.active = n.id; paintNotes(); paintPins();
         if (RV.pausedByUs) { RV.pausedByUs = false; a.play().catch(() => {}); }
       } catch (e) { alert(e.message); }
     };
     document.getElementById('rvadd').onclick = add;
-    txt.onkeydown = e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); add(); } };
+    txt.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); add(); } else if (e.key === 'Escape') { txt.blur(); } };
   }
   paintNotes(); paintPins(); tick();
 }
