@@ -1138,13 +1138,16 @@ function bindPlayer(ver) {
     txt.onfocus = () => { stamp(); if (!a.paused) { a.pause(); RV.pausedByUs = true; } };
     txt.onblur = () => setTimeout(() => { if (document.activeElement !== txt && !txt.value.trim() && RV.pausedByUs) { RV.pausedByUs = false; a.play().catch(() => {}); } }, 200);
     bar2.addEventListener('mousedown', e => { if (e.target.closest('button')) e.preventDefault(); });
+    let sending = false;
     const add = async () => {
-      const text = txt.value.trim(); if (!text) return;
+      const text = txt.value.trim(); if (!text || sending) return;
+      sending = true; txt.value = '';       // esvazia já: o mesmo toque não pode enviar duas vezes
       try {
         const n = await api(`/api/episodes/${RV.id}/review/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: ver.id, t: RV.noteT, text, author: role.name }) });
-        RV.data.review.notes.push(n); txt.value = ''; txt.blur(); RV.active = n.id; paintNotes(); paintPins();
+        RV.data.review.notes.push(n); txt.blur(); RV.active = n.id; paintNotes(); paintPins();
         if (RV.pausedByUs) { RV.pausedByUs = false; a.play().catch(() => {}); }
-      } catch (e) { alert(e.message); }
+      } catch (e) { txt.value = text; alert(e.message); }
+      sending = false;
     };
     document.getElementById('rvform').onsubmit = e => { e.preventDefault(); add(); };
     document.getElementById('rvadd').addEventListener('pointerdown', e => { e.preventDefault(); add(); });   // um toque só: envia sem fechar o teclado primeiro
