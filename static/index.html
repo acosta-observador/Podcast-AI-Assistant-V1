@@ -580,6 +580,12 @@ body{letter-spacing:-.015em}
 .knobs:has(.gone){margin-left:auto;margin-right:auto}
 .rv-wrap .knobs:has(.gone){max-width:none;display:flex;justify-content:center}
 .tape-time #rvb10{order:1}.tape-time #rvspd{order:2}.tape-time #rvf10{order:3}
+
+.dchip{display:inline-block;padding:2px 10px;border-radius:980px;color:#fff;font-size:12px;font-weight:800;letter-spacing:0;line-height:1.5;vertical-align:1px}
+.tape .rv-pin{top:8px!important;bottom:auto!important;height:30px!important;width:14px!important;margin-left:-7px!important;background:transparent!important;position:absolute}
+.tape .rv-pin::after{content:'';position:absolute;left:50%;top:0;bottom:0;width:4px;margin-left:-2px;border-radius:2px;background:var(--c,#111)}
+.tape .rv-pin.feita::after{opacity:.35}
+.tape .rv-pin.on::after{width:6px;margin-left:-3px;box-shadow:0 0 0 2px #111}
 </style>
 </head>
 <body>
@@ -934,6 +940,8 @@ async function notesHome() {
 
 /* ---------- Revisão: player com notas na timeline ---------- */
 const REEL_SVG = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="49" fill="#e6dfd6"/><g fill="none" stroke="#111" stroke-width="13" stroke-linecap="round"><path d="M50 18 A32 32 0 0 1 77 34"/><path d="M80 62 A32 32 0 0 1 56 81"/><path d="M26 71 A32 32 0 0 1 23 38"/></g><circle cx="50" cy="50" r="17" fill="#111"/><path d="M46 43 L58 50 L46 57 Z" fill="#cbc2b8"/></svg>';
+const DCOL = { Miguel: '#d9822b', Sara: '#c2477a', 'Tânia': '#2f8f6b', 'João': '#3b6fd1', Raquel: '#7a52c7' };
+const dchip = n => `<span class="dchip" style="background:${DCOL[n] || '#111'}">${esc(n || 'Direção')}</span>`;
 const isMobile = () => window.matchMedia('(max-width: 640px)').matches;
 const RV = { id: null, v: null, data: null, poll: null, noteT: 0, pausedByUs: false, editing: null, replying: null, filter: 'todas', active: null };
 const mmss = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s % 60).padStart(2, '0'); };
@@ -1073,7 +1081,7 @@ function bindPlayer(ver) {
   const role = getRole(), a = document.getElementById('rvaudio'), bar = document.getElementById('rvbar');
   const dur = () => (a.duration && isFinite(a.duration)) ? a.duration : (ver.duration || 1);
   const notes = () => RV.data.review.notes.filter(n => n.version === ver.id).sort((x, y) => x.t - y.t);
-  const paintPins = () => { document.getElementById('rvpins').innerHTML = notes().map(n => `<button class="rv-pin ${n.status === 'feita' ? 'feita' : ''} ${RV.active === n.id ? 'on' : ''}" style="left:${Math.min(100, n.t / dur() * 100)}%" data-pin="${n.id}" title="${mmss(n.t)} · ${esc(n.author)}: ${esc(n.text.slice(0, 80))}" aria-label="Nota aos ${mmss(n.t)}"></button>`).join(''); document.querySelectorAll('[data-pin]').forEach(p => p.onclick = e => { e.stopPropagation(); const n = notes().find(x => x.id === p.dataset.pin); seek(n.t); setActive(n.id, true); }); };
+  const paintPins = () => { document.getElementById('rvpins').innerHTML = notes().map(n => `<button class="rv-pin ${n.status === 'feita' ? 'feita' : ''} ${RV.active === n.id ? 'on' : ''}" style="left:${Math.min(100, n.t / dur() * 100)}%;--c:${DCOL[n.author] || '#111'}" data-pin="${n.id}" title="${mmss(n.t)} · ${esc(n.author)}: ${esc(n.text.slice(0, 80))}" aria-label="Nota aos ${mmss(n.t)}"></button>`).join(''); document.querySelectorAll('[data-pin]').forEach(p => p.onclick = e => { e.stopPropagation(); const n = notes().find(x => x.id === p.dataset.pin); seek(n.t); setActive(n.id, true); }); };
   const seek = t => { a.currentTime = Math.max(0, Math.min(dur(), t)); tick(); };
   const setActive = (id, scroll) => { RV.active = id; paintNotes(); paintPins(); if (scroll) document.querySelector(`[data-n="${id}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
   const tick = () => {
@@ -1083,7 +1091,7 @@ function bindPlayer(ver) {
     const stp = document.getElementById('rvnt'), tx = document.getElementById('rvtxt'); if (stp && document.activeElement !== tx) stp.textContent = mmss(t);
     const cur = notes().filter(n => n.t <= t + 0.2).pop(); const id = cur && t - cur.t < 8 ? cur.id : null;
     const now = document.getElementById('rvnow');
-    if (now) { const sig = id || ''; if (now.dataset.s !== sig) { now.dataset.s = sig; now.innerHTML = cur && id ? `<div data-nowid="${cur.id}"><b>${esc(cur.author || 'Direção')} · ${mmss(cur.t)}</b> ${esc(cur.text.length > 140 ? cur.text.slice(0, 140) + '…' : cur.text)}</div>` : ''; now.querySelector('[data-nowid]')?.addEventListener('click', () => setActive(cur.id, true)); } }
+    if (now) { const sig = id || ''; if (now.dataset.s !== sig) { now.dataset.s = sig; now.innerHTML = cur && id ? `<div data-nowid="${cur.id}">${dchip(cur.author)} <b>${mmss(cur.t)}</b> ${esc(cur.text.length > 140 ? cur.text.slice(0, 140) + '…' : cur.text)}</div>` : ''; now.querySelector('[data-nowid]')?.addEventListener('click', () => setActive(cur.id, true)); } }
     if (id !== RV.active && !a.paused) { RV.active = id; paintNotes(); paintPins(); }
   };
   function paintNotes() {
@@ -1093,11 +1101,11 @@ function bindPlayer(ver) {
     document.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === RV.filter));
     document.getElementById('rvnotes').innerHTML = list.length ? list.map(n => `<div class="rv-note ${n.status === 'feita' ? 'feita' : ''} ${RV.active === n.id ? 'on' : ''}" data-n="${n.id}">
       <button class="rv-t" data-seek="${n.t}" title="Ir para este momento">${mmss(n.t)}</button>
-      <div><div><span class="rv-au">${esc(n.author || 'Direção')}</span>${own && n.author === own ? '<span class="rv-mine">tu</span>' : ''} ${n.status === 'feita' ? `<span class="pill ok">Feita${n.done_by ? ' por ' + esc(n.done_by) : ''}</span>` : ''}</div>
+      <div><div><span class="rv-au">${dchip(n.author)}</span>${own && n.author === own ? '<span class="rv-mine">tu</span>' : ''} ${n.status === 'feita' ? `<span class="pill ok">Feita${n.done_by ? ' por ' + esc(n.done_by) : ''}</span>` : ''}</div>
         ${RV.editing === n.id ? `<textarea class="rv-edit" data-edit="${n.id}" style="width:100%;margin-top:6px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:8px 10px;font:inherit;color:var(--text)" rows="2">${esc(n.text)}</textarea>
           <div style="display:flex;gap:8px;margin-top:6px"><button class="btn blue" data-save="${n.id}">Guardar</button><button class="btn" data-cancel>Cancelar</button></div>` : `<div class="rv-text">${esc(n.text)}</div>`}
         ${(n.agree || []).length || (own && n.author !== own) ? `<div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">${own && n.author !== own ? `<button class="rv-agree ${(n.agree || []).includes(own) ? 'on' : ''}" data-agree="${n.id}">Também reparei${(n.agree || []).length ? ' · ' + n.agree.length : ''}</button>` : `<span class="note">${n.agree.length} também reparou(aram)</span>`}${(n.agree || []).length && own && n.author !== own ? `<span class="note">${n.agree.map(esc).join(', ')}</span>` : ''}</div>` : ''}
-        ${n.reply ? `<div class="rv-reply"><b>${esc(n.reply_by || 'Sonoplastia')}:</b> ${esc(n.reply)}</div>` : ''}
+        ${n.reply ? `<div class="rv-reply">${dchip(n.reply_by || 'Sonoplastia')} ${esc(n.reply)}</div>` : ''}
         ${RV.replying === n.id ? `<textarea class="rv-edit" data-reply="${n.id}" style="width:100%;margin-top:8px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:8px 10px;font:inherit;color:var(--text)" rows="2" placeholder="Resposta para a Direção">${esc(n.reply || '')}</textarea>
           <div style="display:flex;gap:8px;margin-top:6px"><button class="btn blue" data-savereply="${n.id}">Enviar resposta</button><button class="btn" data-cancel>Cancelar</button></div>` : ''}</div>
       <div class="rv-act">${son ? `<button data-done="${n.id}">${n.status === 'feita' ? 'Reabrir' : 'Marcar como feita'}</button><button data-rep="${n.id}">Responder</button>` : ''}
@@ -1131,7 +1139,7 @@ function bindPlayer(ver) {
     const txt = document.getElementById('rvtxt'), nt = document.getElementById('rvnt'), bar2 = document.getElementById('rvsheet');
     const paintNear = () => {
       const near = notes().filter(n => Math.abs(n.t - RV.noteT) <= 20), box = document.getElementById('rvnear');
-      box.innerHTML = near.length ? near.map(n => `<div class="it"><span><b>${esc(n.author)} · ${mmss(n.t)}</b> ${esc(n.text)}</span>${n.author !== role.name ? `<button class="rv-agree ${(n.agree || []).includes(role.name) ? 'on' : ''}" data-near="${n.id}">Também reparei${(n.agree || []).length ? ' · ' + n.agree.length : ''}</button>` : ''}</div>`).join('') : '';
+      box.innerHTML = near.length ? near.map(n => `<div class="it"><span>${dchip(n.author)} <b>${mmss(n.t)}</b> ${esc(n.text)}</span>${n.author !== role.name ? `<button class="rv-agree ${(n.agree || []).includes(role.name) ? 'on' : ''}" data-near="${n.id}">Também reparei${(n.agree || []).length ? ' · ' + n.agree.length : ''}</button>` : ''}</div>`).join('') : '';
       box.querySelectorAll('[data-near]').forEach(b => b.onclick = async () => { const n = RV.data.review.notes.find(x => x.id === b.dataset.near); try { Object.assign(n, await api(`/api/episodes/${RV.id}/review/notes/${n.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agree: { name: role.name, on: !(n.agree || []).includes(role.name) } }) })); } catch (e) { showErr(e); } paintNear(); paintNotes(); });
     };
     const stamp = () => { RV.noteT = a.currentTime || 0; nt.textContent = mmss(RV.noteT); paintNear(); };
