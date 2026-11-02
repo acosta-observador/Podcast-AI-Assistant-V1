@@ -1255,6 +1255,45 @@ def _safe_peaks(path: Path, n: int = 240) -> list:
         return []
 
 
+def _norm_title(t: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", (t or "").lower())
+
+
+def _link_by_title(d: Path) -> None:
+    """Episódio de revisão sem guião ligado: procura no AutoTake um com o mesmo nome."""
+    meta = read_json(d / "meta.json", {})
+    if meta.get("kind") != "review" or meta.get("scenes_from"):
+        return
+    mine = _norm_title(meta.get("title", ""))
+    for p in DATA.iterdir():
+        m = read_json(p / "meta.json")
+        if m and m.get("kind") != "review" and read_json(p / "result.json"):
+            other = _norm_title(m.get("title", ""))
+            if mine and other and (mine == other or mine in other or other in mine):
+                meta["scenes_from"] = p.name
+                write_json(d / "meta.json", meta)
+                return
+
+
+def _scenes_source(d: Path):
+    """Pasta do episódio do AutoTake de onde vêm as cenas: o próprio, ou aquele a que este episódio de revisão está ligado."""
+    _link_by_title(d)
+    meta = read_json(d / "meta.json", {})
+    for cand in (d, DATA / str(meta.get("scenes_from") or "-")):
+        if cand.is_dir() and read_json(cand / "result.json"):
+            return cand
+    return None
+
+
+def _scenes_from_script(d: Path) -> list[dict]:
+    src = _scenes_source(d)
+    if not src:
+        return []
+    result = read_json(src / "result.json")
+    tl = sounddesign.timeline(result, read_json(src / "selections.json", {}), scenes_of(src, result))
+    return [{"n": sc["n"], "title": sc["title"], "start": sc["start"]} for sc in tl["scenes"]]
+
+
 def run_review_convert(d: Path, vid: str, src: Path) -> None:
     """Converte o ficheiro carregado para MP3 (leve e compatível com todos os browsers)."""
     try:
@@ -1263,7 +1302,12 @@ def run_review_convert(d: Path, vid: str, src: Path) -> None:
         dur = audio_tools.probe(dst)["duration"]
         src.unlink(missing_ok=True)
         peaks = _safe_peaks(dst)
-        update_review(d, lambda rv: (_version(rv, vid) or {}).update(state="pronto", file=dst.name, duration=round(dur, 1), message="", peaks=peaks))
+        try:
+            marks = _clean_scenes(_scenes_from_script(d), dur)
+        except Exception:
+            traceback.print_exc()
+            marks = []
+        update_review(d, lambda rv: (_version(rv, vid) or {}).update(state="pronto", file=dst.name, duration=round(dur, 1), message="", peaks=peaks, scenes=marks))
     except Exception as e:
         traceback.print_exc()
         update_review(d, lambda rv: (_version(rv, vid) or {}).update(state="erro", message=str(e)))
@@ -1347,14 +1391,14 @@ def review_overview():
             continue
         rv = read_review(d)
         ready = [v for v in rv["versions"] if v["state"] == "pronto"]
-        out.append({"id": meta["id"], "title": meta["title"], "kind": meta.get("kind", "autotake"), "created": meta.get("created"), "versions": len(ready),
+        out.append({"id": meta["id"], "title": meta["title"], "has_script": bool(read_json(d / "result.json")), "kind": meta.get("kind", "autotake"), "created": meta.get("created"), "versions": len(ready),
                     "latest": ready[-1]["id"] if ready else None, "latest_label": ready[-1]["label"] if ready else None,
                     "notes": len(rv["notes"]), "open": sum(1 for n in rv["notes"] if n.get("status") != "feita")})
     return out
 
 
 @app.post("/api/review/episodes")
-def upload_review_episode(title: str = Form(...), label: str = Form(""), by: str = Form("Sonoplastia"), audio: UploadFile = File(...)):
+def upload_review_episode(title: str = Form(...), label: str = Form(""), by: str = Form("Sonoplastia"), script_from: str = Form(""), audio: UploadFile = File(...)):
     """A Sonoplastia carrega um episódio para a Direção ouvir. Se já existir um com o mesmo título, entra como nova versão."""
     title = title.strip()[:120]
     if not title:
@@ -1370,6 +1414,10 @@ def upload_review_episode(title: str = Form(...), label: str = Form(""), by: str
         d = DATA / eid
         d.mkdir(parents=True)
         write_json(d / "meta.json", {"id": eid, "title": title, "created": time.time(), "kind": "review"})
+    if script_from and re.fullmatch(r"[\w-]+", script_from) and (DATA / script_from).is_dir():
+        meta = read_json(d / "meta.json")
+        meta["scenes_from"] = script_from
+        write_json(d / "meta.json", meta)
     v = _new_version(d, label, "upload", by, "a converter")
     src = d / "review" / f"{v['id']}-original{Path(audio.filename or 'x.wav').suffix.lower()}"
     with open(src, "wb") as out:
@@ -1397,8 +1445,13 @@ def get_review(eid: str):
             peaks = _safe_peaks(p)
             update_review(d, lambda r, vid=v["id"], pk=peaks: (_version(r, vid) or {}).update(peaks=pk))
             v["peaks"] = peaks
+    for v in rv["versions"]:                       # versões carregadas antes de haver cenas: preenche uma vez, a partir do guião
+        if v["state"] == "pronto" and "scenes" not in v:
+            marks = _clean_scenes(_scenes_from_script(d), v.get("duration") or 0)
+            update_review(d, lambda r, vid=v["id"], m=marks: (_version(r, vid) or {}).update(scenes=m))
+            v["scenes"] = marks
     return {"meta": read_json(d / "meta.json"), "review": rv, "directors": DIRECTORS,
-            "can_mix": bool(read_json(d / "result.json"))}
+            "can_mix": bool(read_json(d / "result.json")), "can_scenes": _scenes_source(d) is not None}
 
 
 @app.post("/api/episodes/{eid}/review/versions")
@@ -1452,13 +1505,12 @@ def put_version_scenes(eid: str, vid: str, body: dict):
 
 @app.post("/api/episodes/{eid}/review/versions/{vid}/scenes/from-structure")
 def scenes_from_structure(eid: str, vid: str):
-    """Copia o início das cenas da Estrutura Plus (serve quando o áudio carregado tem a mesma montagem)."""
+    """Copia o início das cenas do guião (serve quando o áudio tem a mesma montagem do AutoTake)."""
     d = ep_dir(eid)
-    result = read_json(d / "result.json")
-    if not result:
-        raise HTTPException(400, "Este episódio não tem Estrutura Plus")
-    tl = sounddesign.timeline(result, read_json(d / "selections.json", {}), scenes_of(d, result))
-    return put_version_scenes(eid, vid, {"scenes": [{"n": sc["n"], "title": sc["title"], "start": sc["start"]} for sc in tl["scenes"]]})
+    marks = _scenes_from_script(d)
+    if not marks:
+        raise HTTPException(400, "Este episódio não tem guião processado no AutoTake")
+    return put_version_scenes(eid, vid, {"scenes": marks})
 
 
 @app.delete("/api/episodes/{eid}/review/versions/{vid}")
