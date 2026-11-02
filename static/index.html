@@ -526,8 +526,8 @@ body{letter-spacing:-.015em}
 .tape-bar{position:fixed;left:0;right:0;bottom:0;z-index:35;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:#cbc2b8;box-shadow:0 -8px 26px rgba(0,0,0,.14)}
 .tape-bar .tb-row{max-width:1120px;margin:0 auto;display:flex;gap:10px;align-items:flex-end}
 .tape-bar .tb-stamp{flex:none;height:46px;min-width:58px;padding:0 14px;border-radius:980px;background:#111;color:#e6dfd6;font-weight:800;font-size:15px;display:grid;place-items:center;font-variant-numeric:tabular-nums}
-.tape-bar textarea{overflow:hidden;flex:1;min-width:0;height:46px;max-height:110px;border:0;border-radius:23px;background:#e6dfd6;color:#111;padding:13px 18px;font:inherit;font-size:16px;line-height:20px;resize:none;box-sizing:border-box;margin:0}
-.tape-bar textarea:focus{outline:2px solid #111}
+.tape-bar input{flex:1;min-width:0;height:46px;max-height:110px;border:0;border-radius:23px;background:#e6dfd6;color:#111;padding:0 18px;font:inherit;font-size:16px;box-sizing:border-box;margin:0}
+.tape-bar input:focus{outline:2px solid #111}
 .tape-bar .tb-send{flex:none;height:46px;padding:0 20px;border-radius:980px;background:#111;color:#e6dfd6;font-weight:800;font-size:15px;display:inline-flex;align-items:center;gap:8px}
 .tape-bar .tb-send svg{width:18px;height:18px}
 .tape-bar .rv-near{max-width:1120px;margin:0 auto 10px;max-height:28vh;overflow:auto}
@@ -568,7 +568,7 @@ body{letter-spacing:-.015em}
   .rv-wrap.dir .tape-sub{display:none}
   .tape-bar{padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px))}
   .tape-bar .tb-stamp{height:44px;min-width:52px;padding:0 10px;font-size:14px}
-  .tape-bar textarea{height:44px;padding:12px 16px}
+  .tape-bar input{height:44px;padding:0 16px}
   .tape-bar .tb-send{height:44px;width:44px;padding:0;justify-content:center}.tape-bar .tb-send span{display:none}
 }
 
@@ -977,9 +977,9 @@ function renderReview() {
       <div class="tape-side" id="rvside"><div class="card tape-notes" id="rvnotesbox"><div class="tape-nh"><b id="rvcount"></b><button class="tape-x" id="rvnclose" aria-label="Fechar notas">×</button>
         <div style="display:flex;gap:6px"><button class="chip" data-f="todas">Todas</button><button class="chip" data-f="abertas">Abertas</button>${son ? '' : '<button class="chip" data-f="minhas">Minhas</button>'}</div></div><div id="rvnotes"></div></div></div>
       ${son ? '' : `<div class="tape-bar" id="rvsheet"><div class="rv-near" id="rvnear"></div>
-        <div class="tb-row"><span class="tb-stamp" id="rvnt">0:00</span>
-          <textarea id="rvtxt" rows="1" placeholder="Escreve uma nota…" enterkeyhint="send"></textarea>
-          <button class="tb-send" id="rvadd" aria-label="Adicionar nota">${I.note}<span>Adicionar</span></button></div></div>`}
+        <form class="tb-row" id="rvform" autocomplete="off"><span class="tb-stamp" id="rvnt">0:00</span>
+          <input type="text" id="rvtxt" placeholder="Escreve uma nota…" enterkeyhint="send" autocapitalize="sentences" autocomplete="off">
+          <button type="submit" class="tb-send" id="rvadd" aria-label="Adicionar nota"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span>Adicionar</span></button></form></div>`}
     </div>`;
   } else {
     body = `<h1 class="page-t" style="font-size:30px">${esc(d.meta.title)}</h1><div class="card empty" style="margin-top:20px">${rv.versions.some(v => v.state !== 'pronto' && v.state !== 'erro') ? 'A versão está a ser preparada…' : (son ? 'Ainda não há nenhuma versão para a Direção ouvir. Carrega uma acima.' : 'Ainda não há versão deste episódio para ouvir.')}</div>`;
@@ -1137,18 +1137,18 @@ function bindPlayer(ver) {
     const stamp = () => { RV.noteT = a.currentTime || 0; nt.textContent = mmss(RV.noteT); paintNear(); };
     txt.onfocus = () => { stamp(); if (!a.paused) { a.pause(); RV.pausedByUs = true; } };
     txt.onblur = () => setTimeout(() => { if (document.activeElement !== txt && !txt.value.trim() && RV.pausedByUs) { RV.pausedByUs = false; a.play().catch(() => {}); } }, 200);
-    txt.oninput = () => { txt.style.height = 'auto'; txt.style.height = Math.min(110, txt.scrollHeight) + 'px'; txt.style.overflowY = txt.scrollHeight > 110 ? 'auto' : 'hidden'; };
     bar2.addEventListener('mousedown', e => { if (e.target.closest('button')) e.preventDefault(); });
     const add = async () => {
       const text = txt.value.trim(); if (!text) return;
       try {
         const n = await api(`/api/episodes/${RV.id}/review/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: ver.id, t: RV.noteT, text, author: role.name }) });
-        RV.data.review.notes.push(n); txt.value = ''; txt.style.height = ''; txt.blur(); RV.active = n.id; paintNotes(); paintPins();
+        RV.data.review.notes.push(n); txt.value = ''; txt.blur(); RV.active = n.id; paintNotes(); paintPins();
         if (RV.pausedByUs) { RV.pausedByUs = false; a.play().catch(() => {}); }
       } catch (e) { alert(e.message); }
     };
-    document.getElementById('rvadd').onclick = add;
-    txt.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); add(); } else if (e.key === 'Escape') { txt.blur(); } };
+    document.getElementById('rvform').onsubmit = e => { e.preventDefault(); add(); };
+    document.getElementById('rvadd').addEventListener('pointerdown', e => { e.preventDefault(); add(); });   // um toque só: envia sem fechar o teclado primeiro
+    txt.onkeydown = e => { if (e.key === 'Escape') txt.blur(); };
   }
   paintNotes(); paintPins(); tick();
 }
