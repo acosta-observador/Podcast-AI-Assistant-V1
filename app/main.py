@@ -1296,10 +1296,25 @@ def run_review_mix(d: Path, vid: str) -> None:
         shutil.rmtree(work, ignore_errors=True)
         dur = audio_tools.probe(dst)["duration"]
         peaks = _safe_peaks(dst)
-        update_review(d, lambda rv: (_version(rv, vid) or {}).update(state="pronto", file=dst.name, duration=round(dur, 1), message="", peaks=peaks))
+        marks = _clean_scenes([{"n": sc["n"], "title": sc["title"], "start": sc["start"]} for sc in tl["scenes"]], dur)
+        update_review(d, lambda rv: (_version(rv, vid) or {}).update(state="pronto", file=dst.name, duration=round(dur, 1), message="", peaks=peaks, scenes=marks))
     except Exception as e:
         traceback.print_exc()
         update_review(d, lambda rv: (_version(rv, vid) or {}).update(state="erro", message=str(e)))
+
+
+def _clean_scenes(raw, dur: float) -> list[dict]:
+    """Início de cada cena na versão: ordenados, dentro da duração, com número e nome."""
+    out = []
+    for i, x in enumerate(raw or []):
+        try:
+            start = float(x.get("start"))
+        except (TypeError, ValueError):
+            continue
+        if 0 <= start <= (dur or 1e9):
+            out.append({"n": x.get("n") or i + 1, "title": str(x.get("title") or "").strip()[:80], "start": round(start, 2)})
+    out.sort(key=lambda m: m["start"])
+    return out[:60]
 
 
 def _new_version(d: Path, label: str, source: str, by: str, state: str) -> dict:
@@ -1417,6 +1432,33 @@ def version_audio(eid: str, vid: str):
     if not p.exists():
         raise HTTPException(404, "Versão ainda não está pronta")
     return FileResponse(p, media_type="audio/mpeg")
+
+
+@app.put("/api/episodes/{eid}/review/versions/{vid}/scenes")
+def put_version_scenes(eid: str, vid: str, body: dict):
+    d = ep_dir(eid)
+    if not re.fullmatch(r"v\d+", vid):
+        raise HTTPException(404)
+    got = {}
+
+    def apply(rv):
+        v = _version(rv, vid)
+        if not v:
+            raise HTTPException(404, "Versão não encontrada")
+        v["scenes"] = got["s"] = _clean_scenes(body.get("scenes"), v.get("duration") or 0)
+    update_review(d, apply)
+    return got["s"]
+
+
+@app.post("/api/episodes/{eid}/review/versions/{vid}/scenes/from-structure")
+def scenes_from_structure(eid: str, vid: str):
+    """Copia o início das cenas da Estrutura Plus (serve quando o áudio carregado tem a mesma montagem)."""
+    d = ep_dir(eid)
+    result = read_json(d / "result.json")
+    if not result:
+        raise HTTPException(400, "Este episódio não tem Estrutura Plus")
+    tl = sounddesign.timeline(result, read_json(d / "selections.json", {}), scenes_of(d, result))
+    return put_version_scenes(eid, vid, {"scenes": [{"n": sc["n"], "title": sc["title"], "start": sc["start"]} for sc in tl["scenes"]]})
 
 
 @app.delete("/api/episodes/{eid}/review/versions/{vid}")

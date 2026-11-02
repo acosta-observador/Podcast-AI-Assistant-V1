@@ -586,6 +586,8 @@ body{letter-spacing:-.015em}
 .tape .rv-pin::after{content:'';position:absolute;left:50%;top:0;bottom:0;width:4px;margin-left:-2px;border-radius:2px;background:var(--c,#111)}
 .tape .rv-pin.feita::after{opacity:.35}
 .tape .rv-pin.on::after{width:6px;margin-left:-3px;box-shadow:0 0 0 2px #111}
+
+.scn{display:inline-block;margin-left:6px;padding:2px 9px;border-radius:980px;background:rgba(0,0,0,.1);color:#111;font-size:11px;font-weight:800;vertical-align:1px}
 </style>
 </head>
 <body>
@@ -942,6 +944,8 @@ async function notesHome() {
 const REEL_SVG = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="49" fill="#e6dfd6"/><g fill="none" stroke="#111" stroke-width="13" stroke-linecap="round"><path d="M50 18 A32 32 0 0 1 77 34"/><path d="M80 62 A32 32 0 0 1 56 81"/><path d="M26 71 A32 32 0 0 1 23 38"/></g><circle cx="50" cy="50" r="17" fill="#111"/><path d="M46 43 L58 50 L46 57 Z" fill="#cbc2b8"/></svg>';
 const DCOL = { Miguel: '#d9822b', Sara: '#c2477a', 'Tânia': '#2f8f6b', 'João': '#3b6fd1', Raquel: '#7a52c7' };
 const dchip = n => `<span class="dchip" style="background:${DCOL[n] || '#111'}">${esc(n || 'Direção')}</span>`;
+const sceneAt = (ver, t) => (ver.scenes || []).filter(x => x.start <= t + 0.05).pop() || null;
+const sceneTag = (ver, t) => { const sc = sceneAt(ver, t); return sc ? `<span class="scn">Cena ${sc.n}</span>` : ''; };
 const isMobile = () => window.matchMedia('(max-width: 640px)').matches;
 const RV = { id: null, v: null, data: null, poll: null, noteT: 0, pausedByUs: false, editing: null, replying: null, filter: 'todas', active: null };
 const mmss = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s % 60).padStart(2, '0'); };
@@ -998,6 +1002,30 @@ function renderReview() {
   if (ver) { bindPlayer(ver); bindTape(ver); }
 }
 
+function sceneEditor() {
+  const ver = RV.data.review.versions.find(v => v.id === RV.v && v.state === 'pronto'); if (!ver) return '';
+  const scs = ver.scenes || [];
+  return `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)"><b style="font-size:14px">Cenas desta versão</b>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">${scs.length ? scs.map((x, k) => `<span class="chip" style="display:inline-flex;align-items:center;gap:6px"><button data-scseek="${x.start}" style="font-weight:700">Cena ${x.n} · ${mmss(x.start)}</button><button data-scdel="${k}" aria-label="Apagar cena" style="font-size:16px;line-height:1">×</button></span>`).join('') : '<span class="note">Sem cenas marcadas.</span>'}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="chip" id="scadd">+ Início de cena no ponto onde está o áudio</button>${RV.data.can_mix ? '<button class="chip" id="scimp">Copiar da Estrutura Plus</button>' : ''}</div></div>`;
+}
+
+function bindSceneEditor() {
+  const ver = RV.data.review.versions.find(v => v.id === RV.v); if (!ver) return;
+  const a = document.getElementById('rvaudio'), box = document.getElementById('rvvers');
+  const save = async list => { try { ver.scenes = await api(`/api/episodes/${RV.id}/review/versions/${ver.id}/scenes`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenes: list }) }); } catch (e) { showErr(e); return; } renderVersions(); RV.repaint && RV.repaint(); };
+  box.querySelectorAll('[data-scseek]').forEach(b => b.onclick = () => { a.currentTime = +b.dataset.scseek; });
+  box.querySelectorAll('[data-scdel]').forEach(b => b.onclick = () => save((ver.scenes || []).filter((_, k) => k !== +b.dataset.scdel)));
+  const add = document.getElementById('scadd');
+  if (add) add.onclick = () => { const list = ver.scenes || []; save([...list, { n: Math.max(0, ...list.map(x => x.n)) + 1, title: '', start: a.currentTime || 0 }]); };
+  const imp = document.getElementById('scimp');
+  if (imp) imp.onclick = async () => {
+    if (list_has(ver) && !confirm('Substituir as cenas marcadas pelas da Estrutura Plus?')) return;
+    try { ver.scenes = await api(`/api/episodes/${RV.id}/review/versions/${ver.id}/scenes/from-structure`, { method: 'POST' }); } catch (e) { showErr(e); return; } renderVersions(); RV.repaint && RV.repaint();
+  };
+}
+const list_has = ver => (ver.scenes || []).length > 0;
+
 function renderVersions() {
   const box = document.getElementById('rvvers'); if (!box) return;
   const d = RV.data, rv = d.review;
@@ -1006,6 +1034,7 @@ function renderVersions() {
       <span style="flex:1;min-width:160px"><b>${esc(v.label)}</b> <span class="note">${v.source === 'app' ? 'gerada pela app' : 'carregada'}${v.duration ? ' · ' + mmss(v.duration) : ''}</span></span>
       ${v.state === 'pronto' ? `<span class="pill ok">Pronta</span>` : v.state === 'erro' ? `<span class="pill warn" title="${esc(v.message)}">Erro</span>` : `<span class="pill run">${esc(v.state)}…</span>`}
       <button class="chip" data-delv="${v.id}">Apagar</button></div>`).join('') : '<p class="note" style="margin:6px 0 0">Ainda não há versões.</p>'}
+    ${sceneEditor()}
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
       <input type="text" id="vlabel" placeholder="Nome da versão (opcional)" style="height:36px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font:inherit;color:var(--text);min-width:200px">
       <label class="btn blue" style="cursor:pointer">${I.dl}Nova versão (áudio final)<input type="file" id="vfile" accept="audio/*,.wav,.mp3,.m4a,.aif,.aiff,.flac" hidden></label>
@@ -1031,6 +1060,7 @@ function renderVersions() {
     if (!confirm('Apagar este episódio, todas as versões e todas as notas? Não se pode desfazer.')) return;
     await api(`/api/review/episodes/${RV.id}`, { method: 'DELETE' }).catch(e => { alert(e.message); }); location.hash = '#/notas';
   };
+  bindSceneEditor();
   const vgen = document.getElementById('vgen');
   if (vgen) vgen.onclick = async () => {
     if (!confirm('Gerar uma versão a partir da narração e das faixas de sons e música da Estrutura Plus? Pode demorar alguns minutos.')) return;
@@ -1047,6 +1077,13 @@ function bindTape(ver) {
     if (!w) return; cv.width = w * r; cv.height = h * r;
     const c = cv.getContext('2d'); c.scale(r, r); c.clearRect(0, 0, w, h);
     const dur = (a.duration && isFinite(a.duration)) ? a.duration : (ver.duration || 1), p = (RV.scrubT ?? (a.currentTime || 0)) / dur, n = Math.floor(w / 5);
+    const scs = ver.scenes || [];
+    scs.forEach((sc, k) => {
+      const x0 = sc.start / dur * w, x1 = (scs[k + 1] ? scs[k + 1].start : dur) / dur * w;
+      if (k % 2 === 0) { c.fillStyle = 'rgba(0,0,0,.07)'; c.fillRect(x0, 0, x1 - x0, h); }
+      c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(x0, 0, 1.5, h);
+      if (x1 - x0 > 26) { c.fillStyle = '#111'; c.font = '700 11px -apple-system,system-ui,sans-serif'; c.textBaseline = 'alphabetic'; c.fillText('C' + sc.n, x0 + 6, h - 6); }
+    });
     for (let i = 0; i < n; i++) {
       const v = peaks[Math.min(peaks.length - 1, Math.floor(i / n * peaks.length))] / 100, bh = Math.max(4, v * (h - 16));
       c.fillStyle = i / n <= p ? '#111' : '#a29a90'; c.fillRect(i * 5 + 1, (h - bh) / 2, 3, bh);
@@ -1085,16 +1122,17 @@ function bindPlayer(ver) {
   const dur = () => (a.duration && isFinite(a.duration)) ? a.duration : (ver.duration || 1);
   const notes = () => RV.data.review.notes.filter(n => n.version === ver.id).sort((x, y) => x.t - y.t);
   const paintPins = () => { document.getElementById('rvpins').innerHTML = notes().map(n => `<button class="rv-pin ${n.status === 'feita' ? 'feita' : ''} ${RV.active === n.id ? 'on' : ''}" style="left:${Math.min(100, n.t / dur() * 100)}%;--c:${DCOL[n.author] || '#111'}" data-pin="${n.id}" title="${mmss(n.t)} · ${esc(n.author)}: ${esc(n.text.slice(0, 80))}" aria-label="Nota aos ${mmss(n.t)}"></button>`).join(''); document.querySelectorAll('[data-pin]').forEach(p => p.onclick = e => { e.stopPropagation(); const n = notes().find(x => x.id === p.dataset.pin); seek(n.t); setActive(n.id, true); }); };
+  const stampText = t => { const sc = sceneAt(ver, t); return (sc ? 'C' + sc.n + ' · ' : '') + mmss(t); };
   const seek = t => { a.currentTime = Math.max(0, Math.min(dur(), t)); tick(); };
   const setActive = (id, scroll) => { RV.active = id; paintNotes(); paintPins(); if (scroll) document.querySelector(`[data-n="${id}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
   const tick = () => {
     const t = RV.scrubT ?? (a.currentTime || 0), p = Math.min(100, t / dur() * 100);
     document.getElementById('rvfill').style.width = p + '%'; document.getElementById('rvhead').style.left = p + '%';
     document.getElementById('rvtime').textContent = `${mmss(t)} / ${mmss(dur())}`;
-    const stp = document.getElementById('rvnt'), tx = document.getElementById('rvtxt'); if (stp && document.activeElement !== tx) stp.textContent = mmss(t);
+    const stp = document.getElementById('rvnt'), tx = document.getElementById('rvtxt'); if (stp && document.activeElement !== tx) stp.textContent = stampText(t);
     const cur = notes().filter(n => n.t <= t + 0.2).pop(); const id = cur && t - cur.t < 8 ? cur.id : null;
     const now = document.getElementById('rvnow');
-    if (now) { const sig = id || ''; if (now.dataset.s !== sig) { now.dataset.s = sig; now.innerHTML = cur && id ? `<div data-nowid="${cur.id}">${dchip(cur.author)} <b>${mmss(cur.t)}</b> ${esc(cur.text.length > 140 ? cur.text.slice(0, 140) + '…' : cur.text)}</div>` : ''; now.querySelector('[data-nowid]')?.addEventListener('click', () => setActive(cur.id, true)); } }
+    if (now) { const sig = id || ''; if (now.dataset.s !== sig) { now.dataset.s = sig; now.innerHTML = cur && id ? `<div data-nowid="${cur.id}">${dchip(cur.author)} ${sceneTag(ver, cur.t)} <b>${mmss(cur.t)}</b> ${esc(cur.text.length > 140 ? cur.text.slice(0, 140) + '…' : cur.text)}</div>` : ''; now.querySelector('[data-nowid]')?.addEventListener('click', () => setActive(cur.id, true)); } }
     if (id !== RV.active && !a.paused) { RV.active = id; paintNotes(); paintPins(); }
   };
   function paintNotes() {
@@ -1104,7 +1142,7 @@ function bindPlayer(ver) {
     document.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === RV.filter));
     document.getElementById('rvnotes').innerHTML = list.length ? list.map(n => `<div class="rv-note ${n.status === 'feita' ? 'feita' : ''} ${RV.active === n.id ? 'on' : ''}" data-n="${n.id}">
       <button class="rv-t" data-seek="${n.t}" title="Ir para este momento">${mmss(n.t)}</button>
-      <div><div><span class="rv-au">${dchip(n.author)}</span>${own && n.author === own ? '<span class="rv-mine">tu</span>' : ''} ${n.status === 'feita' ? `<span class="pill ok">Feita${n.done_by ? ' por ' + esc(n.done_by) : ''}</span>` : ''}</div>
+      <div><div><span class="rv-au">${dchip(n.author)}</span>${sceneTag(ver, n.t)}${own && n.author === own ? '<span class="rv-mine">tu</span>' : ''} ${n.status === 'feita' ? `<span class="pill ok">Feita${n.done_by ? ' por ' + esc(n.done_by) : ''}</span>` : ''}</div>
         ${RV.editing === n.id ? `<textarea class="rv-edit" data-edit="${n.id}" style="width:100%;margin-top:6px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:8px 10px;font:inherit;color:var(--text)" rows="2">${esc(n.text)}</textarea>
           <div style="display:flex;gap:8px;margin-top:6px"><button class="btn blue" data-save="${n.id}">Guardar</button><button class="btn" data-cancel>Cancelar</button></div>` : `<div class="rv-text">${esc(n.text)}</div>`}
         ${(n.agree || []).length || (own && n.author !== own) ? `<div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">${own && n.author !== own ? `<button class="rv-agree ${(n.agree || []).includes(own) ? 'on' : ''}" data-agree="${n.id}">Também reparei${(n.agree || []).length ? ' · ' + n.agree.length : ''}</button>` : `<span class="note">${n.agree.length} também reparou(aram)</span>`}${(n.agree || []).length && own && n.author !== own ? `<span class="note">${n.agree.map(esc).join(', ')}</span>` : ''}</div>` : ''}
@@ -1129,6 +1167,7 @@ function bindPlayer(ver) {
       RV.data.review.notes = RV.data.review.notes.filter(x => x.id !== b.dataset.del); paintNotes(); paintPins();
     });
   }
+  RV.repaint = () => { paintNotes(); paintPins(); RV.tapeDraw && RV.tapeDraw(); tick(); };
   RV.tick = tick; a.ontimeupdate = tick; a.onloadedmetadata = () => { tick(); paintPins(); };
   a.onplay = a.onpause = () => { document.getElementById('rvplay').innerHTML = a.paused ? I.play : I.stop; };
   document.getElementById('rvplay').onclick = () => a.paused ? a.play().catch(() => {}) : a.pause();
@@ -1142,10 +1181,10 @@ function bindPlayer(ver) {
     const txt = document.getElementById('rvtxt'), nt = document.getElementById('rvnt'), bar2 = document.getElementById('rvsheet');
     const paintNear = () => {
       const near = notes().filter(n => Math.abs(n.t - RV.noteT) <= 20), box = document.getElementById('rvnear');
-      box.innerHTML = near.length ? near.map(n => `<div class="it"><span>${dchip(n.author)} <b>${mmss(n.t)}</b> ${esc(n.text)}</span>${n.author !== role.name ? `<button class="rv-agree ${(n.agree || []).includes(role.name) ? 'on' : ''}" data-near="${n.id}">Também reparei${(n.agree || []).length ? ' · ' + n.agree.length : ''}</button>` : ''}</div>`).join('') : '';
+      box.innerHTML = near.length ? near.map(n => `<div class="it"><span>${dchip(n.author)} ${sceneTag(ver, n.t)} <b>${mmss(n.t)}</b> ${esc(n.text)}</span>${n.author !== role.name ? `<button class="rv-agree ${(n.agree || []).includes(role.name) ? 'on' : ''}" data-near="${n.id}">Também reparei${(n.agree || []).length ? ' · ' + n.agree.length : ''}</button>` : ''}</div>`).join('') : '';
       box.querySelectorAll('[data-near]').forEach(b => b.onclick = async () => { const n = RV.data.review.notes.find(x => x.id === b.dataset.near); try { Object.assign(n, await api(`/api/episodes/${RV.id}/review/notes/${n.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agree: { name: role.name, on: !(n.agree || []).includes(role.name) } }) })); } catch (e) { showErr(e); } paintNear(); paintNotes(); });
     };
-    const stamp = () => { RV.noteT = a.currentTime || 0; nt.textContent = mmss(RV.noteT); paintNear(); };
+    const stamp = () => { RV.noteT = a.currentTime || 0; nt.textContent = stampText(RV.noteT); paintNear(); };
     txt.onfocus = () => { stamp(); if (!a.paused) { a.pause(); RV.pausedByUs = true; } };
     txt.onblur = () => setTimeout(() => { if (document.activeElement !== txt && !txt.value.trim() && RV.pausedByUs) { RV.pausedByUs = false; a.play().catch(() => {}); } }, 200);
     bar2.addEventListener('mousedown', e => { if (e.target.closest('button')) e.preventDefault(); });
@@ -2051,11 +2090,12 @@ const Demo = {
       .map(([lane, start, dur, label, kind, block, scene], i) => ({ id: 'c' + (i + 1), lane, start, dur, label, kind, block, scene, prompt: 'Exemplo de descrição do som', state: 'gerado', message: '', peaks: pk(40 + i * 7, Math.round(dur * 3)) }));
     return { meta: this.ep.meta, ready: true, missing: [], structure: { status: 'pronto', message: '', done: 8, total: 8, scene: null, clips: cl }, timeline: { blocks: bl, segments: [], total: 57.2, scenes } };
   },
-  async api(path) {
+  async api(path, opts = {}) {
     if (!this.ep) this.ep = this.build();
     if (path === '/api/episodes') return [{ id: 'demo', title: this.ep.meta.title, created: Date.now() / 1000, state: { status: 'pronto' } }];
     if (path === '/api/review') return [{ id: 'demo', title: this.ep.meta.title, versions: 1, latest: 'v1', latest_label: 'Versão 1', notes: 3, open: 2 }];
-    if (path === '/api/episodes/demo/review') return { meta: this.ep.meta, directors: ['Miguel', 'Sara', 'Tânia', 'João', 'Raquel'], can_mix: true, review: { versions: [{ id: 'v1', label: 'Versão 1', created: Date.now() / 1000, source: 'upload', by: 'Sonoplastia', state: 'pronto', duration: 1800 }],
+    if (/\/review\/versions\/v1\/scenes$/.test(path)) return JSON.parse(opts.body).scenes;
+    if (path === '/api/episodes/demo/review') return { meta: this.ep.meta, directors: ['Miguel', 'Sara', 'Tânia', 'João', 'Raquel'], can_mix: true, review: { versions: [{ id: 'v1', label: 'Versão 1', created: Date.now() / 1000, source: 'upload', by: 'Sonoplastia', state: 'pronto', duration: 1800, scenes: [{ n: 1, title: '', start: 0 }, { n: 2, title: '', start: 420 }, { n: 3, title: '', start: 900 }, { n: 4, title: '', start: 1400 }] }],
       notes: [{ id: 'n1', version: 'v1', t: 332.4, text: 'Ouve-se um tiro e não é suposto.', author: 'Miguel', status: 'aberta' }, { id: 'n2', version: 'v1', t: 65, text: 'A música está demasiado alta por cima da voz.', author: 'Sara', status: 'feita', done_by: 'Sonoplastia', reply: 'Baixei 4 dB.', reply_by: 'Sonoplastia' }, { id: 'n3', version: 'v1', t: 910, text: 'Falta uma pausa antes da entrevista.', author: 'Raquel', status: 'aberta' }] } };
     if (path === '/api/episodes/demo/maestro') return this.maestro();
     if (path === '/api/episodes/demo/analysis') return this.analysis();
