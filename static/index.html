@@ -1043,30 +1043,6 @@ function renderReview() {
   if (ver) { bindPlayer(ver); bindTape(ver); }
 }
 
-function sceneEditor() {
-  const ver = RV.data.review.versions.find(v => v.id === RV.v && v.state === 'pronto'); if (!ver) return '';
-  const scs = ver.scenes || [];
-  return `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)"><b style="font-size:14px">Cenas desta versão</b> <span class="note">(vêm do guião; podes acertar)</span>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0">${scs.length ? scs.map((x, k) => `<span class="chip" style="display:inline-flex;align-items:center;gap:6px"><button data-scseek="${x.start}" style="font-weight:700">Cena ${x.n} · ${mmss(x.start)}</button><button data-scdel="${k}" aria-label="Apagar cena" style="font-size:16px;line-height:1">×</button></span>`).join('') : '<span class="note">Sem cenas marcadas.</span>'}</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="chip" id="scadd">+ Início de cena no ponto onde está o áudio</button>${RV.data.can_scenes ? '<button class="chip" id="scimp">Copiar do guião (AutoTake)</button>' : ''}</div></div>`;
-}
-
-function bindSceneEditor() {
-  const ver = RV.data.review.versions.find(v => v.id === RV.v); if (!ver) return;
-  const a = document.getElementById('rvaudio'), box = document.getElementById('rvvers');
-  const save = async list => { try { ver.scenes = await api(`/api/episodes/${RV.id}/review/versions/${ver.id}/scenes`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenes: list }) }); } catch (e) { showErr(e); return; } renderVersions(); RV.repaint && RV.repaint(); };
-  box.querySelectorAll('[data-scseek]').forEach(b => b.onclick = () => { a.currentTime = +b.dataset.scseek; });
-  box.querySelectorAll('[data-scdel]').forEach(b => b.onclick = () => save((ver.scenes || []).filter((_, k) => k !== +b.dataset.scdel)));
-  const add = document.getElementById('scadd');
-  if (add) add.onclick = () => { const list = ver.scenes || []; save([...list, { n: Math.max(0, ...list.map(x => x.n)) + 1, title: '', start: a.currentTime || 0 }]); };
-  const imp = document.getElementById('scimp');
-  if (imp) imp.onclick = async () => {
-    if (list_has(ver) && !confirm('Substituir as cenas marcadas pelas do guião?')) return;
-    try { ver.scenes = await api(`/api/episodes/${RV.id}/review/versions/${ver.id}/scenes/from-structure`, { method: 'POST' }); } catch (e) { showErr(e); return; } renderVersions(); RV.repaint && RV.repaint();
-  };
-}
-const list_has = ver => (ver.scenes || []).length > 0;
-
 function renderVersions() {
   const box = document.getElementById('rvvers'); if (!box) return;
   const d = RV.data, rv = d.review;
@@ -1075,7 +1051,6 @@ function renderVersions() {
       <span style="flex:1;min-width:160px"><b>${esc(v.label)}</b> <span class="note">${v.source === 'app' ? 'gerada pela app' : 'carregada'}${v.duration ? ' · ' + mmss(v.duration) : ''}</span></span>
       ${v.state === 'pronto' ? `<span class="pill ok">Pronta</span>` : v.state === 'erro' ? `<span class="pill warn" title="${esc(v.message)}">Erro</span>` : `<span class="pill run">${esc(v.state)}…</span>`}
       <button class="chip" data-delv="${v.id}">Apagar</button></div>`).join('') : '<p class="note" style="margin:6px 0 0">Ainda não há versões.</p>'}
-    ${sceneEditor()}
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
       <input type="text" id="vlabel" placeholder="Nome da versão (opcional)" style="height:36px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font:inherit;color:var(--text);min-width:200px">
       <label class="btn blue" style="cursor:pointer">${I.dl}Nova versão (áudio final)<input type="file" id="vfile" accept="audio/*,.wav,.mp3,.m4a,.aif,.aiff,.flac" hidden></label>
@@ -1101,7 +1076,6 @@ function renderVersions() {
     if (!confirm('Apagar este episódio, todas as versões e todas as notas? Não se pode desfazer.')) return;
     await api(`/api/review/episodes/${RV.id}`, { method: 'DELETE' }).catch(e => { alert(e.message); }); location.hash = '#/notas';
   };
-  bindSceneEditor();
   const vgen = document.getElementById('vgen');
   if (vgen) vgen.onclick = async () => {
     if (!confirm('Gerar uma versão a partir da narração e das faixas de sons e música da Estrutura Plus? Pode demorar alguns minutos.')) return;
