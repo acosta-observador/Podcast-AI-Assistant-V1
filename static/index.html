@@ -38,13 +38,13 @@ a{color:var(--accent);text-decoration:none}
 .sec{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;margin:18px 12px 6px}
 .nav-i{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;color:var(--text);font-size:15px}
 .nav-i svg{width:18px;height:18px;flex:none}
-.nav-i:hover{background:var(--hover)}
+@media (hover:hover) and (pointer:fine){.nav-i:hover{background:var(--hover)}}
 .nav-i.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
 .page-t{margin:0 0 6px;font-size:40px;line-height:1.1;font-weight:700;letter-spacing:-.03em}
 .page-s{margin:0;font-size:18px;color:var(--muted);max-width:56ch}
 .projs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:20px;margin-top:32px}
 .pcard{display:flex;flex-direction:column;overflow:hidden;color:var(--text)}
-.pcard:hover{border-color:var(--faint);background:var(--hover)}
+@media (hover:hover) and (pointer:fine){.pcard:hover{border-color:var(--faint);background:var(--hover)}}
 .pcard .cov{height:140px;background:var(--accent-soft);display:grid;place-items:center;color:var(--accent)}
 .pcard .cov svg{width:56px;height:56px}
 .pcard .bd{padding:18px 20px 20px;display:flex;flex-direction:column;gap:10px}
@@ -54,7 +54,7 @@ a{color:var(--accent);text-decoration:none}
 .pill i{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;margin-right:6px}
 .fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:16px}
 .fcard{display:flex;flex-direction:column;gap:6px;padding:18px 20px;color:var(--text)}
-.fcard:hover{background:var(--hover);border-color:var(--faint)}
+@media (hover:hover) and (pointer:fine){.fcard:hover{background:var(--hover);border-color:var(--faint)}}
 .fcard .ico{width:40px;height:40px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;margin-bottom:6px}
 .fcard .ico svg{width:20px;height:20px}
 .fcard b{font-size:16px;font-weight:600}.fcard span{font-size:14px;color:var(--muted)}
@@ -68,7 +68,7 @@ a{color:var(--accent);text-decoration:none}
 .tm{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .chips{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
 .chip{height:30px;padding:0 12px;border-radius:980px;background:var(--panel);font-size:13px;font-weight:500}
-.chip:hover:not(:disabled){background:var(--hover)}.chip:disabled{opacity:.45}
+@media (hover:hover) and (pointer:fine){.chip:hover:not(:disabled){background:var(--hover)}}.chip:disabled{opacity:.45}
 
 /* estrutura plus */
 .tl{overflow:hidden}
@@ -82,7 +82,7 @@ a{color:var(--accent);text-decoration:none}
 .tl-lbl{position:sticky;left:0;z-index:3;background:var(--card);width:170px;flex:none;box-sizing:border-box;padding:0 8px 0 14px;display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:6px;font-size:14px;font-weight:600}
 .tl-lbl .lt{display:flex;flex-direction:column;gap:2px;min-width:0}
 .trk-dl{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:var(--muted);flex:none}
-.trk-dl:hover:not(:disabled){background:var(--hover);color:var(--accent)}.trk-dl:disabled{opacity:.3;cursor:default}
+@media (hover:hover) and (pointer:fine){.trk-dl:hover:not(:disabled){background:var(--hover);color:var(--accent)}}.trk-dl:disabled{opacity:.3;cursor:default}
 .trk-dl svg{width:15px;height:15px}
 .tl-lbl small{font-size:12px;color:var(--muted);font-weight:400}
 .tl-lane{position:relative;flex:1;min-width:0;border-left:1px solid var(--line);overflow:hidden}
@@ -106,7 +106,7 @@ a{color:var(--accent);text-decoration:none}
 .sel-card textarea{width:100%;border-radius:12px;border:1px solid var(--line);background:var(--bg);padding:10px 12px;font:inherit;font-size:15px;color:var(--text);resize:vertical}
 .scn-bar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px}
 .sc-chip{height:34px;padding:0 14px;border-radius:980px;background:var(--panel);font-size:14px;font-weight:500;display:inline-flex;align-items:center;gap:6px;color:var(--text)}
-.sc-chip:hover{background:var(--hover)}
+@media (hover:hover) and (pointer:fine){.sc-chip:hover{background:var(--hover)}}
 .sc-chip.on{background:var(--accent);color:#fff}
 .sc-chip svg{width:12px;height:12px;color:var(--ok)}.sc-chip.on svg{color:#fff}
 .clip.scn{background:var(--panel);color:var(--text);justify-content:center;align-items:center;text-align:center;top:4px;bottom:4px}
@@ -147,11 +147,11 @@ a{color:var(--accent);text-decoration:none}
 .gate-in h1{margin:0 0 6px;font-size:32px;letter-spacing:-.03em}.gate-in p{margin:0 0 24px;color:var(--muted);font-size:17px}
 .gate-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
 .gate-card{padding:28px 22px;text-align:left;display:flex;flex-direction:column;gap:6px;cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:14px;color:var(--text)}
-.gate-card:hover{border-color:var(--accent);background:var(--accent-soft)}
+@media (hover:hover) and (pointer:fine){.gate-card:hover{border-color:var(--accent);background:var(--accent-soft)}}
 .gate-card b{font-size:20px;letter-spacing:-.02em}.gate-card span{color:var(--muted);font-size:14px}
 .gate-names{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .gate-names button{height:64px;border-radius:14px;border:1px solid var(--line);background:var(--card);font-size:19px;font-weight:600;color:var(--text);cursor:pointer}
-.gate-names button:hover{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+@media (hover:hover) and (pointer:fine){.gate-names button:hover{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}}
 .who{margin-top:auto;padding:14px 12px 0;border-top:1px solid var(--line);font-size:13px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:8px}
 .who a{color:var(--accent)}
 .rv-wrap{max-width:900px;margin:0 auto;padding:32px 20px 80px}
@@ -170,11 +170,11 @@ a{color:var(--accent);text-decoration:none}
 .rv-note{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;padding:14px 16px;border-top:1px solid var(--line)}
 .rv-note:first-child{border-top:0}.rv-note.on{background:var(--accent-soft)}.rv-note.feita .rv-text{color:var(--muted);text-decoration:line-through}
 .rv-t{height:30px;padding:0 12px;border-radius:980px;background:var(--panel);font-weight:600;font-size:13px;font-variant-numeric:tabular-nums;font-family:ui-monospace,Menlo,monospace}
-.rv-t:hover{background:var(--hover)}
+@media (hover:hover) and (pointer:fine){.rv-t:hover{background:var(--hover)}}
 .rv-au{font-weight:600;font-size:13px}.rv-text{font-size:15px;margin-top:2px;white-space:pre-wrap}
 .rv-reply{margin-top:8px;padding:8px 12px;border-radius:10px;background:var(--panel);font-size:14px}
 .rv-act{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.rv-act button{font-size:13px;color:var(--accent);padding:4px 8px;border-radius:8px}.rv-act button:hover{background:var(--hover)}
+.rv-act button{font-size:13px;color:var(--accent);padding:4px 8px;border-radius:8px}@media (hover:hover) and (pointer:fine){.rv-act button:hover{background:var(--hover)}}
 .rv-now{min-height:0;margin:2px 0 8px;padding:0}
 .rv-now div{padding:10px 14px;border-radius:12px;background:var(--accent-soft);color:var(--text);font-size:15px;cursor:pointer}
 .rv-now b{color:var(--accent)}
@@ -280,7 +280,7 @@ a{color:var(--accent);text-decoration:none}
 .tape-sheet .rv-near .it{background:rgba(0,0,0,.08)}
 .tape .rv-agree{background:transparent;border:1.5px solid var(--accent);color:var(--accent)}
 .tape .rv-agree.on{background:var(--accent);color:#fff}
-.tape .rv-act button{color:var(--ink);font-weight:600}.tape .rv-act button:hover{background:rgba(0,0,0,.08)}
+.tape .rv-act button{color:var(--ink);font-weight:600}@media (hover:hover) and (pointer:fine){.tape .rv-act button:hover{background:rgba(0,0,0,.08)}}
 .tape .rv-mine{color:var(--ink);background:rgba(0,0,0,.1);border-radius:980px;padding:1px 8px}
 .tape .rv-note.on{background:rgba(0,0,0,.08)}.tape .rv-note.feita .rv-text{color:rgba(0,0,0,.5)}
 .tape .rv-edit,.tape-notes textarea{background:var(--disc)!important;color:var(--ink)!important;border:0!important}
@@ -293,7 +293,7 @@ a{color:var(--accent);text-decoration:none}
 .snd .st{outline:none;min-width:14px;overflow-wrap:anywhere}
 .snd .st:focus{background:var(--bg);border-radius:6px;padding:0 4px}
 .snd .x{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;color:var(--muted);flex:none}
-.snd .x:hover{background:var(--warn-soft);color:#d70015}
+@media (hover:hover) and (pointer:fine){.snd .x:hover{background:var(--warn-soft);color:#d70015}}
 .snd .x svg{width:12px;height:12px}
 .snd-add{height:32px;min-width:150px;flex:1 1 150px;border:1px dashed var(--line);border-radius:980px;background:transparent;padding:0 12px;font:inherit;font-size:14px;color:var(--text)}
 .snd-add:focus{outline:none;border-style:solid;border-color:var(--accent);background:var(--bg)}
@@ -306,7 +306,7 @@ a{color:var(--accent);text-decoration:none}
 @media (max-width:900px){.an-grid{grid-template-columns:1fr}.an-row>div:first-child{border-bottom:0;padding-bottom:0}.an-row>div:last-child{border-top:0;padding-top:4px}}
 .an-cue{display:grid;grid-template-columns:auto 1fr auto;gap:10px 14px;align-items:start;padding:12px 0;border-top:1px solid var(--line)}
 .an-cue .del{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:var(--faint)}
-.an-cue .del:hover{background:var(--warn-soft);color:#d70015}
+@media (hover:hover) and (pointer:fine){.an-cue .del:hover{background:var(--warn-soft);color:#d70015}}
 .an-cue .del svg{width:16px;height:16px}
 .kchip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:980px;white-space:nowrap;letter-spacing:.02em}
 .kchip.sfx{background:rgba(255,159,10,.16);color:#c77700}.kchip.amb{background:rgba(48,176,199,.16);color:#1d8a9c}.kchip.mus{background:rgba(125,92,255,.14);color:#6b4cf0}
@@ -326,10 +326,10 @@ a{color:var(--accent);text-decoration:none}
 .top-actions{display:flex;justify-content:flex-end;gap:8px}
 
 .btn{height:32px;padding:0 14px;border-radius:980px;font-size:14px;font-weight:500;background:var(--panel);color:var(--text);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.btn:hover:not(:disabled){background:var(--hover)}
+@media (hover:hover) and (pointer:fine){.btn:hover:not(:disabled){background:var(--hover)}}
 .btn:disabled{opacity:.45}
 .btn.blue{background:var(--accent);color:#fff}
-.btn.blue:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 88%,#000)}
+@media (hover:hover) and (pointer:fine){.btn.blue:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 88%,#000)}}
 .btn svg{width:16px;height:16px}
 .link{color:var(--accent);font-size:14px}
 .link:disabled{color:var(--faint)}
@@ -347,10 +347,10 @@ a{color:var(--accent);text-decoration:none}
 .eps{overflow:hidden}
 .ep-row{display:flex;align-items:center;border-top:1px solid var(--line)}
 .ep-row:first-child{border-top:0}
-.ep-row:hover{background:var(--panel)}
+@media (hover:hover) and (pointer:fine){.ep-row:hover{background:var(--panel)}}
 .ep{flex:1;min-width:0;display:grid;grid-template-columns:1fr auto;gap:4px 16px;padding:14px 18px;color:var(--text)}
 .ep-del{flex:none;width:36px;height:36px;margin-right:12px;display:grid;place-items:center;border:0;border-radius:50%;background:transparent;color:var(--faint);cursor:pointer}
-.ep-del:hover,.ep-del:focus-visible{background:var(--warn-soft);color:#d70015}
+@media (hover:hover) and (pointer:fine){.ep-del:hover,.ep-del:focus-visible{background:var(--warn-soft);color:#d70015}}
 .ep-del svg{width:18px;height:18px}
 .ep b{font-weight:600;font-size:16px}
 .ep small{color:var(--muted);font-size:13px}
@@ -368,7 +368,7 @@ form.new h2{margin:0;font-size:19px;font-weight:600}
 .field input[type=text]{height:40px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font-size:15px;color:var(--text)}
 .field input[type=text]:focus{outline:3px solid color-mix(in srgb,var(--accent) 35%,transparent);border-color:var(--accent)}
 .drop{position:relative;border:1.5px dashed var(--line);border-radius:12px;padding:16px;display:flex;align-items:center;gap:12px;background:var(--bg)}
-.drop:hover{border-color:var(--faint)}
+@media (hover:hover) and (pointer:fine){.drop:hover{border-color:var(--faint)}}
 .drop.has{border-style:solid;border-color:var(--accent);background:var(--accent-soft)}
 .drop svg{width:26px;height:26px;color:var(--accent);flex:none}
 .drop b{display:block;font-weight:600;font-size:15px;color:var(--text)}
@@ -401,7 +401,7 @@ form.new h2{margin:0;font-size:19px;font-weight:600}
 .blocks{overflow:hidden;max-height:calc(100vh - 190px);overflow-y:auto;position:sticky;top:72px}
 .blk{display:grid;grid-template-columns:18px 1fr auto;gap:10px;align-items:start;width:100%;text-align:left;padding:12px 14px;border-top:1px solid var(--line)}
 .blk:first-child{border-top:0}
-.blk:hover{background:var(--panel)}
+@media (hover:hover) and (pointer:fine){.blk:hover{background:var(--panel)}}
 .blk.cur{background:var(--accent-soft)}
 .blk .n{font-size:13px;font-weight:600;color:var(--muted);padding-top:1px;text-align:right}
 .blk .t{font-size:14px;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -415,7 +415,7 @@ form.new h2{margin:0;font-size:19px;font-weight:600}
 .d-top h2{margin:0;font-size:13px;font-weight:600;color:var(--muted)}
 .nav{display:flex;gap:6px}
 .nav button{width:32px;height:32px;border-radius:50%;background:var(--panel);display:grid;place-items:center}
-.nav button:hover:not(:disabled){background:var(--hover)}
+@media (hover:hover) and (pointer:fine){.nav button:hover:not(:disabled){background:var(--hover)}}
 .nav button:disabled{opacity:.35}
 .nav svg{width:16px;height:16px}
 .script{font-size:21px;line-height:1.5;letter-spacing:-.015em;margin:0 0 26px;max-width:62ch}
@@ -423,13 +423,13 @@ form.new h2{margin:0;font-size:19px;font-weight:600}
 .segctl{display:inline-flex;flex-wrap:wrap;background:var(--panel);border-radius:10px;padding:3px;gap:2px}
 .segctl button{min-width:74px;padding:7px 14px;border-radius:8px;font-size:14px;font-weight:500;color:var(--text);display:flex;flex-direction:column;align-items:center;line-height:1.2}
 .segctl button small{font-size:11px;color:var(--muted);font-weight:400}
-.segctl button:hover:not([aria-pressed="true"]){background:var(--hover)}
+@media (hover:hover) and (pointer:fine){.segctl button:hover:not([aria-pressed="true"]){background:var(--hover)}}
 .segctl button[aria-pressed="true"]{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.12),0 0 0 .5px rgba(0,0,0,.04)}
 .lbl{font-size:13px;color:var(--muted);margin:0 0 8px}
 
 .player{display:flex;align-items:center;gap:16px;margin:24px 0 8px}
 .play{width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}
-.play:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 88%,#000)}
+@media (hover:hover) and (pointer:fine){.play:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 88%,#000)}}
 .play:disabled{background:var(--panel);color:var(--faint)}
 .play svg{width:22px;height:22px}
 .p-meta b{display:block;font-size:16px;font-weight:600}
@@ -456,7 +456,7 @@ kbd{font-family:var(--font);font-size:11px;border:1px solid var(--line);border-r
   .side{flex-basis:100%;width:100%;height:auto;position:static;border-right:0;border-bottom:1px solid var(--line)}
   .page-t{font-size:32px}
 }
-@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+
 
 /* ===== desenho gravador de fita em toda a app ===== */
 body{letter-spacing:-.015em}
@@ -465,33 +465,33 @@ body{letter-spacing:-.015em}
 .logo span{font-weight:800;letter-spacing:-.03em}.logo span em{color:var(--grey);font-weight:800}
 .sec{color:var(--muted);letter-spacing:.06em}
 .nav-i{border-radius:980px;font-weight:600}
-.nav-i:hover{background:rgba(0,0,0,.07)}
+@media (hover:hover) and (pointer:fine){.nav-i:hover{background:rgba(0,0,0,.07)}}
 .nav-i.on{background:var(--accent);color:#fff}
 .page-t,.intro h1{font-weight:800;letter-spacing:-.04em}
 .page-s,.intro p{color:var(--muted)}
 .card,.pcard,.fcard,.gate-card,.audio,.an-sc,.mp,.sel-card,.tl{border:0;border-radius:24px;background:var(--card);box-shadow:none}
-.pcard:hover,.fcard:hover,.gate-card:hover{background:#d9e7f6;border:0}
+@media (hover:hover) and (pointer:fine){.pcard:hover,.fcard:hover,.gate-card:hover{background:#d9e7f6;border:0}}
 .pcard .cov{background:var(--panel);color:var(--ink)}
 .fcard .ico{background:var(--accent);color:#fff;border-radius:50%}
 .btn{background:rgba(0,0,0,.1);color:var(--ink);font-weight:700}
-.btn:hover:not(:disabled){background:rgba(0,0,0,.18)}
+@media (hover:hover) and (pointer:fine){.btn:hover:not(:disabled){background:rgba(0,0,0,.18)}}
 .btn.blue,.primary{background:var(--accent);color:#fff}
-.btn.blue:hover:not(:disabled),.primary:hover:not(:disabled){background:#24364d}
+@media (hover:hover) and (pointer:fine){.btn.blue:hover:not(:disabled),.primary:hover:not(:disabled){background:#24364d}}
 .primary{border-radius:980px}
 .chip,.sc-chip{background:rgba(0,0,0,.09);color:var(--ink);font-weight:700}
-.chip:hover:not(:disabled),.sc-chip:hover{background:rgba(0,0,0,.17)}
+@media (hover:hover) and (pointer:fine){.chip:hover:not(:disabled),.sc-chip:hover{background:rgba(0,0,0,.17)}}
 .sc-chip.on{background:var(--accent);color:#fff}.sc-chip.on svg{color:var(--disc)}
 .pill{background:rgba(0,0,0,.09);color:var(--muted);font-weight:700}
 .pill.run{background:var(--accent);color:#fff}
 .pill.ok{background:rgba(31,122,56,.18);color:#175e2b}
 .play{background:var(--accent);color:#fff}
-.play:hover:not(:disabled){background:#24364d}
+@media (hover:hover) and (pointer:fine){.play:hover:not(:disabled){background:#24364d}}
 .play:disabled{background:rgba(0,0,0,.12);color:var(--faint)}
 .prog{background:rgba(0,0,0,.12)}.prog i{background:var(--blue)}
 .wave i{background:rgba(0,0,0,.18)}.wave i.on{background:var(--blue)}
 .segctl{background:rgba(0,0,0,.1);border-radius:980px}
 .segctl button{border-radius:980px;font-weight:700}
-.segctl button:hover:not([aria-pressed="true"]){background:rgba(0,0,0,.08)}
+@media (hover:hover) and (pointer:fine){.segctl button:hover:not([aria-pressed="true"]){background:rgba(0,0,0,.08)}}
 .segctl button[aria-pressed="true"]{background:var(--accent);color:#fff;box-shadow:none}
 .segctl button[aria-pressed="true"] small{color:var(--grey)}
 .epsel,.tl-pop input[type=text],.tl-pop input[type=number],.sel-card textarea,.mp textarea,.mp input[type=number],.rv-compose textarea{background:var(--disc);border:0;color:var(--ink)}
@@ -507,14 +507,14 @@ body{letter-spacing:-.015em}
 .gate{background:var(--bg)}
 .gate-in h1{font-weight:800;letter-spacing:-.04em}
 .gate-names button{background:var(--card);border:0;border-radius:24px;font-weight:800}
-.gate-names button:hover{background:var(--accent);color:#fff}
-.gate-card:hover b,.gate-card:hover span{color:inherit}
+@media (hover:hover) and (pointer:fine){.gate-names button:hover{background:var(--accent);color:#fff}}
+@media (hover:hover) and (pointer:fine){.gate-card:hover b,.gate-card:hover span{color:inherit}}
 .rv-bar{background:rgba(0,0,0,.1)}.rv-fill{background:rgba(0,0,0,.12)}.rv-head{background:var(--blue)}
 .rv-t{background:rgba(0,0,0,.1)}
 .rv-agree{background:transparent;border:1.5px solid var(--accent);color:var(--accent)}.rv-agree.on{background:var(--accent);color:#fff}
 .who{border-top:1px solid rgba(0,0,0,.12)}.who a,.link,a{color:var(--ink);font-weight:600;text-decoration:underline;text-underline-offset:2px}
 .nav-i,.fcard,.pcard,.gate-card,.logo,.ep,.back{text-decoration:none}
-.eps{background:var(--card)}.ep-row:hover{background:#dfebf8}
+.eps{background:var(--card)}@media (hover:hover) and (pointer:fine){.ep-row:hover{background:#dfebf8}}
 .drop{background:rgba(0,0,0,.06)}
 .flags,.banner{background:var(--warn-soft);color:var(--warn)}
 :focus-visible{outline:3px solid rgba(0,0,0,.4)}
@@ -621,7 +621,7 @@ body{letter-spacing:-.015em}
 .epc-n{font-size:12px;font-weight:800;background:var(--accent);color:#fff;border-radius:980px;padding:2px 10px}
 .epc-l{display:flex;gap:4px;padding:8px 12px 12px;flex-wrap:wrap}
 .epc-l a{font-size:13px;font-weight:600;padding:5px 11px;border-radius:980px;background:rgba(0,0,0,.08);color:#111;text-decoration:none}
-.epc-l a:hover{background:rgba(0,0,0,.16)}
+@media (hover:hover) and (pointer:fine){.epc-l a:hover{background:rgba(0,0,0,.16)}}
 .epc-empty{align-items:flex-start;gap:6px;padding:16px 18px;border:1.5px dashed rgba(0,0,0,.3)!important;background:transparent!important;text-decoration:none;color:inherit}
 .epc-empty b{color:#8ea6bf}.epc-empty small{color:rgba(0,0,0,.5)}
 
@@ -651,6 +651,33 @@ body{letter-spacing:-.015em}
 .pnew-f{display:flex;flex-direction:column;gap:12px;width:100%}
 .pnew-f label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
 .pnew-f input{height:40px;border-radius:12px;border:1px solid var(--line);background:#fff;padding:0 12px;font:inherit;font-size:15px;color:var(--text)}
+
+/* ---------- Emil, segunda passagem ---------- */
+/* apagar = manter premido: enche devagar (linear), larga depressa (ease-out) */
+[data-hold]{position:relative;overflow:hidden;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+[data-hold]::after{content:'';position:absolute;inset:0;background:rgba(200,40,40,.3);clip-path:inset(0 100% 0 0);transition:clip-path .2s var(--ease-out);pointer-events:none}
+[data-hold].holding::after{clip-path:inset(0 0 0 0);transition:clip-path 1.3s linear}
+[data-hold].holding{transform:scale(.97)}
+/* ícones que trocam (play ↔ pause, etc.): entram com blur leve, para não se ver dois objetos */
+@keyframes icoin{from{opacity:0;transform:scale(.85);filter:blur(2px)}to{opacity:1;transform:none;filter:none}}
+.kic svg,.play svg,#pPlay svg,.tape-ic svg{animation:icoin .18s var(--ease-out) both}
+/* cada ecrã novo entra com um fade curto (nada de movimento grande: navegação é frequente) */
+@keyframes pagein{from{opacity:0}to{opacity:1}}
+#app>.shell>.main>*,#app>.wrap,#app>.rv-wrap{animation:pagein .2s var(--ease-out) both}
+/* o spinner mais rápido faz a espera parecer mais curta */
+.stage.now .ic{animation-duration:.8s!important}
+/* números que mudam não saltam; texto corrido com largura legível */
+.tape-clock,.rv-t,.tb-stamp,.scn,.pill,.epc-n,.tape-time,.tape-nh b{font-variant-numeric:tabular-nums}
+.page-s,.intro p{max-width:65ch;text-wrap:pretty}
+h1,.page-t{text-wrap:balance}
+/* movimento reduzido: menos e mais suave, não zero (mantém opacidade, tira o movimento) */
+@media (prefers-reduced-motion:reduce){
+  .reel svg,.playing .knob.k1 .tick{animation:none!important}
+  .btn:active,.chip:active,.tbtn:active,.knob:active,.play:active,.primary:active,.tb-send:active,.tape-ic:active,.sc-chip:active,.epc:active,.pcard:active,.fcard:active,[data-hold].holding{transform:none!important}
+  #app>.shell>.main>*,#app>.wrap,#app>.rv-wrap,.epg>.epc,.kic svg,.play svg{animation:fadein .2s ease both!important}
+  .rv-wrap.dir .tape-side{transition:opacity .2s ease!important}
+}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
 </style>
 </head>
 <body>
@@ -987,7 +1014,7 @@ async function notesHome() {
         <label class="btn blue" style="cursor:pointer;height:40px">${I.dl}Carregar áudio final<input type="file" id="rfile" accept="audio/*,.wav,.mp3,.m4a,.aif,.aiff,.flac" hidden></label></div>
       <p class="note" id="rnote" style="margin:10px 0 0"></p></div>
     <div class="projs" style="margin-top:0">${rows.length ? rows.map(e => `<a class="card fcard" href="#/revisao/${e.id}${e.latest ? '/' + e.latest : ''}"><b style="font-size:18px;line-height:1.3">${esc(e.title)}</b>
-      <span>${e.versions ? `${e.versions} versão(ões)${e.latest_label ? ', última: ' + esc(e.latest_label) : ''}` : 'A preparar…'} · ${e.notes ? `${e.notes} notas${e.open ? `, <b style="color:var(--warn)">${e.open} abertas</b>` : ', todas tratadas'}` : 'sem notas'}</span></a>`).join('') : '<div class="card empty">Ainda não há episódios para a Direção. Carrega o primeiro acima.</div>'}</div></div>`);
+      <span>${e.versions ? `${e.versions} ${pl(e.versions, 'versão', 'versões')}${e.latest_label ? ', última: ' + esc(e.latest_label) : ''}` : 'A preparar…'} · ${e.notes ? `${e.notes} ${pl(e.notes, 'nota', 'notas')}${e.open ? `, <b style="color:var(--warn)">${e.open} abertas</b>` : ', todas tratadas'}` : 'sem notas'}</span></a>`).join('') : '<div class="card empty">Ainda não há episódios para a Direção. Carrega o primeiro acima.</div>'}</div></div>`);
   document.getElementById('rfile').onchange = e => {
     const f = e.target.files[0], title = document.getElementById('rtitle').value.trim(), note = document.getElementById('rnote');
     if (!f) return;
@@ -1005,6 +1032,17 @@ async function notesHome() {
   };
 }
 
+/* Apagar = manter premido (padrão "hold to delete"): enche devagar, larga depressa; teclado continua a pedir confirmação */
+function holdDelete(el, run, msg, ms = 1300) {
+  if (!el) return; let t = null, done = false;
+  el.dataset.hold = ''; el.title = 'Mantém premido para apagar';
+  const stop = () => { clearTimeout(t); t = null; el.classList.remove('holding'); };
+  el.addEventListener('pointerdown', e => { if (e.button) return; done = false; el.classList.add('holding'); t = setTimeout(() => { stop(); done = true; if (navigator.vibrate) navigator.vibrate(12); run(); }, ms); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => el.addEventListener(ev, stop));
+  el.addEventListener('contextmenu', e => e.preventDefault());
+  el.addEventListener('click', e => { e.preventDefault(); if (e.detail === 0 && !done && confirm(msg)) run(); });
+}
+
 /* ---------- Revisão: player com notas na timeline ---------- */
 const REEL_SVG = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="49" fill="#dfebf8"/><g fill="none" stroke="#0e2238" stroke-width="13" stroke-linecap="round"><path d="M50 18 A32 32 0 0 1 77 34"/><path d="M80 62 A32 32 0 0 1 56 81"/><path d="M26 71 A32 32 0 0 1 23 38"/></g><circle cx="50" cy="50" r="17" fill="#0e2238"/><path d="M46 43 L58 50 L46 57 Z" fill="#f4f8fc"/></svg>';
 const DCOL = { Miguel: '#d9822b', Sara: '#c2477a', 'Tânia': '#2f8f6b', 'João': '#3b6fd1', Raquel: '#7a52c7' };
@@ -1013,6 +1051,7 @@ const sceneAt = (ver, t) => (ver.scenes || []).filter(x => x.start <= t + 0.05).
 const sceneTag = (ver, t) => { const sc = sceneAt(ver, t); return sc ? `<span class="scn">Cena ${sc.n}</span>` : ''; };
 const isMobile = () => window.matchMedia('(max-width: 640px)').matches;
 const RV = { id: null, v: null, data: null, poll: null, noteT: 0, pausedByUs: false, editing: null, replying: null, filter: 'todas', active: null };
+const pl = (n, um, varios) => new Intl.PluralRules('pt').select(n) === 'one' ? um : varios;
 const mmss = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s % 60).padStart(2, '0'); };
 function stopReviewAudio() { const a = document.getElementById('rvaudio'); if (a) a.pause(); }
 
@@ -1087,10 +1126,9 @@ function renderVersions() {
       ${d.can_mix ? `<button class="btn" id="vgen" title="Mistura a narração do AutoTake com os sons e músicas da Estrutura Plus">${I.layers}Gerar a partir da Estrutura Plus</button>` : ''}
       ${d.meta.kind === 'review' ? '<button class="chip" id="vdelep">Apagar episódio</button>' : ''}
       <span class="note" id="vnote"></span></div></div>`;
-  box.querySelectorAll('[data-delv]').forEach(b => b.onclick = async () => {
-    if (!confirm('Apagar esta versão e as notas que lhe pertencem?')) return;
+  box.querySelectorAll('[data-delv]').forEach(b => holdDelete(b, async () => {
     await api(`/api/episodes/${RV.id}/review/versions/${b.dataset.delv}`, { method: 'DELETE' }).catch(showErr); loadReview();
-  });
+  }, 'Apagar esta versão e as notas que lhe pertencem?'));
   document.getElementById('vfile').onchange = e => {
     const f = e.target.files[0]; if (!f) return;
     const fd = new FormData(); fd.append('audio', f); fd.append('label', document.getElementById('vlabel').value); fd.append('by', 'Sonoplastia');
@@ -1102,10 +1140,9 @@ function renderVersions() {
     xhr.send(fd);
   };
   const delep = document.getElementById('vdelep');
-  if (delep) delep.onclick = async () => {
-    if (!confirm('Apagar este episódio, todas as versões e todas as notas? Não se pode desfazer.')) return;
+  holdDelete(delep, async () => {
     await api(`/api/review/episodes/${RV.id}`, { method: 'DELETE' }).catch(e => { alert(e.message); }); location.hash = '#/notas';
-  };
+  }, 'Apagar este episódio, todas as versões e todas as notas? Não se pode desfazer.');
   const vgen = document.getElementById('vgen');
   if (vgen) vgen.onclick = async () => {
     if (!confirm('Gerar uma versão a partir da narração e das faixas de sons e música da Estrutura Plus? Pode demorar alguns minutos.')) return;
@@ -1183,7 +1220,7 @@ function bindPlayer(ver) {
   function paintNotes() {
     const own = role.mode === 'direcao' ? role.name : null, son = role.mode === 'sonoplastia';
     const list = notes().filter(n => RV.filter === 'todas' || (RV.filter === 'minhas' ? n.author === own : n.status !== 'feita'));
-    document.getElementById('rvcount').textContent = `${notes().length} notas${notes().some(n => n.status !== 'feita') ? `, ${notes().filter(n => n.status !== 'feita').length} abertas` : ''}`;
+    document.getElementById('rvcount').textContent = `${notes().length} ${pl(notes().length, 'nota', 'notas')}${notes().some(n => n.status !== 'feita') ? `, ${notes().filter(n => n.status !== 'feita').length} ${pl(notes().filter(n => n.status !== 'feita').length, 'aberta', 'abertas')}` : ''}`;
     document.querySelectorAll('[data-f]').forEach(b => b.classList.toggle('on', b.dataset.f === RV.filter));
     document.getElementById('rvnotes').innerHTML = list.length ? list.map(n => `<div class="rv-note ${n.status === 'feita' ? 'feita' : ''} ${RV.active === n.id ? 'on' : ''}" data-n="${n.id}">
       <button class="rv-t" data-seek="${n.t}" title="Ir para este momento">${mmss(n.t)}</button>
@@ -1206,11 +1243,10 @@ function bindPlayer(ver) {
     document.querySelectorAll('[data-edit-btn]').forEach(b => b.onclick = () => { RV.editing = b.dataset.editBtn; paintNotes(); document.querySelector('[data-edit]')?.focus(); });
     document.querySelectorAll('[data-save]').forEach(b => b.onclick = () => upd(b.dataset.save, { text: document.querySelector(`[data-edit="${b.dataset.save}"]`).value }));
     document.querySelectorAll('[data-cancel]').forEach(b => b.onclick = () => { RV.editing = RV.replying = null; paintNotes(); });
-    document.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
-      if (!confirm('Apagar esta nota?')) return;
+    document.querySelectorAll('[data-del]').forEach(b => holdDelete(b, async () => {
       await api(`/api/episodes/${RV.id}/review/notes/${b.dataset.del}`, { method: 'DELETE' }).catch(showErr);
       RV.data.review.notes = RV.data.review.notes.filter(x => x.id !== b.dataset.del); paintNotes(); paintPins();
-    });
+    }, 'Apagar esta nota?'));
   }
   RV.repaint = () => { paintNotes(); paintPins(); RV.tapeDraw && RV.tapeDraw(); tick(); };
   RV.tick = tick; a.ontimeupdate = tick; a.onloadedmetadata = () => { tick(); paintPins(); };
@@ -1814,8 +1850,6 @@ function statusPill(st) {
 }
 
 async function deleteEpisode(id) {
-  const ep = S.list.find(e => e.id === id);
-  if (!confirm(`Eliminar "${ep ? ep.title : 'este episódio'}"?\n\nA gravação, o guião e todo o trabalho feito serão apagados e não é possível desfazer.`)) return;
   try { await api('/api/episodes/' + id, { method: 'DELETE' }); } catch (e) { alert('Não foi possível eliminar: ' + e.message); }
   home();
 }
@@ -1825,7 +1859,7 @@ async function home() {
   const rows = S.list.filter(inProject).map(ep => `<div class="ep-row"><a class="ep" href="#/ep/${ep.id}">
       <b>${esc(ep.title)}</b>${statusPill(ep.state)}
       <small>${new Date(ep.created * 1000).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' })}</small>
-    </a><button class="ep-del" type="button" title="Eliminar episódio" aria-label="Eliminar ${esc(ep.title)}" onclick="deleteEpisode('${ep.id}')">${I.trash}</button></div>`).join('') || '<div class="empty">Ainda não há episódios.<br>Carrega a gravação e o guião para começar.</div>';
+    </a><button class="ep-del" type="button" title="Eliminar episódio" aria-label="Eliminar ${esc(ep.title)}" data-delep="${ep.id}">${I.trash}</button></div>`).join('') || '<div class="empty">Ainda não há episódios.<br>Carrega a gravação e o guião para começar.</div>';
 
   $app.innerHTML = shell('autotake', topbar({ left: brand }) + `
   <div class="wrap">
@@ -1849,6 +1883,7 @@ async function home() {
     </div>
   </div>`);
 
+  document.querySelectorAll('[data-delep]').forEach(b => holdDelete(b, () => deleteEpisode(b.dataset.delep), 'Eliminar este episódio? A gravação, o guião e todo o trabalho feito serão apagados e não é possível desfazer.'));
   const form = document.getElementById('newForm');
   for (const [id, name] of [['dropAudio','audio'],['dropScript','script']]) {
     const box = document.getElementById(id), input = form.elements[name];
