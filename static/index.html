@@ -613,6 +613,17 @@ body{letter-spacing:-.015em}
   .tape.cols #rvnotes{display:block}
 }
 @media (min-width:641px) and (max-width:1100px){.tape.cols #rvnotes{grid-template-columns:1fr}}
+
+.epg{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.epc{padding:0;display:flex;flex-direction:column;min-height:132px}
+.epc-m{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:16px 18px;color:inherit;text-decoration:none;flex:1}
+.epc-m b{font-size:16px;font-weight:800}
+.epc-n{font-size:12px;font-weight:800;background:#111;color:#e6dfd6;border-radius:980px;padding:2px 10px}
+.epc-l{display:flex;gap:4px;padding:8px 12px 12px;flex-wrap:wrap}
+.epc-l a{font-size:13px;font-weight:600;padding:5px 11px;border-radius:980px;background:rgba(0,0,0,.08);color:#111;text-decoration:none}
+.epc-l a:hover{background:rgba(0,0,0,.16)}
+.epc-empty{align-items:flex-start;gap:6px;padding:16px 18px;border:1.5px dashed rgba(0,0,0,.3)!important;background:transparent!important;text-decoration:none;color:inherit}
+.epc-empty b{color:#a29a90}.epc-empty small{color:rgba(0,0,0,.5)}
 </style>
 </head>
 <body>
@@ -689,14 +700,14 @@ function topbar({ left, title = '', actions = '' }) {
 const brand = `<b class="brand">AutoTake</b>`;
 const backLink = `<a class="back" href="#/autotake">${I.chevL}Episódios</a>`;
 
-const PROJECT = { name: 'As Sombras de Duarte Lima', ep: 'EP 4' };
+const PROJECT = { name: 'As Sombras de Duarte Lima', total: 6 };
 function side(active) {
   const it = (key, href, icon, label) => `<a class="nav-i ${active === key ? 'on' : ''}" href="${href}">${icon}<span>${label}</span></a>`;
   return `<aside class="side">
     <a class="logo" href="#/"><i>${I.logo}</i><span>Podcast Plus<em>AI Assistant</em></span></a>
     <a class="back" href="#/">${I.chevL}Projetos</a>
-    <div class="proj-n"><b>${esc(PROJECT.name)}</b><span>${PROJECT.ep}</span></div>
-    <p class="sec">Episódio</p>${it('geral', '#/projeto', I.grid, 'Visão geral')}
+    <div class="proj-n"><b>${esc(PROJECT.name)}</b><span>${PROJECT.total} episódios</span></div>
+    <p class="sec">Projeto</p>${it('geral', '#/projeto', I.grid, 'Visão geral')}
     <p class="sec">Funcionalidades</p>${it('autotake', '#/autotake', I.wave, 'AutoTake')}${it('analise', '#/analise', I.doc, 'Análise de Guião')}${it('maestro', '#/maestro', I.music, 'Maestro')}${it('estrutura', '#/estrutura', I.layers, 'Estrutura Plus')}
     <p class="sec">Revisão</p>${it('notas', '#/notas', I.note, 'Notas da Direção')}
     <div class="who"><span>Perfil: <b>Sonoplastia</b></span><a href="#" onclick="switchRole();return false">Mudar</a></div>
@@ -713,50 +724,29 @@ function projectsPage() {
     <p class="page-s">Um projeto por podcast. Abre um para trabalhar o áudio do episódio com as ferramentas do assistente.</p>
     <div class="projs">
       <a class="card pcard" href="#/projeto"><div class="cov">${I.wave}</div>
-        <div class="bd"><span class="pill run"><i></i>Próximo podcast</span><div><b>${esc(PROJECT.name)}</b><small>Podcast Plus · ${PROJECT.ep}</small></div></div></a>
+        <div class="bd"><span class="pill run"><i></i>Próximo podcast</span><div><b>${esc(PROJECT.name)}</b><small>Podcast Plus · ${PROJECT.total} episódios</small></div></div></a>
     </div>
   </div>`;
 }
 
-/* ---------- visão geral do projeto ---------- */
+/* ---------- visão geral do projeto: os episódios em que andamos a trabalhar ---------- */
+const epNum = t => { const m = String(t).match(/\bep(?:is[oó]dio)?\.?\s*#?\s*0?(\d{1,2})\b/i) || String(t).match(/\b0?(\d{1,2})\s*$/); return m ? +m[1] : null; };
 async function projectPage() {
   try { S.list = await api('/api/episodes'); } catch { S.list = []; }
-  const ready = S.list.find(e => e.state?.status === 'pronto');
-  const bars = Array.from({ length: 96 }, (_, i) => `<i style="height:${Math.min(52, 6 + Math.round(Math.abs(Math.sin(i * .31) * Math.cos(i * .09 + 1)) * 44 + (i % 5) * 1.5))}px"></i>`).join('');
-  const audio = ready ? `<div class="card audio">
-      <div class="hd"><b>Áudio do episódio</b><span class="note">${esc(ready.title)}</span></div>
-      <div class="row"><button class="play" id="pPlay" aria-label="Ouvir" ${S.demo ? 'disabled' : ''}>${I.play}</button>
-        <div class="wv"><div class="wave" id="pWave">${bars}</div><div class="tm"><span id="pCur">0:00</span><span id="pDur">—</span></div></div></div>
-      <div class="chips"><button class="chip" id="pBack" ${S.demo ? 'disabled' : ''}>−15 s</button><button class="chip" id="pFwd" ${S.demo ? 'disabled' : ''}>+15 s</button></div>
-    </div>` : `<div class="card empty" style="margin-bottom:32px">Ainda não há áudio neste episódio.<br>Abre o AutoTake e carrega a gravação e o guião para começar.</div>`;
+  const slots = {}, extra = [];
+  S.list.forEach(e => { const n = epNum(e.title); if (n >= 1 && n <= PROJECT.total && !slots[n]) slots[n] = e; else extra.push(e); });
+  const card = (n, e) => e ? `<div class="card epc"><a class="epc-m" href="#/ep/${e.id}"><span class="epc-n">${n ? 'EP ' + n : 'EP'}</span><b>${esc(e.title)}</b>${statusPill(e.state)}</a>
+      <div class="epc-l"><a href="#/ep/${e.id}">Takes</a><a href="#/analise/${e.id}">Análise</a><a href="#/maestro/${e.id}">Maestro</a><a href="#/estrutura/${e.id}">Estrutura</a></div></div>`
+    : `<a class="card epc epc-empty" href="#/autotake"><span class="epc-n">EP ${n}</span><b>Por começar</b><small>Carregar gravação e guião</small></a>`;
+  const done = Object.keys(slots).length;
   $app.innerHTML = shell('geral', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios e não há áudio.</div>' : ''}
     <div class="wrap">
-      <span class="pill run" style="display:inline-block;margin-bottom:12px"><i></i>Próximo podcast</span>
       <h1 class="page-t" style="margin-top:0">${esc(PROJECT.name)}</h1>
-      <p class="page-s" style="margin-bottom:32px">Podcast Plus · ${PROJECT.ep}</p>
-      ${audio}
-      <p class="section-t">Funcionalidades</p>
-      <div class="fgrid">
-        <a class="card fcard" href="#/autotake"><span class="ico">${I.wave}</span><b>AutoTake</b><span>Encontra os takes de cada parágrafo e escolhe o melhor.</span></a>
-        <a class="card fcard" href="#/analise"><span class="ico">${I.doc}</span><b>Análise de Guião</b><span>As cenas do guião e os sons de cada parágrafo.</span></a>
-        <a class="card fcard" href="#/maestro"><span class="ico">${I.music}</span><b>Maestro</b><span>Músicas e stems para cada cena, criados a partir do texto.</span></a>
-        <a class="card fcard" href="#/estrutura"><span class="ico">${I.layers}</span><b>Estrutura Plus</b><span>Em preparação.</span></a>
-      </div>
+      <p class="page-s" style="margin-bottom:28px">Podcast Plus · ${done} de ${PROJECT.total} episódios em curso</p>
+      <p class="section-t">Episódios</p>
+      <div class="epg">${Array.from({ length: PROJECT.total }, (_, i) => card(i + 1, slots[i + 1])).join('')}</div>
+      ${extra.length ? `<p class="section-t" style="margin-top:32px">Outros</p><div class="epg">${extra.map(e => card(null, e)).join('')}</div>` : ''}
     </div>`);
-  if (!ready || S.demo) return;
-  player.src = `/api/episodes/${ready.id}/audio`;
-  const wave = document.getElementById('pWave'), cur = document.getElementById('pCur'), dur = document.getElementById('pDur'), btn = document.getElementById('pPlay');
-  const paint = () => {
-    const d = player.duration || 0, t = player.currentTime || 0, n = Math.round(wave.children.length * (d ? t / d : 0));
-    [...wave.children].forEach((b, i) => b.classList.toggle('on', i < n));
-    cur.textContent = fmt(t); if (d) dur.textContent = fmt(d);
-    btn.innerHTML = player.paused ? I.play : I.stop;
-  };
-  player.onloadedmetadata = player.ontimeupdate = player.onpause = player.onplay = paint;
-  btn.onclick = () => player.paused ? player.play() : player.pause();
-  document.getElementById('pBack').onclick = () => { player.currentTime = Math.max(0, player.currentTime - 15); };
-  document.getElementById('pFwd').onclick = () => { player.currentTime = Math.min(player.duration || 0, player.currentTime + 15); };
-  wave.onclick = e => { if (player.duration) { const r = wave.getBoundingClientRect(); player.currentTime = (e.clientX - r.left) / r.width * player.duration; } };
 }
 
 /* ---------- Análise de Guião ---------- */
