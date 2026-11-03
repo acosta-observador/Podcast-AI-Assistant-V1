@@ -678,6 +678,31 @@ h1,.page-t{text-wrap:balance}
   .rv-wrap.dir .tape-side{transition:opacity .2s ease!important}
 }
 @keyframes fadein{from{opacity:0}to{opacity:1}}
+
+/* Indicações Sonoplastia */
+.dtabs{display:flex;gap:8px;margin:0 0 22px}
+.dtabs a{text-decoration:none;height:36px;padding:0 16px;border-radius:980px;background:var(--panel);color:var(--text);font-size:14px;font-weight:700;display:inline-flex;align-items:center}
+.dtabs a.on{background:var(--accent);color:#fff}
+.ind-sc{padding:20px 22px;margin-bottom:16px}
+.ind-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.ind-h b{font-size:18px;letter-spacing:-.02em}.ind-h .scn-n{font-size:12px;font-weight:800;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.ind-h .sp{flex:1}
+.ind-p{padding:10px 0;border-top:1px solid var(--line)}
+.ind-p .tx{font-size:15px;line-height:1.5;color:var(--text);margin:0;max-width:65ch}
+.ind-p .spk{font-size:12px;font-weight:800;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;display:block;margin-bottom:2px}
+.ind-p.mk .tx{color:var(--faint);font-style:italic;font-size:13px}
+.ind-p .add{margin-top:8px}
+.ind-i{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;margin:8px 0 0;padding:10px 12px;border-radius:14px;background:var(--panel)}
+.ind-i.done{opacity:.55}.ind-i.done .t{text-decoration:line-through}
+.ind-i .t{font-size:15px;line-height:1.45;margin:0}
+.ind-i .rp{font-size:13px;color:var(--muted);margin:4px 0 0}
+.ind-i .ac{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.ind-i .ac .btn{height:28px;padding:0 12px;font-size:13px}
+.ind-f{margin:10px 0 0;display:flex;flex-direction:column;gap:8px}
+.ind-f textarea{width:100%;min-height:72px;border-radius:12px;border:1px solid var(--line);background:#fff;padding:10px 12px;font:inherit;font-size:15px;color:var(--text);resize:vertical}
+.ind-f div{display:flex;gap:8px}
+.ind-gen{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 18px}
+@media (max-width:640px){.ind-i{grid-template-columns:1fr}.ind-i .ac{justify-content:flex-start}}
 </style>
 </head>
 <body>
@@ -728,8 +753,10 @@ async function route() {
   stopAudio(); clearTimeout(S.poll); stopStructure(); clearTimeout(ST.poll); clearTimeout(AN.poll); clearTimeout(MA.poll); clearTimeout(RV.poll); stopReviewAudio(); player.onloadedmetadata = player.ontimeupdate = player.onpause = player.onplay = null; if (!player.paused) player.pause();
   const role = getRole();
   if (!role) return gatePage();
-  if (role.mode === 'direcao' && !/^#\/(direcao|revisao)/.test(location.hash)) { location.hash = '#/direcao'; return; }
+  if (role.mode === 'direcao' && !/^#\/(direcao|revisao|indicacoes)/.test(location.hash)) { location.hash = '#/direcao'; return; }
   if (role.mode === 'sonoplastia' && !/^#\/projeto/.test(location.hash)) await ensureProject();
+  const mi = location.hash.match(/^#\/indicacoes(?:\/([\w-]+))?$/);
+  if (mi) return mi[1] ? indicPage(mi[1]) : indicHome();
   const mr = location.hash.match(/^#\/revisao\/([\w-]+)(?:\/(v\d+))?/);
   if (mr) return reviewPage(mr[1], mr[2]);
   if (location.hash === '#/direcao') return role.mode === 'direcao' ? directorHome() : (location.hash = '#/notas', undefined);
@@ -774,7 +801,7 @@ function side(active) {
     <div class="proj-n"><b>${esc(PROJECT.name)}</b><span>${PROJECT.total} episódios</span></div>
     <p class="sec">Projeto</p>${it('geral', '#/projeto/' + PROJECT.id, I.grid, 'Visão geral')}
     <p class="sec">Funcionalidades</p>${it('autotake', '#/autotake', I.wave, 'AutoTake')}${it('analise', '#/analise', I.doc, 'Análise de Guião')}${it('maestro', '#/maestro', I.music, 'Maestro')}${it('estrutura', '#/estrutura', I.layers, 'Estrutura Plus')}
-    <p class="sec">Revisão</p>${it('notas', '#/notas', I.note, 'Notas da Direção')}
+    <p class="sec">Revisão</p>${it('notas', '#/notas', I.note, 'Notas da Direção')}${it('indic', '#/indicacoes', I.doc, 'Indicações da Direção')}
     <div class="who"><span>Perfil: <b>Sonoplastia</b></span><a href="#" onclick="switchRole();return false">Mudar</a></div>
   </aside>`;
 }
@@ -812,7 +839,7 @@ async function projectPage() {
   const slots = {}, extra = [];
   S.list.filter(inProject).forEach(e => { const n = epNum(e.title); if (n >= 1 && n <= PROJECT.total && !slots[n]) slots[n] = e; else extra.push(e); });
   const card = (n, e) => e ? `<div class="card epc"><a class="epc-m" href="#/ep/${e.id}"><span class="epc-n">${n ? 'EP ' + n : 'EP'}</span><b>${esc(e.title)}</b>${statusPill(e.state)}</a>
-      <div class="epc-l"><a href="#/ep/${e.id}">Takes</a><a href="#/analise/${e.id}">Análise</a><a href="#/maestro/${e.id}">Maestro</a><a href="#/estrutura/${e.id}">Estrutura</a></div></div>`
+      <div class="epc-l"><a href="#/ep/${e.id}">Takes</a><a href="#/analise/${e.id}">Análise</a><a href="#/maestro/${e.id}">Maestro</a><a href="#/estrutura/${e.id}">Estrutura</a><a href="#/indicacoes/${e.id}">Indicações</a></div></div>`
     : `<a class="card epc epc-empty" href="#/autotake"><span class="epc-n">EP ${n}</span><b>Por começar</b><small>Carregar gravação e guião</small></a>`;
   const done = Object.keys(slots).length;
   $app.innerHTML = shell('geral', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios e não há áudio.</div>' : ''}
@@ -992,7 +1019,7 @@ async function directorHome() {
   const role = getRole();
   let list; try { list = await api('/api/review'); } catch { list = []; }
   list = list.filter(e => e.kind === 'review' || e.versions);
-  $app.innerHTML = dirTop(role) + `<div class="wrap"><h1 class="page-t">Olá, ${esc(role.name)}</h1>
+  $app.innerHTML = dirTop(role) + `<div class="wrap">${dirTabs('rev')}<h1 class="page-t">Olá, ${esc(role.name)}</h1>
     
     <div class="projs">${list.length ? list.map(e => e.latest ? `<a class="card fcard" href="#/revisao/${e.id}/${e.latest}"><b style="font-size:13px;color:var(--muted);letter-spacing:.04em">${esc(e.latest_label)}</b>
       <b style="font-size:18px;line-height:1.3">${esc(e.title)}</b><span>${e.notes ? `${e.notes} notas` : 'Sem notas ainda'}${e.open ? ` · ${e.open} abertas` : ''}</span></a>`
@@ -1030,6 +1057,80 @@ async function notesHome() {
     xhr.onerror = () => { note.textContent = 'O envio falhou. Verifica a ligação.'; };
     xhr.send(fd);
   };
+}
+
+/* ---------- Indicações Sonoplastia: a Direção escreve por cena, a Sonoplastia lê antes de editar ---------- */
+const IN = { id: null, data: null, comp: null, all: false };
+const dirTabs = a => `<div class="dtabs"><a class="${a === 'rev' ? 'on' : ''}" href="#/direcao">Revisão</a><a class="${a === 'ind' ? 'on' : ''}" href="#/indicacoes">Indicações Sonoplastia</a></div>`;
+const inShell = html => { const r = getRole(); return r.mode === 'direcao' ? dirTop(r) + `<div class="wrap">${dirTabs('ind')}${html}</div>` : shell('indic', `<div class="wrap">${html}</div>`); };
+const jsonOpts = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+async function indicHome() {
+  const dir = getRole().mode === 'direcao';
+  let list; try { list = await api('/api/indications'); } catch { list = []; }
+  if (!dir) list = list.filter(inProject);
+  $app.innerHTML = inShell(`<h1 class="page-t">Indicações Sonoplastia</h1>
+    <p class="page-s" style="margin-bottom:24px">${dir ? 'Escreve, por cena, o que queres ouvir no som do episódio. A Sonoplastia lê tudo antes de começar a editar.' : 'O que a Direção quer ouvir em cada cena. Lê antes de começares a editar.'}</p>
+    <div class="projs" style="margin-top:0">${list.length ? list.map(e => `<a class="card fcard" href="#/indicacoes/${e.id}"><b style="font-size:18px;line-height:1.3">${esc(e.title)}</b>
+      <span>${e.total ? `${e.total} ${pl(e.total, 'indicação', 'indicações')}${e.open ? `, <b style="color:var(--warn)">${e.open} por tratar</b>` : ', todas tratadas'}` : (dir ? 'Sem indicações ainda' : 'Sem indicações')}</span></a>`).join('') : '<div class="card empty">Ainda não há episódios com guião.</div>'}</div>`);
+}
+
+async function indicPage(id) { IN.id = id; IN.comp = null; IN.all = false; await loadIndic(); }
+async function loadIndic() {
+  try { IN.data = await api(`/api/episodes/${IN.id}/indications`); }
+  catch (e) { $app.innerHTML = inShell(`<p class="rv-back"><a class="back" href="#/indicacoes">${I.chevL}Episódios</a></p><div class="card empty">${esc(e.message)}</div>`); return; }
+  renderIndic();
+}
+
+function renderIndic() {
+  const d = IN.data, role = getRole(), dir = role.mode === 'direcao', me = dir ? role.name : 'Sonoplastia';
+  const scenes = d.scenes && d.scenes.length ? d.scenes : [{ n: 1, title: 'Guião', from: 0, to: 1e9 }];
+  const inds = d.indications || [], total = inds.length, open = inds.filter(i => i.status !== 'feita').length;
+  const comp = (sc, item) => IN.comp && IN.comp.scene === sc && IN.comp.item === item
+    ? `<form class="ind-f" id="indf"><textarea id="indt" maxlength="2000" placeholder="${item ? 'O que queres ouvir neste parágrafo?' : 'O que queres ouvir nesta cena?'}" aria-label="Indicação"></textarea>
+        <div><button class="btn blue" type="submit">Guardar</button><button class="btn" type="button" id="indx">Cancelar</button></div></form>` : '';
+  const row = i => {
+    const own = dir && i.author === role.name;
+    return `<div class="ind-i ${i.status === 'feita' ? 'done' : ''}" data-i="${i.id}">${dchip(i.author)}
+      <div><p class="t">${esc(i.text)}</p>${i.reply ? `<p class="rp"><b>${esc(i.reply_by || 'Sonoplastia')}:</b> ${esc(i.reply)}</p>` : ''}</div>
+      <div class="ac">${dir ? (own ? `<button class="btn" data-edit="${i.id}">Editar</button><button class="btn" data-del="${i.id}" aria-label="Apagar">${I.trash}</button>` : '')
+        : `<button class="btn ${i.status === 'feita' ? '' : 'blue'}" data-done="${i.id}">${i.status === 'feita' ? 'Reabrir' : I.check + 'Feita'}</button><button class="btn" data-reply="${i.id}">Responder</button>`}</div></div>`;
+  };
+  const card = sc => {
+    const mine = inds.filter(i => i.scene === sc.n), sOpen = mine.filter(i => i.status !== 'feita').length;
+    const lines = (d.script || []).filter(x => x.id >= sc.from && x.id <= sc.to && x.type !== 'titulo');
+    const shown = lines.filter(x => dir || IN.all || mine.some(i => i.item === x.id));
+    const sceneLevel = mine.filter(i => i.item == null || !lines.some(x => x.id === i.item));
+    return `<section class="card ind-sc" id="sc${sc.n}"><div class="ind-h"><span class="scn-n">Cena ${sc.n}</span><b>${esc(sc.title || '')}</b><span class="sp"></span>
+        ${mine.length ? `<span class="pill ${sOpen ? 'warn' : 'ok'}">${sOpen ? `${sOpen} por tratar` : 'tratadas'}</span>` : ''}
+        ${dir ? `<button class="btn" data-add="${sc.n}:">+ Indicação para a cena</button>` : ''}</div>
+      ${sceneLevel.map(row).join('')}${comp(sc.n, null)}
+      ${shown.map(x => `<div class="ind-p ${x.type === 'nota' ? 'mk' : ''}">${x.speaker ? `<span class="spk">${esc(x.speaker)}</span>` : ''}<p class="tx">${esc(x.text)}</p>
+        ${mine.filter(i => i.item === x.id).map(row).join('')}${comp(sc.n, x.id)}
+        ${dir && x.type !== 'nota' ? `<button class="btn add" data-add="${sc.n}:${x.id}">+ Indicação aqui</button>` : ''}</div>`).join('')}
+      ${!dir && !mine.length ? '<p class="note">Sem indicações nesta cena.</p>' : ''}</section>`;
+  };
+  const y = window.scrollY;
+  $app.innerHTML = inShell(`<p class="rv-back" style="margin:0 0 10px"><a class="back" href="#/indicacoes">${I.chevL}Episódios</a></p>
+    <h1 class="page-t" style="margin-top:0">${esc(d.meta.title)}</h1>
+    <p class="page-s" style="margin-bottom:18px">${total ? `${total} ${pl(total, 'indicação', 'indicações')} em ${new Set(inds.map(i => i.scene)).size} ${pl(new Set(inds.map(i => i.scene)).size, 'cena', 'cenas')}${open ? `, ${open} por tratar` : ', todas tratadas'}` : (dir ? 'Ainda sem indicações. Escolhe uma cena ou um parágrafo do guião.' : 'A Direção ainda não deixou indicações.')}</p>
+    ${dir ? '' : `<div class="ind-gen"><button class="btn" id="indall">${IN.all ? 'Só o que tem indicações' : 'Ver o guião completo'}</button></div>`}
+    ${scenes.map(card).join('')}`);
+  window.scrollTo(0, y);
+  const patch = (id, body) => api(`/api/episodes/${IN.id}/indications/${id}`, jsonOpts('PATCH', body)).then(loadIndic).catch(e => alert(e.message));
+  const find = id => inds.find(i => i.id === id);
+  $app.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { const [sc, it] = b.dataset.add.split(':'); IN.comp = { scene: +sc, item: it ? +it : null }; renderIndic(); const t = document.getElementById('indt'); if (t) t.focus(); });
+  const f = document.getElementById('indf');
+  if (f) {
+    document.getElementById('indx').onclick = () => { IN.comp = null; renderIndic(); };
+    f.onsubmit = e => { e.preventDefault(); const text = document.getElementById('indt').value.trim(); if (!text) return; const c = IN.comp; IN.comp = null;
+      api(`/api/episodes/${IN.id}/indications`, jsonOpts('POST', { scene: c.scene, item: c.item, text, author: me })).then(loadIndic).catch(e2 => alert(e2.message)); };
+  }
+  $app.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { const i = find(b.dataset.edit), t = prompt('Editar indicação', i.text); if (t && t.trim()) patch(i.id, { text: t }); });
+  $app.querySelectorAll('[data-del]').forEach(b => holdDelete(b, () => api(`/api/episodes/${IN.id}/indications/${b.dataset.del}`, { method: 'DELETE' }).then(loadIndic).catch(e => alert(e.message)), 'Apagar esta indicação?'));
+  $app.querySelectorAll('[data-done]').forEach(b => b.onclick = () => { const i = find(b.dataset.done); patch(i.id, { status: i.status === 'feita' ? 'aberta' : 'feita', by: me }); });
+  $app.querySelectorAll('[data-reply]').forEach(b => b.onclick = () => { const i = find(b.dataset.reply), t = prompt('Resposta à Direção', i.reply || ''); if (t !== null) patch(i.id, { reply: t, by: me }); });
+  const ia = document.getElementById('indall'); if (ia) ia.onclick = () => { IN.all = !IN.all; renderIndic(); };
 }
 
 /* Apagar = manter premido (padrão "hold to delete"): enche devagar, larga depressa; teclado continua a pedir confirmação */
@@ -2175,6 +2276,17 @@ const Demo = {
     if (!this.ep) this.ep = this.build();
     if (path === '/api/episodes') return [{ id: 'demo', title: this.ep.meta.title, created: Date.now() / 1000, state: { status: 'pronto' } }];
     if (path === '/api/projects') { this.projs = this.projs || [{ id: DEFAULT_PID, name: 'As Sombras de Duarte Lima', total: 6 }]; if (opts.method === 'POST') { const nm = JSON.parse(opts.body).name; const p = { id: 'p' + (this.projs.length + 1), name: nm, total: 6 }; this.projs.push(p); return p; } return this.projs; }
+    if (path === '/api/indications') { const l = this.inds || []; return [{ id: 'demo', title: this.ep.meta.title, project: DEFAULT_PID, total: l.length || 2, open: l.length ? l.filter(i => i.status !== 'feita').length : 2 }]; }
+    const mi = path.match(/^\/api\/episodes\/demo\/indications(?:\/(\w+))?$/);
+    if (mi) {
+      this.inds = this.inds || [{ id: 'i1', scene: 1, item: 2, text: 'Abrir em silêncio e só depois o sino, muito ao longe.', author: 'Sara', created: Date.now() / 1000, status: 'aberta', reply: '' },
+        { id: 'i2', scene: 2, item: null, text: 'Cena toda em tensão: sem música até ao maremoto.', author: 'Miguel', created: Date.now() / 1000, status: 'aberta', reply: '' }];
+      const m = opts.method || 'GET', b = opts.body ? JSON.parse(opts.body) : {}, an = this.analysis().analysis;
+      if (m === 'GET') return { meta: this.ep.meta, directors: ['Miguel', 'Sara', 'Tânia', 'João', 'Raquel'], scenes: an.scenes, script: an.items, indications: this.inds };
+      if (m === 'POST') { const it = { id: 'i' + (this.inds.length + 10), scene: b.scene, item: b.item, text: b.text, author: b.author, created: Date.now() / 1000, status: 'aberta', reply: '' }; this.inds.push(it); return it; }
+      if (m === 'PATCH') { const it = this.inds.find(x => x.id === mi[1]); Object.assign(it, b); return it; }
+      if (m === 'DELETE') { this.inds = this.inds.filter(x => x.id !== mi[1]); return { ok: true }; }
+    }
     if (path === '/api/review') return [{ id: 'demo', title: this.ep.meta.title, versions: 1, latest: 'v1', latest_label: 'Versão 1', notes: 3, open: 2 }];
     if (/\/review\/versions\/v1\/scenes$/.test(path)) return JSON.parse(opts.body).scenes;
     if (path === '/api/episodes/demo/review') return { meta: this.ep.meta, directors: ['Miguel', 'Sara', 'Tânia', 'João', 'Raquel'], can_mix: true, review: { versions: [{ id: 'v1', label: 'Versão 1', created: Date.now() / 1000, source: 'upload', by: 'Sonoplastia', state: 'pronto', duration: 1800, scenes: [{ n: 1, title: '', start: 0 }, { n: 2, title: '', start: 420 }, { n: 3, title: '', start: 900 }, { n: 4, title: '', start: 1400 }] }],

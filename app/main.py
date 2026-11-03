@@ -1256,6 +1256,101 @@ def export_narration(eid: str, scene: int):
                         background=BackgroundTask(shutil.rmtree, tmp.parent, ignore_errors=True))
 
 
+# ---------- Indicações Sonoplastia: a Direção escreve, no guião e por cena, o que quer ouvir antes de a Sonoplastia editar ----------
+def indic_path(d: Path) -> Path:
+    return d / "indications.json"
+
+
+def read_indic(d: Path) -> dict:
+    return read_json(indic_path(d), {"items": [], "next": 1})
+
+
+def update_indic(d: Path, fn) -> None:
+    with _lock:
+        ind = read_indic(d)
+        fn(ind)
+        write_json(indic_path(d), ind)
+
+
+@app.get("/api/indications")
+def indications_overview():
+    """Episódios com guião e quantas indicações a Direção já deixou em cada um."""
+    out = []
+    for d in sorted(DATA.iterdir(), reverse=True):
+        meta = read_json(d / "meta.json")
+        if not meta or meta.get("kind") == "review" or not meta.get("script_file"):
+            continue
+        its = read_indic(d)["items"]
+        out.append({"id": meta["id"], "title": meta["title"], "project": meta.get("project"), "total": len(its),
+                    "open": sum(1 for i in its if i.get("status") != "feita")})
+    return out
+
+
+@app.get("/api/episodes/{eid}/indications")
+def get_indications(eid: str):
+    d = ep_dir(eid)
+    meta = read_json(d / "meta.json")
+    if not meta.get("script_file"):
+        raise HTTPException(400, "Este episódio não tem guião")
+    an = load_analysis(d)
+    return {"meta": meta, "directors": DIRECTORS, "scenes": an.get("scenes", []), "script": an.get("items", []), "indications": read_indic(d)["items"]}
+
+
+@app.post("/api/episodes/{eid}/indications")
+def add_indication(eid: str, body: dict = Body(...)):
+    d = ep_dir(eid)
+    text = str(body.get("text", "")).strip()[:2000]
+    if not text:
+        raise HTTPException(400, "Escreve a indicação")
+    try:
+        scene = int(body.get("scene"))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Cena inválida")
+    item = body.get("item")
+    made = {}
+
+    def apply(ind):
+        n = ind.get("next", 1)
+        it = {"id": f"i{n}", "scene": scene, "item": int(item) if isinstance(item, int) or str(item or "").isdigit() else None, "text": text,
+              "author": str(body.get("author", ""))[:40], "created": time.time(), "status": "aberta", "reply": ""}
+        ind["next"] = n + 1
+        ind["items"].append(it)
+        made.update(it)
+    update_indic(d, apply)
+    return made
+
+
+@app.patch("/api/episodes/{eid}/indications/{iid}")
+def patch_indication(eid: str, iid: str, body: dict = Body(...)):
+    """Texto (a Direção) ou estado e resposta (a Sonoplastia)."""
+    d = ep_dir(eid)
+    out = {}
+
+    def apply(ind):
+        for it in ind["items"]:
+            if it["id"] == iid:
+                if "text" in body and str(body["text"]).strip():
+                    it["text"] = str(body["text"]).strip()[:2000]
+                if body.get("status") in ("aberta", "feita"):
+                    it["status"] = body["status"]
+                    it["done_by"] = str(body.get("by", ""))[:40] if body["status"] == "feita" else ""
+                if "reply" in body:
+                    it["reply"] = str(body["reply"])[:1000]
+                    it["reply_by"] = str(body.get("by", ""))[:40]
+                out.update(it)
+    update_indic(d, apply)
+    if not out:
+        raise HTTPException(404)
+    return out
+
+
+@app.delete("/api/episodes/{eid}/indications/{iid}")
+def delete_indication(eid: str, iid: str):
+    d = ep_dir(eid)
+    update_indic(d, lambda ind: ind.update(items=[i for i in ind["items"] if i["id"] != iid]))
+    return {"ok": True}
+
+
 # ---------- Revisão: a Direção ouve versões do episódio e deixa notas na timeline ----------
 DIRECTORS = ["Miguel", "Sara", "Tânia", "João", "Raquel"]
 
