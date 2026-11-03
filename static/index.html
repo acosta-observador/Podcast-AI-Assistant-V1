@@ -643,6 +643,14 @@ body{letter-spacing:-.015em}
 .rv-wrap.dir .tape-side:not(.open){transition-duration:.2s}
 /* caixas: definição suave sobre o fundo branco */
 .card,.tape-notes,.kpan{box-shadow:0 1px 0 rgba(14,34,56,.04)}
+
+.pnew{display:grid;place-items:center;min-height:200px;border:1.5px dashed rgba(14,34,56,.3)!important;background:transparent!important;padding:18px}
+.pnew-b{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--text);font:inherit}
+.pnew-b span{width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:30px;font-weight:300;line-height:1}
+.pnew-f[hidden],.pnew-b[hidden]{display:none}
+.pnew-f{display:flex;flex-direction:column;gap:12px;width:100%}
+.pnew-f label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+.pnew-f input{height:40px;border-radius:12px;border:1px solid var(--line);background:#fff;padding:0 12px;font:inherit;font-size:15px;color:var(--text)}
 </style>
 </head>
 <body>
@@ -694,13 +702,15 @@ async function route() {
   const role = getRole();
   if (!role) return gatePage();
   if (role.mode === 'direcao' && !/^#\/(direcao|revisao)/.test(location.hash)) { location.hash = '#/direcao'; return; }
+  if (role.mode === 'sonoplastia' && !/^#\/projeto/.test(location.hash)) await ensureProject();
   const mr = location.hash.match(/^#\/revisao\/([\w-]+)(?:\/(v\d+))?/);
   if (mr) return reviewPage(mr[1], mr[2]);
   if (location.hash === '#/direcao') return role.mode === 'direcao' ? directorHome() : (location.hash = '#/notas', undefined);
   if (location.hash === '#/notas') return notesHome();
   const m = location.hash.match(/^#\/ep\/([\w-]+)/);
   if (m) return openEpisode(m[1]);
-  if (location.hash === '#/projeto') return projectPage();
+  const mp = location.hash.match(/^#\/projeto(?:\/([\w-]+))?$/);
+  if (mp) { await ensureProject(mp[1]); return projectPage(); }
   if (location.hash === '#/autotake') return home();
   const mm = location.hash.match(/^#\/maestro(?:\/([\w-]+))?(?:\/(\d+))?$/);
   if (mm) return maestroPage(mm[1], mm[2] ? +mm[2] : null);
@@ -719,14 +729,23 @@ function topbar({ left, title = '', actions = '' }) {
 const brand = `<b class="brand">AutoTake</b>`;
 const backLink = `<a class="back" href="#/autotake">${I.chevL}Episódios</a>`;
 
-const PROJECT = { name: 'As Sombras de Duarte Lima', total: 6 };
+const DEFAULT_PID = 'sombras-duarte-lima';
+const PROJECT = { id: DEFAULT_PID, name: 'As Sombras de Duarte Lima', total: 6 };
+const inProject = e => (e.project || DEFAULT_PID) === PROJECT.id;
+async function loadProjects() { try { S.projs = await api('/api/projects'); } catch { S.projs = [{ id: DEFAULT_PID, name: PROJECT.name, total: 6 }]; } return S.projs; }
+async function ensureProject(id) {
+  const ps = S.projs || await loadProjects();
+  let want = id; if (!want) { try { want = localStorage.getItem('pp_project'); } catch {} }
+  const p = ps.find(x => x.id === want) || ps[0];
+  Object.assign(PROJECT, p); try { localStorage.setItem('pp_project', p.id); } catch {}
+}
 function side(active) {
   const it = (key, href, icon, label) => `<a class="nav-i ${active === key ? 'on' : ''}" href="${href}">${icon}<span>${label}</span></a>`;
   return `<aside class="side">
     <a class="logo" href="#/"><i>${I.logo}</i><span>Podcast Plus<em>AI Assistant</em></span></a>
     <a class="back" href="#/">${I.chevL}Projetos</a>
     <div class="proj-n"><b>${esc(PROJECT.name)}</b><span>${PROJECT.total} episódios</span></div>
-    <p class="sec">Projeto</p>${it('geral', '#/projeto', I.grid, 'Visão geral')}
+    <p class="sec">Projeto</p>${it('geral', '#/projeto/' + PROJECT.id, I.grid, 'Visão geral')}
     <p class="sec">Funcionalidades</p>${it('autotake', '#/autotake', I.wave, 'AutoTake')}${it('analise', '#/analise', I.doc, 'Análise de Guião')}${it('maestro', '#/maestro', I.music, 'Maestro')}${it('estrutura', '#/estrutura', I.layers, 'Estrutura Plus')}
     <p class="sec">Revisão</p>${it('notas', '#/notas', I.note, 'Notas da Direção')}
     <div class="who"><span>Perfil: <b>Sonoplastia</b></span><a href="#" onclick="switchRole();return false">Mudar</a></div>
@@ -736,16 +755,27 @@ const shell = (active, html) => `<div class="shell">${active ? side(active) : ''
 const plainTop = `<div class="top"><div class="top-in"><div>${brand}</div><div></div><div></div></div></div>`;
 
 /* ---------- homepage: projetos ---------- */
-function projectsPage() {
+async function projectsPage() {
+  const ps = await loadProjects();
   $app.innerHTML = `<div class="top"><div class="top-in"><a class="logo" href="#/" style="padding:0"><i>${I.logo}</i><span style="font-size:15px">Podcast Plus <em style="display:inline;margin-left:4px">AI Assistant</em></span></a><div></div><div class="top-actions"><span style="font-size:13px;color:var(--muted)">Sonoplastia</span><a href="#" onclick="switchRole();return false" style="font-size:13px;margin-left:12px">Mudar de perfil</a></div></div></div>
   <div class="wrap">
     <h1 class="page-t">Projetos</h1>
     <p class="page-s">Um projeto por podcast. Abre um para trabalhar o áudio do episódio com as ferramentas do assistente.</p>
-    <div class="projs">
-      <a class="card pcard" href="#/projeto"><div class="cov">${I.wave}</div>
-        <div class="bd"><span class="pill run"><i></i>Próximo podcast</span><div><b>${esc(PROJECT.name)}</b><small>Podcast Plus · ${PROJECT.total} episódios</small></div></div></a>
+    <div class="projs">${ps.map(p => `<a class="card pcard" href="#/projeto/${p.id}"><div class="cov">${I.wave}</div>
+        <div class="bd"><span class="pill run"><i></i>Podcast Plus</span><div><b>${esc(p.name)}</b><small>${p.total} episódios</small></div></div></a>`).join('')}
+      <div class="card pcard pnew" id="pnew"><button type="button" class="pnew-b" id="pnewb" aria-label="Novo projeto"><span>+</span><b>Novo projeto</b></button>
+        <form class="pnew-f" id="pnewf" hidden><label>Nome do podcast<input type="text" id="pnewn" maxlength="80" placeholder="Ex.: O Caso Casa Pia" autocomplete="off"></label>
+          <div><button type="submit" class="btn blue">Criar</button> <button type="button" class="btn" id="pnewc">Cancelar</button></div><small class="note" id="pnewe"></small></form></div>
     </div>
   </div>`;
+  const nb = document.getElementById('pnewb'), nf = document.getElementById('pnewf'), nn = document.getElementById('pnewn');
+  nb.onclick = () => { nb.hidden = true; nf.hidden = false; nn.focus(); };
+  document.getElementById('pnewc').onclick = () => { nf.hidden = true; nb.hidden = false; };
+  nf.onsubmit = async e => {
+    e.preventDefault(); const name = nn.value.trim(); if (!name) { nn.focus(); return; }
+    try { const p = await api('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }); S.projs = null; location.hash = '#/projeto/' + p.id; }
+    catch (err) { document.getElementById('pnewe').textContent = err.message; }
+  };
 }
 
 /* ---------- visão geral do projeto: os episódios em que andamos a trabalhar ---------- */
@@ -753,7 +783,7 @@ const epNum = t => { const m = String(t).match(/\bep(?:is[oó]dio)?\.?\s*#?\s*0?
 async function projectPage() {
   try { S.list = await api('/api/episodes'); } catch { S.list = []; }
   const slots = {}, extra = [];
-  S.list.forEach(e => { const n = epNum(e.title); if (n >= 1 && n <= PROJECT.total && !slots[n]) slots[n] = e; else extra.push(e); });
+  S.list.filter(inProject).forEach(e => { const n = epNum(e.title); if (n >= 1 && n <= PROJECT.total && !slots[n]) slots[n] = e; else extra.push(e); });
   const card = (n, e) => e ? `<div class="card epc"><a class="epc-m" href="#/ep/${e.id}"><span class="epc-n">${n ? 'EP ' + n : 'EP'}</span><b>${esc(e.title)}</b>${statusPill(e.state)}</a>
       <div class="epc-l"><a href="#/ep/${e.id}">Takes</a><a href="#/analise/${e.id}">Análise</a><a href="#/maestro/${e.id}">Maestro</a><a href="#/estrutura/${e.id}">Estrutura</a></div></div>`
     : `<a class="card epc epc-empty" href="#/autotake"><span class="epc-n">EP ${n}</span><b>Por começar</b><small>Carregar gravação e guião</small></a>`;
@@ -1792,7 +1822,7 @@ async function deleteEpisode(id) {
 
 async function home() {
   try { S.list = await api('/api/episodes'); } catch { S.list = []; }
-  const rows = S.list.map(ep => `<div class="ep-row"><a class="ep" href="#/ep/${ep.id}">
+  const rows = S.list.filter(inProject).map(ep => `<div class="ep-row"><a class="ep" href="#/ep/${ep.id}">
       <b>${esc(ep.title)}</b>${statusPill(ep.state)}
       <small>${new Date(ep.created * 1000).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' })}</small>
     </a><button class="ep-del" type="button" title="Eliminar episódio" aria-label="Eliminar ${esc(ep.title)}" onclick="deleteEpisode('${ep.id}')">${I.trash}</button></div>`).join('') || '<div class="empty">Ainda não há episódios.<br>Carrega a gravação e o guião para começar.</div>';
@@ -1833,6 +1863,7 @@ async function home() {
 function upload(form) {
   const fd = new FormData(form), bar = document.getElementById('bar'), note = document.getElementById('formNote'), go = document.getElementById('go');
   if (S.demo) { location.hash = '#/ep/demo'; return; }
+  fd.append('project', PROJECT.id);
   go.disabled = true; bar.hidden = false;
   const xhr = new XMLHttpRequest();
   xhr.open('POST', '/api/episodes');
@@ -2108,6 +2139,7 @@ const Demo = {
   async api(path, opts = {}) {
     if (!this.ep) this.ep = this.build();
     if (path === '/api/episodes') return [{ id: 'demo', title: this.ep.meta.title, created: Date.now() / 1000, state: { status: 'pronto' } }];
+    if (path === '/api/projects') { this.projs = this.projs || [{ id: DEFAULT_PID, name: 'As Sombras de Duarte Lima', total: 6 }]; if (opts.method === 'POST') { const nm = JSON.parse(opts.body).name; const p = { id: 'p' + (this.projs.length + 1), name: nm, total: 6 }; this.projs.push(p); return p; } return this.projs; }
     if (path === '/api/review') return [{ id: 'demo', title: this.ep.meta.title, versions: 1, latest: 'v1', latest_label: 'Versão 1', notes: 3, open: 2 }];
     if (/\/review\/versions\/v1\/scenes$/.test(path)) return JSON.parse(opts.body).scenes;
     if (path === '/api/episodes/demo/review') return { meta: this.ep.meta, directors: ['Miguel', 'Sara', 'Tânia', 'João', 'Raquel'], can_mix: true, review: { versions: [{ id: 'v1', label: 'Versão 1', created: Date.now() / 1000, source: 'upload', by: 'Sonoplastia', state: 'pronto', duration: 1800, scenes: [{ n: 1, title: '', start: 0 }, { n: 2, title: '', start: 420 }, { n: 3, title: '', start: 900 }, { n: 4, title: '', start: 1400 }] }],

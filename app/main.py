@@ -308,8 +308,39 @@ def list_episodes():
     return items
 
 
+DEFAULT_PROJECT = {"id": "sombras-duarte-lima", "name": "As Sombras de Duarte Lima", "total": 6}
+PROJECTS_FILE = DATA.parent / "projects.json"
+
+
+def _projects() -> list:
+    items = read_json(PROJECTS_FILE, None)
+    if not isinstance(items, list) or not items:
+        items = [{**DEFAULT_PROJECT, "created": 0}]
+    return items
+
+
+@app.get("/api/projects")
+def list_projects():
+    return _projects()
+
+
+@app.post("/api/projects")
+def create_project(payload: dict = Body(...)):
+    name = str(payload.get("name") or "").strip()[:80]
+    if not name:
+        raise HTTPException(400, "Escreve o nome do projeto.")
+    items = _projects()
+    base = slug(name) or "projeto"
+    pid, n = base, 2
+    while any(p["id"] == pid for p in items):
+        pid, n = f"{base}-{n}", n + 1
+    proj = {"id": pid, "name": name, "total": 6, "created": time.time()}
+    write_json(PROJECTS_FILE, items + [proj])
+    return proj
+
+
 @app.post("/api/episodes")
-def create_episode(title: str = Form(...), audio: UploadFile = File(...), script: UploadFile = File(...)):
+def create_episode(title: str = Form(...), audio: UploadFile = File(...), script: UploadFile = File(...), project: str = Form("")):
     if not API_KEY:
         raise HTTPException(400, "O servidor não tem a chave do Scribe configurada (ELEVENLABS_API_KEY).")
     eid = f"{time.strftime('%Y%m%d-%H%M%S')}-{slug(title)}"
@@ -320,7 +351,8 @@ def create_episode(title: str = Form(...), audio: UploadFile = File(...), script
         with open(d / name, "wb") as out:
             shutil.copyfileobj(up.file, out, length=8 * 1024 * 1024)
     meta = {"id": eid, "title": title.strip(), "created": time.time(),
-            "audio_file": audio_name, "script_file": script_name}
+            "audio_file": audio_name, "script_file": script_name,
+            "project": project if any(p["id"] == project for p in _projects()) else DEFAULT_PROJECT["id"]}
     write_json(d / "meta.json", meta)
     set_state(d, status="na fila", message="")
     jobs.submit(run_autotake, d)
