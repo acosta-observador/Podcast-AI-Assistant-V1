@@ -6,10 +6,10 @@
 <title>Podcast Plus AI Assistant</title>
 <style>
 :root{
-  --bg:#dcebf9; --panel:#c9dff4; --card:#f6faff; --line:rgba(0,0,0,.13); --hover:#bcd6ef;
+  --bg:#f4f8fc; --panel:#e7eff7; --card:#ffffff; --line:rgba(0,0,0,.13); --hover:#dae6f2;
   --text:#0e2238; --muted:#51677f; --faint:#7d93ab;
   --accent:#0e2238; --accent-soft:rgba(14,34,56,.09); --blue:#2b86dc; --warn:#a85a00; --warn-soft:#e3cfae; --ok:#1f7a38;
-  --disc:#f6faff; --ink:#0e2238; --grey:#8ea6bf;
+  --disc:#ffffff; --ink:#0e2238; --grey:#8ea6bf;
   --r:22px;
   --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI","Helvetica Neue",Arial,sans-serif;
   color-scheme:light;
@@ -209,7 +209,7 @@ a{color:var(--accent);text-decoration:none}
   .top-in{display:flex!important;justify-content:space-between;padding:0 14px}
   .top-actions{flex:none}
 }
-.tape{--bg1:#dcebf9;--bg2:#c9dff4;--disc:#f6faff;--ink:#0e2238;--grey:#8ea6bf;background:var(--bg1);min-height:100vh;margin:0 -12px;padding:20px 20px 40px;color:var(--ink);color-scheme:light}
+.tape{--bg1:#f4f8fc;--bg2:#e7eff7;--disc:#ffffff;--ink:#0e2238;--grey:#8ea6bf;background:var(--bg1);min-height:100vh;margin:0 -12px;padding:20px 20px 40px;color:var(--ink);color-scheme:light}
 .tape *{letter-spacing:-.01em}
 .tape-title{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
 .tape-title h1{margin:0;font-size:34px!important;line-height:1.05;font-weight:800;letter-spacing:-.04em;color:var(--ink)}
@@ -470,7 +470,7 @@ body{letter-spacing:-.015em}
 .page-t,.intro h1{font-weight:800;letter-spacing:-.04em}
 .page-s,.intro p{color:var(--muted)}
 .card,.pcard,.fcard,.gate-card,.audio,.an-sc,.mp,.sel-card,.tl{border:0;border-radius:24px;background:var(--card);box-shadow:none}
-.pcard:hover,.fcard:hover,.gate-card:hover{background:#fbfdff;border:0}
+.pcard:hover,.fcard:hover,.gate-card:hover{background:#ffffff;border:0}
 .pcard .cov{background:var(--panel);color:var(--ink)}
 .fcard .ico{background:var(--accent);color:#fff;border-radius:50%}
 .btn{background:rgba(0,0,0,.1);color:var(--ink);font-weight:700}
@@ -514,7 +514,7 @@ body{letter-spacing:-.015em}
 .rv-agree{background:transparent;border:1.5px solid var(--accent);color:var(--accent)}.rv-agree.on{background:var(--accent);color:#fff}
 .who{border-top:1px solid rgba(0,0,0,.12)}.who a,.link,a{color:var(--ink);font-weight:600;text-decoration:underline;text-underline-offset:2px}
 .nav-i,.fcard,.pcard,.gate-card,.logo,.ep,.back{text-decoration:none}
-.eps{background:var(--card)}.ep-row:hover{background:#fbfdff}
+.eps{background:var(--card)}.ep-row:hover{background:#ffffff}
 .drop{background:rgba(0,0,0,.06)}
 .flags,.banner{background:var(--warn-soft);color:var(--warn)}
 :focus-visible{outline:3px solid rgba(0,0,0,.4)}
@@ -523,10 +523,10 @@ body{letter-spacing:-.015em}
 /* ===== revisão: caixa de notas em baixo e ecrã compacto ===== */
 .tape-x{display:none}
 .rv-wrap.dir{padding-bottom:120px}
-.tape-bar{position:fixed;left:0;right:0;bottom:0;z-index:35;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:#dcebf9;box-shadow:0 -8px 26px rgba(0,0,0,.14)}
+.tape-bar{position:fixed;left:0;right:0;bottom:0;z-index:35;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:#f4f8fc;box-shadow:0 -8px 26px rgba(0,0,0,.14)}
 .tape-bar .tb-row{max-width:1120px;margin:0 auto;display:flex;gap:10px;align-items:flex-end}
 .tape-bar .tb-stamp{flex:none;height:46px;min-width:58px;padding:0 14px;border-radius:980px;background:var(--accent);color:#fff;font-weight:800;font-size:15px;display:grid;place-items:center;font-variant-numeric:tabular-nums}
-.tape-bar input{flex:1;min-width:0;height:46px;max-height:110px;border:0;border-radius:23px;background:#f6faff;color:#111;padding:0 18px;font:inherit;font-size:16px;box-sizing:border-box;margin:0}
+.tape-bar input{flex:1;min-width:0;height:46px;max-height:110px;border:0;border-radius:23px;background:#ffffff;color:#111;padding:0 18px;font:inherit;font-size:16px;box-sizing:border-box;margin:0}
 .tape-bar input:focus{outline:2px solid var(--accent)}
 .tape-bar .tb-send{flex:none;height:46px;padding:0 20px;border-radius:980px;background:var(--accent);color:#fff;font-weight:800;font-size:15px;display:inline-flex;align-items:center;gap:8px}
 .tape-bar .tb-send svg{width:18px;height:18px}
@@ -561,7 +561,7 @@ body{letter-spacing:-.015em}
   .rv-wrap.dir .kpan{background:none;padding:0;width:80px}
   .rv-wrap.dir .knob em{display:none}
   .rv-wrap.dir .tape-hint{display:none}
-  .rv-wrap.dir .tape-side{position:fixed;left:0;right:0;bottom:0;height:74dvh;z-index:50;background:#dcebf9;border-radius:24px 24px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.3);transform:translateY(108%);transition:transform .24s ease;padding-top:6px}
+  .rv-wrap.dir .tape-side{position:fixed;left:0;right:0;bottom:0;height:74dvh;z-index:50;background:#f4f8fc;border-radius:24px 24px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.3);transform:translateY(108%);transition:transform .24s ease;padding-top:6px}
   .rv-wrap.dir .tape-side.open{transform:none}
   .rv-wrap.dir .tape-notes{margin:0!important;height:100%;overflow:auto;border-radius:24px 24px 0 0!important;background:transparent!important}
   .rv-wrap.dir .tape-x{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;font-size:22px;line-height:1;order:3}
@@ -957,7 +957,7 @@ async function notesHome() {
 }
 
 /* ---------- Revisão: player com notas na timeline ---------- */
-const REEL_SVG = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="49" fill="#f6faff"/><g fill="none" stroke="#0e2238" stroke-width="13" stroke-linecap="round"><path d="M50 18 A32 32 0 0 1 77 34"/><path d="M80 62 A32 32 0 0 1 56 81"/><path d="M26 71 A32 32 0 0 1 23 38"/></g><circle cx="50" cy="50" r="17" fill="#0e2238"/><path d="M46 43 L58 50 L46 57 Z" fill="#dcebf9"/></svg>';
+const REEL_SVG = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="49" fill="#ffffff"/><g fill="none" stroke="#0e2238" stroke-width="13" stroke-linecap="round"><path d="M50 18 A32 32 0 0 1 77 34"/><path d="M80 62 A32 32 0 0 1 56 81"/><path d="M26 71 A32 32 0 0 1 23 38"/></g><circle cx="50" cy="50" r="17" fill="#0e2238"/><path d="M46 43 L58 50 L46 57 Z" fill="#f4f8fc"/></svg>';
 const DCOL = { Miguel: '#d9822b', Sara: '#c2477a', 'Tânia': '#2f8f6b', 'João': '#3b6fd1', Raquel: '#7a52c7' };
 const dchip = n => `<span class="dchip" style="background:${DCOL[n] || '#111'}">${esc(n || 'Direção')}</span>`;
 const sceneAt = (ver, t) => (ver.scenes || []).filter(x => x.start <= t + 0.05).pop() || null;
