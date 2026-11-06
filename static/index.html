@@ -645,8 +645,13 @@ body{letter-spacing:-.015em}
 .card,.tape-notes,.kpan{box-shadow:0 1px 0 rgba(14,34,56,.04)}
 
 .pnew{display:grid;place-items:center;min-height:200px;border:1.5px dashed rgba(14,34,56,.3)!important;background:transparent!important;padding:18px}
-.pnew-b{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--text);font:inherit}
-.pnew-b span{width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:30px;font-weight:300;line-height:1}
+.pnew{transition:background-color .2s var(--ease-out),border-color .2s var(--ease-out),transform .16s var(--ease-out)}
+.pnew-b{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text);font:inherit;width:100%;height:100%;min-height:160px}
+.pnew-b span svg{transition:transform .3s var(--ease-out)}
+.pnew-b span{transition:transform .25s var(--ease-out)}
+.pnew:has(.pnew-b:active){transform:scale(.98)}
+@media (hover:hover) and (pointer:fine){.pnew:hover{background:var(--accent-soft)!important;border-color:rgba(14,34,56,.55)!important}.pnew:hover .pnew-b span{transform:scale(1.08)}.pnew:hover .pnew-b span svg{transform:rotate(90deg)}}
+.pnew-b span{width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center}
 .pnew-f[hidden],.pnew-b[hidden]{display:none}
 .pnew-f{display:flex;flex-direction:column;gap:12px;width:100%}
 .pnew-f label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
@@ -817,7 +822,7 @@ async function projectsPage() {
     <p class="page-s">Um projeto por podcast. Abre um para trabalhar o áudio do episódio com as ferramentas do assistente.</p>
     <div class="projs">${ps.map(p => `<a class="card pcard" href="#/projeto/${p.id}"><div class="cov">${I.wave}</div>
         <div class="bd"><span class="pill run"><i></i>Podcast Plus</span><div><b>${esc(p.name)}</b><small>${p.total} episódios</small></div></div></a>`).join('')}
-      <div class="card pcard pnew" id="pnew"><button type="button" class="pnew-b" id="pnewb" aria-label="Novo projeto"><span>+</span><b>Novo projeto</b></button>
+      <div class="card pcard pnew" id="pnew"><button type="button" class="pnew-b" id="pnewb" aria-label="Novo projeto"><span><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><b>Novo projeto</b></button>
         <form class="pnew-f" id="pnewf" hidden><label>Nome do podcast<input type="text" id="pnewn" maxlength="80" placeholder="Ex.: O Caso Casa Pia" autocomplete="off"></label>
           <div><button type="submit" class="btn blue">Criar</button> <button type="button" class="btn" id="pnewc">Cancelar</button></div><small class="note" id="pnewe"></small></form></div>
     </div>
