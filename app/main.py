@@ -1518,14 +1518,14 @@ def review_overview():
             continue
         rv = read_review(d)
         ready = [v for v in rv["versions"] if v["state"] == "pronto"]
-        out.append({"id": meta["id"], "title": meta["title"], "has_script": bool(read_json(d / "result.json")), "kind": meta.get("kind", "autotake"), "created": meta.get("created"), "versions": len(ready),
+        out.append({"id": meta["id"], "title": meta["title"], "has_script": bool(read_json(d / "result.json")), "kind": meta.get("kind", "autotake"), "created": meta.get("created"), "project": meta.get("project") or DEFAULT_PROJECT["id"], "versions": len(ready),
                     "latest": ready[-1]["id"] if ready else None, "latest_label": ready[-1]["label"] if ready else None,
                     "notes": len(rv["notes"]), "open": sum(1 for n in rv["notes"] if n.get("status") != "feita")})
     return out
 
 
 @app.post("/api/review/episodes")
-def upload_review_episode(title: str = Form(...), label: str = Form(""), by: str = Form("Sonoplastia"), script_from: str = Form(""), audio: UploadFile = File(...)):
+def upload_review_episode(title: str = Form(...), label: str = Form(""), by: str = Form("Sonoplastia"), script_from: str = Form(""), project: str = Form(""), audio: UploadFile = File(...)):
     """A Sonoplastia carrega um episódio para a Direção ouvir. Se já existir um com o mesmo título, entra como nova versão."""
     title = title.strip()[:120]
     if not title:
@@ -1540,7 +1540,8 @@ def upload_review_episode(title: str = Form(...), label: str = Form(""), by: str
         eid = f"rev-{time.strftime('%Y%m%d-%H%M%S')}-{slug(title)}"
         d = DATA / eid
         d.mkdir(parents=True)
-        write_json(d / "meta.json", {"id": eid, "title": title, "created": time.time(), "kind": "review"})
+        write_json(d / "meta.json", {"id": eid, "title": title, "created": time.time(), "kind": "review",
+                                      "project": project if any(p["id"] == project for p in _projects()) else DEFAULT_PROJECT["id"]})
     if script_from and re.fullmatch(r"[\w-]+", script_from) and (DATA / script_from).is_dir():
         meta = read_json(d / "meta.json")
         meta["scenes_from"] = script_from

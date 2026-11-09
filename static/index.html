@@ -864,6 +864,7 @@ const nLines = t => (t || '').split('\n').filter(l => l.trim()).length;
 
 async function analisePage(wanted, scene) {
   try { S.list = await api('/api/episodes'); } catch { S.list = []; }
+  S.list = S.list.filter(inProject);
   if (!S.list.length) {
     $app.innerHTML = shell('analise', `<div class="wrap"><h1 class="page-t">Análise de Guião</h1>
       <p class="page-s" style="margin-bottom:32px">As cenas do guião e os sons de cada parágrafo.</p>
@@ -1024,15 +1025,17 @@ async function directorHome() {
   const role = getRole();
   let list; try { list = await api('/api/review'); } catch { list = []; }
   list = list.filter(e => e.kind === 'review' || e.versions);
+  const pnames = {}; for (const p of (S.projs || await loadProjects())) pnames[p.id] = p.name;
   $app.innerHTML = dirTop(role) + `<div class="wrap">${dirTabs('rev')}<h1 class="page-t">Olá, ${esc(role.name)}</h1>
     
-    <div class="projs">${list.length ? list.map(e => e.latest ? `<a class="card fcard" href="#/revisao/${e.id}/${e.latest}"><b style="font-size:13px;color:var(--muted);letter-spacing:.04em">${esc(e.latest_label)}</b>
+    <div class="projs">${list.length ? list.map(e => e.latest ? `<a class="card fcard" href="#/revisao/${e.id}/${e.latest}"><b style="font-size:13px;color:var(--muted);letter-spacing:.04em">${esc(pnames[e.project || DEFAULT_PID] || '')} · ${esc(e.latest_label)}</b>
       <b style="font-size:18px;line-height:1.3">${esc(e.title)}</b><span>${e.notes ? `${e.notes} notas` : 'Sem notas ainda'}${e.open ? ` · ${e.open} abertas` : ''}</span></a>`
       : `<div class="card fcard" style="opacity:.6"><b style="font-size:18px">${esc(e.title)}</b><span>Ainda sem versão para ouvir.</span></div>`).join('') : '<div class="card empty">Ainda não há episódios.</div>'}</div></div>`;
 }
 
 async function notesHome() {
   let list; try { list = await api('/api/review'); } catch { list = []; }
+  list = list.filter(inProject);
   const rows = list.filter(e => e.kind === 'review' || e.versions);
   $app.innerHTML = shell('notas', `<div class="wrap"><h1 class="page-t">Notas da Direção</h1>
     <p class="page-s" style="margin-bottom:24px">Carrega aqui os episódios para a Direção ouvir, com som e música. Eles deixam notas com a hora exata e tu vês tudo aqui.</p>
@@ -1051,7 +1054,7 @@ async function notesHome() {
     const f = e.target.files[0], title = document.getElementById('rtitle').value.trim(), note = document.getElementById('rnote');
     if (!f) return;
     if (!title) { note.textContent = 'Escreve primeiro o nome do episódio.'; e.target.value = ''; return; }
-    const fd = new FormData(); fd.append('audio', f); fd.append('title', title); fd.append('label', document.getElementById('rlabel').value); fd.append('by', 'Sonoplastia'); fd.append('script_from', document.getElementById('rscript').value);
+    const fd = new FormData(); fd.append('audio', f); fd.append('title', title); fd.append('label', document.getElementById('rlabel').value); fd.append('by', 'Sonoplastia'); fd.append('project', PROJECT.id); fd.append('script_from', document.getElementById('rscript').value);
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/review/episodes');
     xhr.upload.onprogress = ev => { if (ev.lengthComputable) note.textContent = `A carregar, ${Math.round(ev.loaded / ev.total * 100)}%`; };
@@ -1409,6 +1412,7 @@ const ROLE_PT = { bed: 'CAMA', stem: 'STEM', stinger: 'STINGER', transition: 'TR
 
 async function maestroPage(wanted, scene) {
   try { S.list = await api('/api/episodes'); } catch { S.list = []; }
+  S.list = S.list.filter(inProject);
   if (!S.list.length) {
     $app.innerHTML = shell('maestro', `<div class="wrap"><h1 class="page-t">Maestro</h1><p class="page-s" style="margin-bottom:32px">Músicas e stems para cada cena.</p>
       <div class="card empty">Ainda não há episódios. Carrega a gravação e o guião no <a href="#/autotake">AutoTake</a> primeiro.</div></div>`);
@@ -1559,6 +1563,7 @@ const SFX_LANES = 5;
 
 async function estruturaPage(wanted, scene) {
   try { S.list = await api('/api/episodes'); } catch { S.list = []; }
+  S.list = S.list.filter(inProject);
   const ready = S.list.filter(e => e.state?.status === 'pronto');
   if (!ready.length) {
     $app.innerHTML = shell('estrutura', `<div class="wrap"><h1 class="page-t">Estrutura Plus</h1>
