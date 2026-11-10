@@ -708,6 +708,13 @@ h1,.page-t{text-wrap:balance}
 .ind-f div{display:flex;gap:8px}
 .ind-gen{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 18px}
 @media (max-width:640px){.ind-i{grid-template-columns:1fr}.ind-i .ac{justify-content:flex-start}}
+
+.epc-l label{cursor:pointer;font-size:13px;font-weight:600;padding:5px 11px;border-radius:980px;background:rgba(0,0,0,.08);color:#111}
+.epc-l label.epc-up{background:var(--accent);color:#fff}
+@media (hover:hover) and (pointer:fine){.epc-l label:hover{background:rgba(0,0,0,.16)}.epc-l label.epc-up:hover{background:#1b3555}.epc-empty:hover{background:var(--accent-soft)!important;border-color:rgba(14,34,56,.55)!important}}
+.epc-empty{cursor:pointer;transition:background-color .2s var(--ease-out),border-color .2s var(--ease-out),transform .16s var(--ease-out)}
+.epc-empty:active{transform:scale(.985)}
+.epc-empty.busy,.epc-l label.busy{opacity:.6;pointer-events:none}
 </style>
 </head>
 <body>
@@ -842,10 +849,18 @@ const epNum = t => { const m = String(t).match(/\bep(?:is[oó]dio)?\.?\s*#?\s*0?
 async function projectPage() {
   try { S.list = await api('/api/episodes'); } catch { S.list = []; }
   const slots = {}, extra = [];
-  S.list.filter(inProject).forEach(e => { const n = epNum(e.title); if (n >= 1 && n <= PROJECT.total && !slots[n]) slots[n] = e; else extra.push(e); });
-  const card = (n, e) => e ? `<div class="card epc"><a class="epc-m" href="#/ep/${e.id}"><span class="epc-n">${n ? 'EP ' + n : 'EP'}</span><b>${esc(e.title)}</b>${statusPill(e.state)}</a>
-      <div class="epc-l"><a href="#/ep/${e.id}">Takes</a><a href="#/analise/${e.id}">Análise</a><a href="#/maestro/${e.id}">Maestro</a><a href="#/estrutura/${e.id}">Estrutura</a><a href="#/indicacoes/${e.id}">Indicações</a></div></div>`
-    : `<a class="card epc epc-empty" href="#/autotake"><span class="epc-n">EP ${n}</span><b>Por começar</b><small>Carregar gravação e guião</small></a>`;
+  S.list.filter(inProject).forEach(e => { const n = e.ep || epNum(e.title); if (n >= 1 && n <= PROJECT.total && !slots[n]) slots[n] = e; else extra.push(e); });
+  const up = (cls, kind, id, label, ext) => `<label class="${cls}" data-up="${kind}" data-id="${id}">${label}<input type="file" accept="${ext}" hidden></label>`;
+  const SCRIPT_EXT = '.pdf,.docx,.txt,.md', AUDIO_EXT = 'audio/*,.wav,.flac,.mp3,.m4a,.aif,.aiff';
+  const card = (n, e) => {
+    if (!e) return `<label class="card epc epc-empty" data-up="new" data-n="${n}"><span class="epc-n">EP ${n}</span><b>Por começar</b><small>Clica para carregar o guião (PDF, Word ou texto)</small><input type="file" accept="${SCRIPT_EXT}" hidden></label>`;
+    const only = !e.audio_file && e.state?.status === 'só guião';
+    const links = only
+      ? `<a href="#/analise/${e.id}">Análise</a><a href="#/maestro/${e.id}">Maestro</a><a href="#/indicacoes/${e.id}">Indicações</a>${up('epc-up', 'script', e.id, 'Trocar guião', SCRIPT_EXT)}${up('epc-up', 'audio', e.id, 'Carregar gravação', AUDIO_EXT)}`
+      : `<a href="#/ep/${e.id}">Takes</a><a href="#/analise/${e.id}">Análise</a><a href="#/maestro/${e.id}">Maestro</a><a href="#/estrutura/${e.id}">Estrutura</a><a href="#/indicacoes/${e.id}">Indicações</a>`;
+    return `<div class="card epc"><a class="epc-m" href="${only ? '#/analise/' + e.id : '#/ep/' + e.id}"><span class="epc-n">${n ? 'EP ' + n : 'EP'}</span><b>${esc(e.title)}</b>${only ? '<span class="pill">Só guião</span>' : statusPill(e.state)}</a>
+      <div class="epc-l">${links}</div></div>`;
+  };
   const done = Object.keys(slots).length;
   $app.innerHTML = shell('geral', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios e não há áudio.</div>' : ''}
     <div class="wrap">
@@ -855,6 +870,21 @@ async function projectPage() {
       <div class="epg">${Array.from({ length: PROJECT.total }, (_, i) => card(i + 1, slots[i + 1])).join('')}</div>
       ${extra.length ? `<p class="section-t" style="margin-top:32px">Outros</p><div class="epg">${extra.map(e => card(null, e)).join('')}</div>` : ''}
     </div>`);
+
+  $app.querySelectorAll('[data-up]').forEach(l => {
+    const inp = l.querySelector('input'), idle = l.innerHTML;
+    inp.onchange = async () => {
+      const f = inp.files[0]; if (!f) return;
+      const fd = new FormData(), kind = l.dataset.up;
+      let path;
+      if (kind === 'new') { fd.append('script', f); fd.append('ep', l.dataset.n); fd.append('project', PROJECT.id); path = '/api/episodes/script'; }
+      else if (kind === 'script') { fd.append('script', f); path = `/api/episodes/${l.dataset.id}/script`; }
+      else { fd.append('audio', f); path = `/api/episodes/${l.dataset.id}/audio`; }
+      l.classList.add('busy'); l.firstChild.textContent = 'A carregar…';
+      try { await api(path, { method: 'POST', body: fd }); if (kind === 'audio') { location.hash = '#/ep/' + l.dataset.id; return; } projectPage(); }
+      catch (e) { alert(e.message); l.classList.remove('busy'); l.innerHTML = idle; inp.value = ''; }
+    };
+  });
 }
 
 /* ---------- Análise de Guião ---------- */
@@ -1958,6 +1988,7 @@ function statusPill(st) {
   const s = st?.status;
   if (s === 'pronto') return '<span class="pill ok">Pronto</span>';
   if (s === 'erro') return '<span class="pill warn">Erro</span>';
+  if (s === 'só guião') return '<span class="pill">Só guião</span>';
   return `<span class="pill run">${esc(capital(s || 'na fila'))}</span>`;
 }
 
@@ -2031,6 +2062,13 @@ async function openEpisode(id) {
   try { S.ep = await api('/api/episodes/' + id); }
   catch { $app.innerHTML = shell('autotake', topbar({ left: backLink }) + `<div class="wrap"><div class="card proc"><h1>Episódio não encontrado</h1><p>Pode ter sido apagado. <a href="#/autotake">Voltar aos episódios</a></p></div></div>`); return; }
   const st = S.ep.state || {};
+  if (st.status === 'só guião') {
+    $app.innerHTML = shell('autotake', topbar({ left: backLink, title: S.ep.meta.title }) + `<div class="wrap"><div class="card proc"><h1>${esc(S.ep.meta.title)}</h1>
+      <p>Este episódio só tem o guião. Carrega a gravação para o AutoTake encontrar os takes.</p>
+      <p style="margin:16px 0 0"><label class="btn blue" style="cursor:pointer">${I.dl}Carregar gravação<input type="file" id="lateaudio" accept="audio/*,.wav,.flac,.mp3,.m4a,.aif,.aiff" hidden></label> <a class="btn" href="#/analise/${id}">Ver análise do guião</a></p></div></div>`);
+    document.getElementById('lateaudio').onchange = async e => { const f = e.target.files[0]; if (!f) return; const fd = new FormData(); fd.append('audio', f); try { await api(`/api/episodes/${id}/audio`, { method: 'POST', body: fd }); openEpisode(id); } catch (er) { alert(er.message); } };
+    return;
+  }
   if (st.status !== 'pronto' || !S.ep.result) return renderProcessing(id, st);
   if (!S.demo) player.src = `/api/episodes/${id}/audio`;
   S.cur = Math.min(S.cur, S.ep.result.blocks.length - 1);
@@ -2285,7 +2323,8 @@ const Demo = {
   },
   async api(path, opts = {}) {
     if (!this.ep) this.ep = this.build();
-    if (path === '/api/episodes') return [{ id: 'demo', title: this.ep.meta.title, created: Date.now() / 1000, state: { status: 'pronto' } }];
+    if (path === '/api/episodes/script' && opts.method === 'POST') { this.scripts = this.scripts || []; const n = +opts.body.get('ep'); const e = { id: 'sg' + n, title: PROJECT.name + ' EP ' + n, created: Date.now() / 1000, project: PROJECT.id, ep: n, state: { status: 'só guião' } }; this.scripts.push(e); return e; }
+    if (path === '/api/episodes') return [{ id: 'demo', title: this.ep.meta.title, created: Date.now() / 1000, state: { status: 'pronto' } }, ...(this.scripts || [])];
     if (path === '/api/projects') { this.projs = this.projs || [{ id: DEFAULT_PID, name: 'As Sombras de Duarte Lima', total: 6 }]; if (opts.method === 'POST') { const nm = JSON.parse(opts.body).name; const p = { id: 'p' + (this.projs.length + 1), name: nm, total: 6 }; this.projs.push(p); return p; } return this.projs; }
     if (path === '/api/indications') { const l = this.inds || []; return [{ id: 'demo', title: this.ep.meta.title, project: DEFAULT_PID, total: l.length || 2, open: l.length ? l.filter(i => i.status !== 'feita').length : 2 }]; }
     const mi = path.match(/^\/api\/episodes\/demo\/indications(?:\/(\w+))?$/);

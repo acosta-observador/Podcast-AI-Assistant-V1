@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Res
 
 import numpy as np
 
-from autotake import aaf_export, analysis as analysis_tools, audio as audio_tools, maestro as maestro_tools, sounddesign
+from autotake import script_parser, aaf_export, analysis as analysis_tools, audio as audio_tools, maestro as maestro_tools, sounddesign
 from autotake.export import to_reaper
 from autotake.pipeline import GAP_BETWEEN_BLOCKS, build_cuts, process, render_episode
 
@@ -355,6 +355,82 @@ def create_episode(title: str = Form(...), audio: UploadFile = File(...), script
             "project": project if any(p["id"] == project for p in _projects()) else DEFAULT_PROJECT["id"]}
     write_json(d / "meta.json", meta)
     set_state(d, status="na fila", message="")
+    jobs.submit(run_autotake, d)
+    return meta
+
+
+SCRIPT_EXTS = {".docx", ".txt", ".md", ".pdf"}
+
+
+def _save_script(d: Path, up: UploadFile) -> str:
+    """Guarda o guião no episódio e confirma que se consegue ler (cenas e narração). Devolve o nome do ficheiro."""
+    ext = Path(up.filename or "").suffix.lower()
+    if ext not in SCRIPT_EXTS:
+        raise HTTPException(400, "O guião tem de ser PDF, Word (.docx) ou texto (.txt).")
+    name = "guiao-" + safe_name(up.filename)
+    with open(d / name, "wb") as out:
+        shutil.copyfileobj(up.file, out, length=8 * 1024 * 1024)
+    try:
+        items = script_parser.classify_items(d / name)
+    except Exception:
+        traceback.print_exc()
+        items = []
+    if not any(i["type"] == "narracao" for i in items):
+        (d / name).unlink(missing_ok=True)
+        raise HTTPException(400, "Não consegui ler texto neste guião. Se for um PDF digitalizado (imagem), exporta-o outra vez com texto.")
+    return name
+
+
+@app.post("/api/episodes/script")
+def create_script_episode(ep: int = Form(0), title: str = Form(""), project: str = Form(""), script: UploadFile = File(...)):
+    """Episódio só com o guião (a gravação vem depois): já dá para analisar cenas, planear sons e a Direção deixar indicações."""
+    proj = project if any(p["id"] == project for p in _projects()) else DEFAULT_PROJECT["id"]
+    pname = next((p["name"] for p in _projects() if p["id"] == proj), "")
+    title = title.strip()[:120] or (f"{pname} EP {ep}" if ep else pname or "Episódio")
+    eid = f"{time.strftime('%Y%m%d-%H%M%S')}-{slug(title)}"
+    d = DATA / eid
+    d.mkdir(parents=True)
+    try:
+        name = _save_script(d, script)
+    except HTTPException:
+        shutil.rmtree(d, ignore_errors=True)
+        raise
+    meta = {"id": eid, "title": title, "created": time.time(), "script_file": name, "project": proj, "ep": ep or None}
+    write_json(d / "meta.json", meta)
+    set_state(d, status="só guião", message="")
+    return meta
+
+
+@app.post("/api/episodes/{eid}/script")
+def replace_script(eid: str, script: UploadFile = File(...)):
+    d = ep_dir(eid)
+    if read_json(d / "result.json"):
+        raise HTTPException(409, "Este episódio já foi processado com o guião anterior. Cria um episódio novo no AutoTake.")
+    meta = read_json(d / "meta.json")
+    old = meta.get("script_file")
+    meta["script_file"] = _save_script(d, script)
+    if old and old != meta["script_file"]:
+        (d / old).unlink(missing_ok=True)
+    write_json(d / "meta.json", meta)
+    analysis_path(d).unlink(missing_ok=True)             # as cenas e os sons mudam com o guião
+    return meta
+
+
+@app.post("/api/episodes/{eid}/audio")
+def attach_audio(eid: str, audio: UploadFile = File(...)):
+    """Junta a gravação a um episódio que só tinha o guião e arranca o AutoTake."""
+    d = ep_dir(eid)
+    meta = read_json(d / "meta.json")
+    if meta.get("audio_file"):
+        raise HTTPException(409, "Este episódio já tem gravação.")
+    if not API_KEY:
+        raise HTTPException(400, "O servidor não tem a chave do Scribe configurada (ELEVENLABS_API_KEY).")
+    name = safe_name(audio.filename)
+    with open(d / name, "wb") as out:
+        shutil.copyfileobj(audio.file, out, length=8 * 1024 * 1024)
+    meta["audio_file"] = name
+    write_json(d / "meta.json", meta)
+    set_state(d, status="na fila", message="", attempts=0)
     jobs.submit(run_autotake, d)
     return meta
 
