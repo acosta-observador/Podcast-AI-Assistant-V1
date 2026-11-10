@@ -25,8 +25,70 @@ def _is_direction(line: str) -> bool:
     return False
 
 
+_PAGE_NUM = re.compile(r"^\d{1,3}$")
+_END_PUNCT = re.compile(r"[.!?…\"”»)]\s*$")
+
+
+def _pdf_lines(path: Path) -> list[tuple]:
+    """Linhas do PDF com a posição: (página, y, texto). Tira os números de página (soltos, junto às margens)."""
+    from pypdf import PdfReader
+    out: list[tuple] = []
+    for pg, page in enumerate(PdfReader(str(path)).pages):
+        ops: list[tuple] = []
+
+        def visit(text, cm, tm, _fd, _fs, ops=ops):
+            if text and text.strip():
+                ops.append((round(tm[5] * cm[3] + cm[5]), tm[4] * cm[0] + cm[4], text.strip()))
+        page.extract_text(visitor_text=visit)
+        h = float(page.mediabox.height)
+        rows: dict[int, list] = {}
+        for y, x, t in ops:
+            if _PAGE_NUM.match(t) and (y < h * .08 or y > h * .93):
+                continue
+            rows.setdefault(y, []).append((x, t))
+        for y in sorted(rows, reverse=True):               # de cima para baixo
+            out.append((pg, y, " ".join(t for _, t in sorted(rows[y]))))
+    return out
+
+
+def _pdf_paragraphs(path: Path) -> list[str]:
+    """PDF → parágrafos. Um parágrafo novo começa quando o espaço vertical é maior que o de uma linha normal
+    (o guião deixa uma linha em branco entre parágrafos); 'CENA n' e as marcas '… NOME EP 1 SOM 1' ficam sozinhas."""
+    lines = _pdf_lines(path)
+    if not lines:
+        return []
+    gaps = sorted(a[1] - b[1] for a, b in zip(lines, lines[1:]) if a[0] == b[0] and a[1] > b[1])
+    pitch = gaps[len(gaps) // 5] if gaps else 0                         # linha normal: o espaço pequeno mais comum
+    sizes = sorted(len(l[2]) for l in lines if len(l[2]) > 20)
+    width = sizes[int(len(sizes) * .9)] if sizes else 80
+    out: list[str] = []
+    cur: list[str] = []
+
+    def flush():
+        if cur:
+            out.append(" ".join(cur))
+            cur.clear()
+
+    prev = None
+    for pg, y, t in lines:
+        solo = bool(SCENE_RE.match(t)) and len(t) < 140 or t.startswith(("…", "..."))
+        if prev is not None and cur:
+            if prev[0] == pg:
+                new = pitch and (prev[1] - y) > pitch * 1.4
+            else:                                                       # mudança de página: sem espaço para medir
+                new = bool(_END_PUNCT.search(cur[-1])) and len(cur[-1]) < width * .86
+            if new or solo or prev_solo:
+                flush()
+        cur.append(t)
+        prev, prev_solo = (pg, y), solo
+    flush()
+    return out
+
+
 def _raw_items(path: Path) -> list[str]:
     """Parágrafos do ficheiro tal como estão (inclui linhas vazias)."""
+    if path.suffix.lower() == ".pdf":
+        return _pdf_paragraphs(path)
     if path.suffix.lower() == ".docx":
         import docx  # python-docx
         return [p.text for p in docx.Document(str(path)).paragraphs]

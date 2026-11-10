@@ -35,6 +35,49 @@ def link_blocks(items: list[dict], blocks: list[dict]) -> None:
                 it["block"] = lst.pop(0)
 
 
+_AUTO_TITLE = re.compile(r"^(cena|scene)\s*\d+$", re.I)
+_YEAR = re.compile(r"\b(19\d\d|20[0-2]\d)\b")
+
+
+def scene_facts(items: list[dict], sc: dict) -> dict:
+    """O 'sumo' de uma cena, tirado do próprio guião (sem Claude): primeira frase da narração, anos citados, quem fala."""
+    mine = [it for it in items if sc["from"] <= it["id"] <= sc["to"]]
+    nar = [it for it in mine if it["type"] == "narracao"]
+    first = re.split(r"(?<=[.!?…])\s+", nar[0]["text"].strip())[0] if nar else ""
+    years = sorted({int(y) for it in mine if it["type"] in ("narracao", "entrevista") for y in _YEAR.findall(it["text"])})
+    who: list[str] = []
+    for it in mine:
+        if it["type"] == "entrevista" and it.get("speaker"):
+            name = re.split(r"\bEP\b|\bSOM\b", re.sub(r"^[…\s.]+", "", it["speaker"]), flags=re.I)[0].strip(" ,-–").title()
+            if name and name not in who:
+                who.append(name)
+    return {"summary": first[:140].rstrip(), "years": years[:12], "speakers": who, "words": sum(len(it["text"].split()) for it in nar)}
+
+
+def scene_label(sc: dict) -> str:
+    """Nome para mostrar: o título do guião, ou (se a cena é só 'CENA 3') o resumo."""
+    t = (sc.get("title") or "").strip()
+    return (sc.get("summary") or t) if _AUTO_TITLE.match(t) and sc.get("summary") else t
+
+
+def scene_context(an: dict, sc: dict) -> str:
+    """Cabeçalho que o Claude lê antes da cena: onde ela cabe no episódio, época, quem fala, duração aproximada."""
+    scenes = an.get("scenes") or []
+    lines = [f"Cena {sc['n']}" + (f": {sc['title']}" if sc.get("title") and not _AUTO_TITLE.match(sc["title"]) else "")]
+    if sc.get("summary"):
+        lines.append(f"Começa assim: {sc['summary']}")
+    if sc.get("years"):
+        y = sc["years"]
+        lines.append("Época citada: " + (str(y[0]) if len(y) == 1 else f"{y[0]} a {y[-1]}"))
+    if sc.get("speakers"):
+        lines.append("Entrevistados nesta cena: " + ", ".join(sc["speakers"]))
+    if sc.get("words"):
+        lines.append(f"Narração: {sc['words']} palavras (cerca de {max(10, round(sc['words'] / 2.6))} segundos)")
+    if len(scenes) > 1:
+        lines.append("O episódio, cena a cena: " + " | ".join(f"{x['n']}. {scene_label(x)[:70]}" for x in scenes if scene_label(x)))
+    return "\n".join(lines)
+
+
 def local_scenes(items: list[dict]) -> list[dict]:
     """As cenas são as 'CENA n - título' do guião. O que vem antes da primeira (avisos, teaser) junta-se à primeira cena
     e o que vem depois da última (próximo episódio, créditos) à última."""
@@ -49,6 +92,8 @@ def local_scenes(items: list[dict]) -> list[dict]:
         out.append({"n": i + 1, "title": title or f"Cena {i + 1}", "from": h["id"],
                     "to": (heads[i + 1]["id"] - 1) if i + 1 < len(heads) else items[-1]["id"]})
     out[0]["from"] = items[0]["id"]
+    for sc in out:
+        sc.update(scene_facts(items, sc))
     return out
 
 
@@ -60,7 +105,7 @@ def scenes_for_structure(an: dict, blocks: list[dict]) -> list[dict]:
     for sc in an.get("scenes", []):
         bl = [it["block"] for it in items if sc["from"] <= it["id"] <= sc["to"] and it.get("block")]
         if bl:
-            out.append({"n": sc["n"], "title": f"Cena {sc['n']}", "subtitle": sc["title"], "setting": "", "blocks": sorted(set(bl))})
+            out.append({"n": sc["n"], "title": f"Cena {sc['n']}", "subtitle": scene_label(sc), "setting": "", "blocks": sorted(set(bl))})
     return out
 
 
@@ -172,7 +217,7 @@ def suggest_scene(an: dict, n: int, key: str, guide: str = "", notes: str = "") 
     def have(it):
         ls = [l for l in (an.get("lines") or {}).get(str(it["id"]), "").splitlines() if l.strip()]
         return f"\n   (já tem: {'; '.join(ls)})" if ls and it["type"] == "narracao" else ""
-    msg = f"Cena {sc['n']}: {sc['title']}\n\n" + "\n\n".join(
+    msg = scene_context(an, sc) + "\n\n" + "\n\n".join(
         f"[{it['id']}] {tag[it['type']]}{' · ' + it['speaker'] if it.get('speaker') else ''}: {it['text'][:1500]}{have(it)}" for it in mine)
     if notes.strip():
         msg += f"\n\nNOTAS DO UTILIZADOR PARA ESTA CENA (têm prioridade):\n{notes.strip()}"

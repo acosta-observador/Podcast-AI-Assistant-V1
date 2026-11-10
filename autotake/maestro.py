@@ -151,9 +151,9 @@ def plan_scene(an: dict, n: int, key: str, notes: str = "") -> dict:
     mine = [it for it in an["items"] if sc["from"] <= it["id"] <= sc["to"] and it["type"] in analysis.VISIBLE]
     tag = {"narracao": "NARRAÇÃO", "entrevista": "ENTREVISTA"}
     words = sum(len(it["text"].split()) for it in mine if it["type"] == "narracao")
-    prev = an["scenes"][n - 2]["title"] if n > 1 else None
-    nxt = an["scenes"][n]["title"] if n < len(an["scenes"]) else None
-    msg = (f"Cena {sc['n']}: {sc['title']}\n(cerca de {max(10, round(words / 2.6))} segundos de narração, {words} palavras)\n"
+    prev = analysis.scene_label(an["scenes"][n - 2]) if n > 1 else None
+    nxt = analysis.scene_label(an["scenes"][n]) if n < len(an["scenes"]) else None
+    msg = (analysis.scene_context(an, sc) + "\n"
            + (f"Cena anterior: {prev}\n" if prev else "") + (f"Cena seguinte: {nxt}\n" if nxt else "") + "\n"
            + "\n\n".join(f"[{it['id']}] {tag[it['type']]}{' · ' + it['speaker'] if it.get('speaker') else ''}: {it['text'][:1500]}" for it in mine))
     if notes.strip():

@@ -940,7 +940,7 @@ function renderAnalysis() {
     : '';
   const errs = Object.entries(an.errors || {}).map(([n, m]) => `<div class="errbox" style="margin:0 0 12px">Cena ${n}: ${esc(m)}</div>`).join('');
   const head = `<div class="ep-head"><div><h1 class="page-t">Análise de Guião</h1>
-      <p class="page-s">${sc ? `Cena ${sc.n}: ${esc(sc.title)}` : 'As cenas do guião. Abre uma cena para ver os parágrafos e escrever, ao lado, os sons a ir buscar à ElevenLabs.'}</p></div>
+      <p class="page-s">${sc ? `Cena ${sc.n}: ${esc(scLabel(sc))}` : 'As cenas do guião. Abre uma cena para ver os parágrafos e escrever, ao lado, os sons a ir buscar à ElevenLabs.'}</p></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <select class="epsel" id="anep" aria-label="Episódio">${epOpts}</select>
         ${sc ? '' : `<button class="btn blue" id="anall" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${busy ? 'A sugerir…' : 'Sugerir sons para as cenas'}</button>`}
@@ -953,7 +953,7 @@ function renderAnalysis() {
       <p class="st-note" style="margin:0 0 16px">${scenes.length} cenas, ${total} sons escritos. A Estrutura Plus vai buscar estes sons e monta a linha do tempo.</p>
       <div class="projs" style="margin-top:0">${scenes.map(s => { const np = visible(s).filter(it => it.type === 'narracao').length, ns = soundsIn(s); return `
         <a class="card fcard" href="#/analise/${AN.id}/${s.n}"><b style="font-size:13px;color:var(--muted);letter-spacing:.04em">CENA ${s.n}</b>
-          <b style="font-size:17px;line-height:1.3">${esc(s.title)}</b>
+          <b style="font-size:17px;line-height:1.3">${esc(scLabel(s))}</b>
           <span>${np} parágrafos · ${ns ? `<b style="color:var(--accent)">${ns} sons</b>` : 'sem sons ainda'}</span></a>`; }).join('')}</div></div>`);
     document.getElementById('anall').onclick = async () => {
       const missing = scenes.filter(s => soundsIn(s) === 0).length, replace = missing === 0;
@@ -1109,7 +1109,7 @@ function renderIndic() {
     const lines = (d.script || []).filter(x => x.id >= sc.from && x.id <= sc.to && x.type !== 'titulo');
     const shown = lines.filter(x => dir || IN.all || mine.some(i => i.item === x.id));
     const sceneLevel = mine.filter(i => i.item == null || !lines.some(x => x.id === i.item));
-    return `<section class="card ind-sc" id="sc${sc.n}"><div class="ind-h"><span class="scn-n">Cena ${sc.n}</span><b>${esc(sc.title || '')}</b><span class="sp"></span>
+    return `<section class="card ind-sc" id="sc${sc.n}"><div class="ind-h"><span class="scn-n">Cena ${sc.n}</span><b>${esc(scLabel(sc))}</b><span class="sp"></span>
         ${mine.length ? `<span class="pill ${sOpen ? 'warn' : 'ok'}">${sOpen ? `${sOpen} por tratar` : 'tratadas'}</span>` : ''}
         ${dir ? `<button class="btn" data-add="${sc.n}:">+ Indicação para a cena</button>` : ''}</div>
       ${sceneLevel.map(row).join('')}${comp(sc.n, null)}
@@ -1160,6 +1160,7 @@ const sceneAt = (ver, t) => (ver.scenes || []).filter(x => x.start <= t + 0.05).
 const sceneTag = (ver, t) => { const sc = sceneAt(ver, t); return sc ? `<span class="scn">Cena ${sc.n}</span>` : ''; };
 const isMobile = () => window.matchMedia('(max-width: 640px)').matches;
 const RV = { id: null, v: null, data: null, poll: null, noteT: 0, pausedByUs: false, editing: null, replying: null, filter: 'todas', active: null };
+const scLabel = sc => { const t = (sc.title || '').trim(); return /^(cena|scene)\s*\d+$/i.test(t) && sc.summary ? sc.summary : t; };
 const pl = (n, um, varios) => new Intl.PluralRules('pt').select(n) === 'one' ? um : varios;
 const mmss = s => { s = Math.max(0, Math.floor(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s % 60).padStart(2, '0'); };
 function stopReviewAudio() { const a = document.getElementById('rvaudio'); if (a) a.pause(); }
@@ -1446,7 +1447,7 @@ function renderMaestro() {
   const errs = Object.entries(mo.errors || {}).map(([n, m]) => `<div class="errbox" style="margin:0 0 12px">Cena ${n}: ${esc(m)}</div>`).join('');
   const post = (path, body) => api(`/api/episodes/${MA.id}/maestro/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
   const head = `<div class="ep-head"><div><h1 class="page-t">Maestro</h1>
-      <p class="page-s">${sc ? `Cena ${sc.n}: ${esc(sc.title)}` : 'O Claude lê cada cena e decide as músicas e os stems (3 a 5 por cena), todos diferentes. A ElevenLabs gera-os e eles entram sozinhos na timeline da Estrutura Plus.'}</p></div>
+      <p class="page-s">${sc ? `Cena ${sc.n}: ${esc(scLabel(sc))}` : 'O Claude lê cada cena e decide as músicas e os stems (3 a 5 por cena), todos diferentes. A ElevenLabs gera-os e eles entram sozinhos na timeline da Estrutura Plus.'}</p></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select class="epsel" id="maep" aria-label="Episódio">${epOpts}</select>
         ${sc ? '' : `<button class="btn blue" id="maplanall" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${busy ? 'A trabalhar…' : 'Planear as cenas'}</button>
         <button class="btn" id="magenall" ${S.demo || busy || !d.eleven ? 'disabled' : ''}>${I.music}Gerar todas as músicas</button>
@@ -1458,7 +1459,7 @@ function renderMaestro() {
     $app.innerHTML = shell('maestro', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios.</div>' : ''}<div class="wrap">${head}
       <div class="projs" style="margin-top:0">${scenes.map(s => { const ps = piecesOf(s.n), g = ps.filter(p => p.state === 'gerado').length; return `
         <a class="card fcard" href="#/maestro/${MA.id}/${s.n}"><b style="font-size:13px;color:var(--muted);letter-spacing:.04em">CENA ${s.n}</b>
-          <b style="font-size:17px;line-height:1.3">${esc(s.title)}</b>
+          <b style="font-size:17px;line-height:1.3">${esc(scLabel(s))}</b>
           <span>${ps.length ? `<b style="color:var(--accent)">${ps.length} peças</b> · ${g} geradas` : 'sem músicas planeadas'}</span></a>`; }).join('')}</div></div>`);
     document.getElementById('maplanall').onclick = async () => {
       const replace = scenes.every(s => piecesOf(s.n).length);
@@ -1986,7 +1987,7 @@ async function home() {
         <div class="drop" id="dropAudio">${I.wave}<div><b>Gravação</b><small>WAV, FLAC, MP3 ou M4A</small></div>
           <input type="file" name="audio" accept="audio/*,.wav,.flac,.mp3,.m4a,.aif,.aiff" required aria-label="Gravação"></div>
         <div class="drop" id="dropScript">${I.doc}<div><b>Guião</b><small>Word (.docx) ou texto (.txt)</small></div>
-          <input type="file" name="script" accept=".docx,.txt,.md" required aria-label="Guião"></div>
+          <input type="file" name="script" accept=".docx,.txt,.md,.pdf" required aria-label="Guião"></div>
         <div class="bar" hidden id="bar"><i></i></div>
         <button class="primary" id="go">Processar</button>
         <p class="note" id="formNote">Cada parágrafo do guião é um bloco. Indicações entre parênteses retos são ignoradas.</p>
