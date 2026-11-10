@@ -806,7 +806,7 @@ function side(active) {
     <div class="proj-n"><b>${esc(PROJECT.name)}</b><span>${PROJECT.total} episódios</span></div>
     <p class="sec">Projeto</p>${it('geral', '#/projeto/' + PROJECT.id, I.grid, 'Visão geral')}
     <p class="sec">Funcionalidades</p>${it('autotake', '#/autotake', I.wave, 'AutoTake')}${it('analise', '#/analise', I.doc, 'Análise de Guião')}${it('maestro', '#/maestro', I.music, 'Maestro')}${it('estrutura', '#/estrutura', I.layers, 'Estrutura Plus')}
-    <p class="sec">Revisão</p>${it('notas', '#/notas', I.note, 'Notas da Direção')}${it('indic', '#/indicacoes', I.doc, 'Indicações da Direção')}
+    <p class="sec">Revisão</p>${it('indic', '#/indicacoes', I.doc, 'Indicações da Direção')}${it('notas', '#/notas', I.note, 'Notas da Direção')}
     <div class="who"><span>Perfil: <b>Sonoplastia</b></span><a href="#" onclick="switchRole();return false">Mudar</a></div>
   </aside>`;
 }
@@ -1069,7 +1069,7 @@ async function notesHome() {
 
 /* ---------- Indicações Sonoplastia: a Direção escreve por cena, a Sonoplastia lê antes de editar ---------- */
 const IN = { id: null, data: null, comp: null, all: false };
-const dirTabs = a => `<div class="dtabs"><a class="${a === 'rev' ? 'on' : ''}" href="#/direcao">Revisão</a><a class="${a === 'ind' ? 'on' : ''}" href="#/indicacoes">Indicações Sonoplastia</a></div>`;
+const dirTabs = a => `<div class="dtabs"><a class="${a === 'ind' ? 'on' : ''}" href="#/indicacoes">Indicações Sonoplastia</a><a class="${a === 'rev' ? 'on' : ''}" href="#/direcao">Revisão</a></div>`;
 const inShell = html => { const r = getRole(); return r.mode === 'direcao' ? dirTop(r) + `<div class="wrap">${dirTabs('ind')}${html}</div>` : shell('indic', `<div class="wrap">${html}</div>`); };
 const jsonOpts = (method, body) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
