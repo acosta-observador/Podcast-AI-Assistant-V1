@@ -721,6 +721,13 @@ h1,.page-t{text-wrap:balance}
 .dlmenu button:active{transform:scale(.97)}
 @media (hover:hover) and (pointer:fine){.dlmenu button:hover{background:var(--accent-soft)}}
 @keyframes dlin{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+
+.esp-disk{padding:18px 20px}.esp-disk p{margin:10px 0 0;font-size:15px}
+.esp-bar{height:10px;border-radius:980px;background:var(--panel);overflow:hidden}.esp-bar i{display:block;height:100%;border-radius:980px;background:var(--accent)}
+.esp-disk.low .esp-bar i{background:#d70015}.esp-disk.low p{color:var(--warn)}
+.esp-l{display:flex;flex-direction:column;gap:12px}.esp-r{padding:16px 20px}
+.esp-t{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.esp-t b{font-size:16px}.esp-t .sp{flex:1}.esp-n{font-variant-numeric:tabular-nums}
+.esp-a{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 </style>
 </head>
 <body>
@@ -736,6 +743,7 @@ const I = {
   down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
   play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.2v13.6c0 .8.9 1.3 1.6.8l10.2-6.8c.6-.4.6-1.2 0-1.6L9.6 4.4C8.9 3.9 8 4.4 8 5.2z"/></svg>',
   stop:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/></svg>',
+  disk:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>',
   check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>',
   wave:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 12h1M7.5 9v6M11 5v14M14.5 8v8M18 10.5v3M20.5 12h-.5"/></svg>',
   doc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>',
@@ -773,6 +781,7 @@ async function route() {
   if (!role) return gatePage();
   if (role.mode === 'direcao' && !/^#\/(direcao|revisao|indicacoes)/.test(location.hash)) { location.hash = '#/direcao'; return; }
   if (role.mode === 'sonoplastia' && !/^#\/projeto/.test(location.hash)) await ensureProject();
+  if (location.hash === '#/espaco') return espacoPage();
   const mi = location.hash.match(/^#\/indicacoes(?:\/([\w-]+))?$/);
   if (mi) return mi[1] ? indicPage(mi[1]) : indicHome();
   const mr = location.hash.match(/^#\/revisao\/([\w-]+)(?:\/(v\d+))?/);
@@ -817,7 +826,7 @@ function side(active) {
     <a class="logo" href="#/"><i>${I.logo}</i><span>Podcast Plus<em>AI Assistant</em></span></a>
     <a class="back" href="#/">${I.chevL}Projetos</a>
     <div class="proj-n"><b>${esc(PROJECT.name)}</b><span>${PROJECT.total} episódios</span></div>
-    <p class="sec">Projeto</p>${it('geral', '#/projeto/' + PROJECT.id, I.grid, 'Visão geral')}
+    <p class="sec">Projeto</p>${it('geral', '#/projeto/' + PROJECT.id, I.grid, 'Visão geral')}${it('espaco', '#/espaco', I.disk, 'Espaço do servidor')}
     <p class="sec">Funcionalidades</p>${it('autotake', '#/autotake', I.wave, 'AutoTake')}${it('analise', '#/analise', I.doc, 'Análise de Guião')}${it('maestro', '#/maestro', I.music, 'Maestro')}${it('estrutura', '#/estrutura', I.layers, 'Estrutura Plus')}
     <p class="sec">Revisão</p>${it('indic', '#/indicacoes', I.doc, 'Indicações da Direção')}${it('notas', '#/notas', I.note, 'Notas da Direção')}
     <div class="who"><span>Perfil: <b>Sonoplastia</b></span><a href="#" onclick="switchRole();return false">Mudar</a></div>
@@ -1175,6 +1184,29 @@ function renderIndic() {
   $app.querySelectorAll('[data-done]').forEach(b => b.onclick = () => { const i = find(b.dataset.done); patch(i.id, { status: i.status === 'feita' ? 'aberta' : 'feita', by: me }); });
   $app.querySelectorAll('[data-reply]').forEach(b => b.onclick = () => { const i = find(b.dataset.reply), t = prompt('Resposta à Direção', i.reply || ''); if (t !== null) patch(i.id, { reply: t, by: me }); });
   const ia = document.getElementById('indall'); if (ia) ia.onclick = () => { IN.all = !IN.all; renderIndic(); };
+}
+
+/* ---------- Espaço do servidor: ver o que ocupa o disco e apagar áudios gerados ou episódios ---------- */
+const fmtMB = mb => mb >= 1024 ? (mb / 1024).toFixed(1).replace('.', ',') + ' GB' : Math.round(mb) + ' MB';
+async function espacoPage() {
+  let d; try { d = await api('/api/storage'); } catch (e) { d = null; }
+  if (!d) { $app.innerHTML = shell('espaco', `<div class="wrap"><h1 class="page-t">Espaço do servidor</h1><div class="card empty">Não consegui ler o disco do servidor.</div></div>`); return; }
+  const used = d.usado_mb / d.total_mb * 100, low = d.livre_mb < 1500;
+  const row = e => `<div class="card esp-r"><div class="esp-t"><b>${esc(e.title)}</b><span class="pill">${e.kind === 'review' ? 'Só revisão' : esc(e.project || 'Projeto')}</span><span class="sp"></span><b class="esp-n">${fmtMB(e.total_mb)}</b></div>
+      <p class="note">Áudios gerados ${fmtMB(e.gerado_mb)} · Gravação e guião ${fmtMB(e.original_mb)}${e.versoes_mb ? ` · Versões da Direção ${fmtMB(e.versoes_mb)}` : ''}</p>
+      <div class="esp-a"><button class="btn" data-purge="${e.id}" ${e.gerado_mb < 1 ? 'disabled' : ''} aria-label="Apagar os áudios gerados de ${esc(e.title)}">${I.trash}Apagar áudios gerados</button>
+        <button class="btn" data-delep="${e.id}" data-kind="${e.kind}" aria-label="Apagar o episódio ${esc(e.title)}">${I.trash}Apagar episódio</button></div></div>`;
+  $app.innerHTML = shell('espaco', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios.</div>' : ''}<div class="wrap">
+    <h1 class="page-t" style="margin-top:0">Espaço do servidor</h1>
+    <p class="page-s" style="margin-bottom:20px">O que ocupa o disco. Para apagar, mantém o botão premido.</p>
+    <div class="card esp-disk ${low ? 'low' : ''}"><div class="esp-bar"><i style="width:${Math.min(100, used).toFixed(1)}%"></i></div>
+      <p><b>${fmtMB(d.livre_mb)} livres</b> de ${fmtMB(d.total_mb)}${low ? ' · quase cheio: sem espaço o AAF e os uploads falham' : ''}</p></div>
+    <p class="section-t" style="margin-top:24px">Episódios, do maior para o mais pequeno</p>
+    <div class="esp-l">${d.episodios.length ? d.episodios.map(row).join('') : '<div class="card empty">Não há episódios no servidor.</div>'}</div>
+    <p class="note" style="margin-top:16px"><b>Apagar áudios gerados</b> remove os sons, as músicas, as exportações e a montagem. Os takes, o guião e as notas ficam, e os sons e músicas podem ser gerados outra vez (gasta créditos da ElevenLabs).<br><b>Apagar episódio</b> remove tudo, incluindo as notas da Direção, e não se desfaz.</p></div>`);
+  const done = () => { S.list = null; espacoPage(); };
+  $app.querySelectorAll('[data-purge]').forEach(b => holdDelete(b, () => api(`/api/episodes/${b.dataset.purge}/purge-generated`, { method: 'POST' }).then(done).catch(e => alert(e.message)), 'Apagar os áudios gerados deste episódio?'));
+  $app.querySelectorAll('[data-delep]').forEach(b => holdDelete(b, () => api(b.dataset.kind === 'review' ? `/api/review/episodes/${b.dataset.delep}` : `/api/episodes/${b.dataset.delep}`, { method: 'DELETE' }).then(done).catch(e => alert('Não foi possível apagar: ' + e.message)), 'Apagar este episódio e tudo o que tem? Não se desfaz.'));
 }
 
 /* Apagar = manter premido (padrão "hold to delete"): enche devagar, larga depressa; teclado continua a pedir confirmação */
@@ -2348,6 +2380,8 @@ const Demo = {
     if (path === '/api/episodes/script' && opts.method === 'POST') { this.scripts = this.scripts || []; const n = +opts.body.get('ep'); const e = { id: 'sg' + n, title: PROJECT.name + ' EP ' + n, created: Date.now() / 1000, project: PROJECT.id, ep: n, state: { status: 'só guião' } }; this.scripts.push(e); return e; }
     if (path === '/api/episodes') return [{ id: 'demo', title: this.ep.meta.title, created: Date.now() / 1000, state: { status: 'pronto' } }, ...(this.scripts || [])];
     if (path === '/api/projects') { this.projs = this.projs || [{ id: DEFAULT_PID, name: 'As Sombras de Duarte Lima', total: 6 }]; if (opts.method === 'POST') { const nm = JSON.parse(opts.body).name; const p = { id: 'p' + (this.projs.length + 1), name: nm, total: 6 }; this.projs.push(p); return p; } return this.projs; }
+    if (path === '/api/storage') return { total_mb: 10240, usado_mb: 9731, livre_mb: 509, episodios: [{ id: 'demo', title: this.ep.meta.title, kind: 'autotake', project: 'As Sombras de Duarte Lima', total_mb: 3480, gerado_mb: 1720, versoes_mb: 210, original_mb: 1550 }, { id: 'rev1', title: 'DUARTE LIMA EP6', kind: 'review', project: '', total_mb: 380, gerado_mb: 0, versoes_mb: 380, original_mb: 0 }] };
+    if (/\/purge-generated$/.test(path)) return { ok: true, freed_mb: 1720 };
     if (path === '/api/indications') { const l = this.inds || []; return [{ id: 'demo', title: this.ep.meta.title, project: DEFAULT_PID, total: l.length || 2, open: l.length ? l.filter(i => i.status !== 'feita').length : 2 }]; }
     const mi = path.match(/^\/api\/episodes\/demo\/indications(?:\/(\w+))?$/);
     if (mi) {

@@ -331,25 +331,68 @@ def health():
     return {"ok": True, "scribe": bool(API_KEY), "anthropic": bool(ANTHROPIC_KEY), "disk_free_mb": free_mb()}
 
 
-@app.get("/api/storage")
-def storage():
-    """Onde está a ir o espaço do disco: total, livre e o peso de cada episódio por pasta."""
-    u = shutil.disk_usage(DATA)
-
-    def size(p: Path) -> int:
+def _size(p: Path) -> int:
+    try:
         if p.is_file():
             return p.stat().st_size
         return sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+    except OSError:
+        return 0
+
+
+def _generated_size(d: Path) -> int:
+    """Áudio que se volta a gerar: sons (Estrutura), músicas (Maestro), exportações e a montagem do AutoTake."""
+    return sum(_size(d / n) for n in ("sd", "maestro", "export")) + _size(d / "work" / "montagem.wav")
+
+
+@app.get("/api/storage")
+def storage():
+    """Disco do servidor: total, livre e, por episódio, quanto é áudio gerado, versões para a Direção e gravação original."""
+    u = shutil.disk_usage(DATA)
+    mb = lambda n: round(n / 1048576, 1)
+    projs = {p["id"]: p["name"] for p in _projects()}
     eps = []
     for d in DATA.iterdir():
         if not d.is_dir():
             continue
         meta = read_json(d / "meta.json", {}) or {}
-        parts = {c.name: round(size(c) / 1048576, 1) for c in d.iterdir()}
-        eps.append({"id": d.name, "title": meta.get("title", d.name), "mb": round(sum(parts.values()), 1),
-                    "maiores": dict(sorted(parts.items(), key=lambda kv: -kv[1])[:5])})
-    eps.sort(key=lambda e: -e["mb"])
+        total, gen, rev = _size(d), _generated_size(d), _size(d / "review")
+        eps.append({"id": d.name, "title": meta.get("title", d.name), "kind": meta.get("kind", "autotake"),
+                    "project": projs.get(meta.get("project") or DEFAULT_PROJECT["id"], ""),
+                    "total_mb": mb(total), "gerado_mb": mb(gen), "versoes_mb": mb(rev), "original_mb": mb(max(0, total - gen - rev))})
+    eps.sort(key=lambda e: -e["total_mb"])
     return {"total_mb": int(u.total / 1048576), "usado_mb": int(u.used / 1048576), "livre_mb": int(u.free / 1048576), "episodios": eps}
+
+
+@app.post("/api/episodes/{eid}/purge-generated")
+def purge_generated(eid: str):
+    """Apaga o áudio gerado deste episódio (sons, músicas, exportações, montagem). Os takes, o guião, as notas e as versões
+    da Direção ficam; os sons e músicas passam a 'por gerar' e podem ser criados outra vez."""
+    d = ep_dir(eid)
+    if struct_busy(d) or maestro_busy(d) or d.name in _aaf_live:
+        raise HTTPException(409, "Há sons, músicas ou um AAF a ser preparados neste episódio. Espera que acabem.")
+    freed = _generated_size(d)
+    for n in ("sd", "maestro", "export"):
+        shutil.rmtree(d / n, ignore_errors=True)
+    (d / "work" / "montagem.wav").unlink(missing_ok=True)
+    if struct_path(d).exists():
+        def clips(st):
+            for c in st.get("clips", []):
+                if c.get("state") == "gerado":
+                    c["state"], c["message"], c["peaks"] = "erro", "Áudio apagado para libertar espaço. Gera outra vez.", []
+        update_struct(d, clips)
+    if (d / "maestro.json").exists():
+        def pieces(mm):
+            for sc in mm.get("scenes", {}).values():
+                for pc in sc.get("pieces", []):
+                    if pc.get("state") == "gerado":
+                        pc["state"], pc["message"] = "novo", ""
+        update_maestro(d, pieces)
+    if (d / "state.json").exists():
+        set_state(d, render=None, render_message="")
+    if (d / "export.json").exists():
+        update_export(d, status=None, file=None, message="")
+    return {"ok": True, "freed_mb": round(freed / 1048576, 1)}
 
 
 @app.get("/api/episodes")
