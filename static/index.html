@@ -1682,7 +1682,7 @@ function renderStructure() {
           <select class="epsel" id="aaffmt" aria-label="Formato da exportação para o Pro Tools" title="AAF com os WAV numa pasta ao lado (recomendado)">
             <option value="linked-24-le">AAF + WAV 24-bit</option><option value="linked-16-le">AAF + WAV 16-bit</option>
             <option value="bwf-24-le">Só ficheiros BWF</option></select>
-          <button class="btn" id="expaaf" ${S.demo || !n ? 'disabled' : ''} title="Para o Pro Tools: narração (um clip por take) e uma faixa por tipo de som${scene ? ' (' + scene.title + ')' : ' (episódio todo)'}">${I.dl}Exportar AAF</button>
+          <button class="btn" id="expaaf" ${S.demo || !tl.blocks.length ? 'disabled' : ''} title="Para o Pro Tools: narração já cortada (um clip por take)${n ? ' e uma faixa por tipo de som' : ', sem sons ainda'}${scene ? ' (' + scene.title + ')' : ' (episódio todo)'}">${I.dl}Exportar AAF</button>
           <button class="btn" id="exptr" ${S.demo || !n ? 'disabled' : ''} title="Uma WAV por faixa${scene ? ' (' + scene.title + ')' : ''}">${I.dl}Exportar faixas</button>
           <button class="btn" id="exp" ${S.demo || !n ? 'disabled' : ''}>${I.dl}Exportar Reaper</button>
           <button class="btn" id="createall" ${S.demo || busy || d.missing.length ? 'disabled' : ''}>${I.spark}Create todas as cenas</button>
