@@ -69,7 +69,7 @@ def _pdf_paragraphs(path: Path) -> list[str]:
             out.append(" ".join(cur))
             cur.clear()
 
-    prev = None
+    prev, prev_solo = None, False
     for pg, y, t in lines:
         solo = bool(SCENE_RE.match(t)) and len(t) < 140 or t.startswith(("…", "..."))
         if prev is not None and cur:
