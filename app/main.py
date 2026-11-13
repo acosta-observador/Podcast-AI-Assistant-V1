@@ -1809,7 +1809,7 @@ def update_export(d: Path, **kw) -> None:
         write_json(d / "export.json", st)
 
 
-def _aaf_tracks(d: Path, scene: int | None) -> tuple[list[dict], str]:
+def _aaf_tracks(d: Path, scene: int | None, narration_only: bool = False) -> tuple[list[dict], str]:
     """Faixas do AAF: narração (um clip por take) e uma faixa por tipo de som, no tempo da Estrutura Plus."""
     meta, result = read_json(d / "meta.json"), read_json(d / "result.json")
     tl = _structure_timeline(d)
@@ -1827,6 +1827,10 @@ def _aaf_tracks(d: Path, scene: int | None) -> tuple[list[dict], str]:
         narr.append({"name": f"Bloco {s['block']}" + (f" · parte {seen[s['block']]}" if seen[s["block"]] > 1 else ""), "src": raw,
                      "start": s["src"], "dur": s["end"] - s["start"], "pos": s["start"] - t0, "gain": 1.0})
     tracks = [{"name": "Narração", "clips": narr}]
+    if narration_only:
+        if not narr:
+            raise RuntimeError("Não há narração para exportar")
+        return tracks, slug(meta["title"]) + "-narracao"
     clips = repositioned([c for c in read_struct(d)["clips"] if c["state"] == "gerado"], tl)
     for lane, lname in enumerate(sounddesign.LANE_NAMES):
         mine = [{"name": c["label"] or "Som", "src": d / "sd" / f"{c['id']}.mp3", "start": 0.0, "dur": c["dur"], "pos": c["start"] - t0,
@@ -1839,10 +1843,10 @@ def _aaf_tracks(d: Path, scene: int | None) -> tuple[list[dict], str]:
     return tracks, slug(meta["title"])
 
 
-def run_aaf(d: Path, scene: int | None, bits: int = 16, big_endian: bool = True, fmt: str = "linked") -> None:
+def run_aaf(d: Path, scene: int | None, bits: int = 16, big_endian: bool = True, fmt: str = "linked", narration_only: bool = False) -> None:
     try:
         update_export(d, status="a preparar", message="", done=0, total=0, file=None, scene=scene)
-        tracks, base = _aaf_tracks(d, scene)
+        tracks, base = _aaf_tracks(d, scene, narration_only)
         out = d / "export"
         shutil.rmtree(out, ignore_errors=True)
         out.mkdir()
@@ -1875,7 +1879,7 @@ def start_aaf(eid: str, body: dict = Body(default={})):
     update_export(d, status="a preparar", message="", done=0, total=0, file=None, scene=body.get("scene") or None)
     bits = 24 if int(body.get("bits") or 16) == 24 else 16
     structure_jobs.submit(run_aaf, d, int(body["scene"]) if body.get("scene") else None, bits, body.get("endian", "be") != "le",
-                          body.get("format") if body.get("format") in ("linked", "bwf", "aaf") else "linked")
+                          body.get("format") if body.get("format") in ("linked", "bwf", "aaf") else "linked", bool(body.get("narration_only")))
     return {"ok": True}
 
 

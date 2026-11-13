@@ -31,11 +31,16 @@ def pcm_wav(src: Path, dst: Path | None, start: float = 0.0, dur: float | None =
         af.append(f"volume={gain:.3f}")
     if dur:
         af.append(f"afade=t=in:d={fade},afade=t=out:st={max(0.0, dur - fade * 2):.3f}:d={fade * 2}")
-    cmd = ["ffmpeg", "-v", "error"] + (["-ss", f"{start:.3f}"] if start else []) + ["-i", str(src)] + (["-t", f"{dur:.3f}"] if dur else [])
+    cmd = ["ffmpeg", "-nostdin", "-v", "error"] + (["-ss", f"{start:.3f}"] if start else []) + ["-i", str(src)] + (["-t", f"{dur:.3f}"] if dur else [])
     cmd += (["-af", ",".join(af)] if af else []) + ["-ac", str(ch), "-ar", str(SR), "-f", "s24le" if bits == 24 else "s16le", "-"]
-    p = subprocess.run(cmd, capture_output=True)
+    p = subprocess.run(cmd, capture_output=True, stdin=subprocess.DEVNULL)
     if p.returncode != 0 or not p.stdout:
-        raise RuntimeError(f"ffmpeg falhou: {p.stderr[-300:].decode(errors='ignore')}")
+        why = p.stderr[-300:].decode(errors="ignore").strip()
+        if p.returncode in (-9, 137):
+            why = "o servidor ficou sem memória (processo morto). " + why
+        elif not why:
+            why = "não saiu áudio" + (" (corte para lá do fim do ficheiro?)" if start else "")
+        raise RuntimeError(f"ffmpeg falhou (código {p.returncode}) ao cortar {Path(src).name} a partir de {start:.1f}s, {dur or 0:.1f}s: {why}")
     if dst is None:
         return p.stdout, ch
     with wave.open(str(dst), "wb") as w:

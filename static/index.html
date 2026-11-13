@@ -715,6 +715,12 @@ h1,.page-t{text-wrap:balance}
 .epc-empty{cursor:pointer;transition:background-color .2s var(--ease-out),border-color .2s var(--ease-out),transform .16s var(--ease-out)}
 .epc-empty:active{transform:scale(.985)}
 .epc-empty.busy,.epc-l label.busy{opacity:.6;pointer-events:none}
+
+.dlmenu{position:fixed;z-index:60;display:flex;flex-direction:column;gap:2px;padding:6px;border-radius:16px;background:#fff;box-shadow:0 10px 32px rgba(14,34,56,.18),0 0 0 1px var(--line);transform-origin:left top;animation:dlin .16s var(--ease-out) both}
+.dlmenu button{height:36px;padding:0 14px;border-radius:10px;text-align:left;font:inherit;font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;transition:background-color .15s ease,transform .16s var(--ease-out)}
+.dlmenu button:active{transform:scale(.97)}
+@media (hover:hover) and (pointer:fine){.dlmenu button:hover{background:var(--accent-soft)}}
+@keyframes dlin{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
 </style>
 </head>
 <body>
@@ -1760,7 +1766,9 @@ function renderStructure() {
   document.getElementById('expaaf').onclick = () => exportAaf(scene ? scene.n : null, document.getElementById('aaffmt').value);
   const q = scene ? `?scene=${scene.n}` : '';
   document.getElementById('exptr').onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/tracks${q}`; };
-  document.querySelector('[data-dlnar]').onclick = () => { if (S.demo) return; scene ? (location.href = `/api/episodes/${ST.id}/export/narration?scene=${scene.n}`) : downloadMontage(); };
+  document.querySelector('[data-dlnar]').onclick = e => dlMenu(e.currentTarget, [
+    ['Áudio (WAV)', () => scene ? (location.href = `/api/episodes/${ST.id}/export/narration?scene=${scene.n}`) : downloadMontage()],
+    ['AAF para o Pro Tools', () => exportAaf(scene ? scene.n : null, document.getElementById('aaffmt').value, true)]]);
   $app.querySelectorAll('[data-dl]').forEach(b => b.onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/track/${b.dataset.dl}${q}`; });
   applyZoom(ST.zoom);
   sc.scrollLeft = keepLeft;
@@ -1866,13 +1874,26 @@ function renderSelected() {
   };
 }
 
+/* pequeno menu junto a um botão (fica fora do scroll da timeline) */
+function dlMenu(btn, items) {
+  document.querySelectorAll('.dlmenu').forEach(x => x.remove());
+  if (S.demo) return;
+  const r = btn.getBoundingClientRect(), m = document.createElement('div');
+  m.className = 'dlmenu'; m.style.left = Math.round(Math.min(r.right + 6, window.innerWidth - 200)) + 'px'; m.style.top = Math.round(Math.max(8, Math.min(r.top, window.innerHeight - 100))) + 'px';
+  items.forEach(([label, fn]) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.onclick = () => { close(); fn(); }; m.appendChild(b); });
+  const close = () => { m.remove(); document.removeEventListener('pointerdown', off, true); document.removeEventListener('keydown', esc2, true); };
+  const off = e => { if (!m.contains(e.target) && e.target !== btn) close(); }, esc2 = e => { if (e.key === 'Escape') close(); };
+  document.body.appendChild(m);
+  setTimeout(() => { document.addEventListener('pointerdown', off, true); document.addEventListener('keydown', esc2, true); });
+}
+
 /* AAF para o Pro Tools: prepara em segundo plano e descarrega quando acabar */
-async function exportAaf(sceneN, fmt) {
+async function exportAaf(sceneN, fmt, narrationOnly = false) {
   const [format, bits, endian] = (fmt || 'linked-24-le').split('-');
   const note = document.getElementById('stnote'), say = t => { if (note) note.textContent = t; };
   const btn = document.getElementById('expaaf'); if (btn) btn.disabled = true;
   try {
-    await api(`/api/episodes/${ST.id}/export/aaf`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: sceneN, bits: +bits, endian, format }) });
+    await api(`/api/episodes/${ST.id}/export/aaf`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: sceneN, bits: +bits, endian, format, narration_only: narrationOnly }) });
     for (;;) {
       await new Promise(r => setTimeout(r, 2000));
       if (location.hash.indexOf('#/estrutura') !== 0) return;

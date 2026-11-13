@@ -11,9 +11,12 @@ FRAME = 0.01  # 10 ms
 
 
 def run(cmd: list[str]) -> None:
-    p = subprocess.run(cmd, capture_output=True, text=True)
+    if cmd and cmd[0] == "ffmpeg" and "-nostdin" not in cmd:
+        cmd = [cmd[0], "-nostdin", *cmd[1:]]
+    p = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if p.returncode != 0:
-        raise RuntimeError(f"ffmpeg falhou: {p.stderr[-600:]}")
+        mem = " (o servidor ficou sem memória)" if p.returncode in (-9, 137) else ""
+        raise RuntimeError(f"ffmpeg falhou (código {p.returncode}){mem}: {p.stderr[-600:]}")
 
 
 def probe(path: Path) -> dict:
