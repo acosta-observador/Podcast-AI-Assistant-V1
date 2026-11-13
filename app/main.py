@@ -277,6 +277,10 @@ def resume_unfinished():
         if aa.get("status") == "a sugerir sons":
             aa.update(status="erro", message="O servidor reiniciou a meio. Carrega em Sugerir sons para tentar outra vez.")
             write_json(d / "analysis.json", aa)
+        ex = read_json(d / "export.json", {})
+        if ex.get("status") == "a preparar":
+            ex.update(status="erro", message="O servidor reiniciou a meio do AAF. Tenta outra vez.")
+            write_json(d / "export.json", ex)
         ss = read_json(struct_path(d), {})
         if ss.get("status") in {"a planear", "a gerar"}:
             ss.update(status="erro", message="O servidor reiniciou a meio. Carrega em Create para tentar outra vez.", batch=0)
@@ -1798,6 +1802,9 @@ def delete_note(eid: str, nid: str):
 
 
 # ---------- AAF para o Pro Tools ----------
+_aaf_live: set[str] = set()              # exportações realmente a correr neste processo (o ficheiro export.json pode ficar velho)
+
+
 def export_state(d: Path) -> dict:
     return read_json(d / "export.json", {"status": None, "message": "", "done": 0, "total": 0, "file": None, "scene": None})
 
@@ -1844,6 +1851,7 @@ def _aaf_tracks(d: Path, scene: int | None, narration_only: bool = False) -> tup
 
 
 def run_aaf(d: Path, scene: int | None, bits: int = 16, big_endian: bool = True, fmt: str = "linked", narration_only: bool = False) -> None:
+    _aaf_live.add(d.name)
     try:
         update_export(d, status="a preparar", message="", done=0, total=0, file=None, scene=scene)
         tracks, base = _aaf_tracks(d, scene, narration_only)
@@ -1865,6 +1873,8 @@ def run_aaf(d: Path, scene: int | None, bits: int = 16, big_endian: bool = True,
     except Exception as e:
         traceback.print_exc()
         update_export(d, status="erro", message=str(e))
+    finally:
+        _aaf_live.discard(d.name)
 
 
 @app.post("/api/episodes/{eid}/export/aaf")
@@ -1873,9 +1883,9 @@ def start_aaf(eid: str, body: dict = Body(default={})):
     d = ep_dir(eid)
     if not read_json(d / "result.json"):
         raise HTTPException(400, "O episódio ainda não foi processado")
-    st = export_state(d)
-    if st.get("status") == "a preparar" and time.time() - st.get("ts", 0) < 900:
+    if d.name in _aaf_live:
         raise HTTPException(409, "O AAF já está a ser preparado")
+    _aaf_live.add(d.name)
     update_export(d, status="a preparar", message="", done=0, total=0, file=None, scene=body.get("scene") or None)
     bits = 24 if int(body.get("bits") or 16) == 24 else 16
     structure_jobs.submit(run_aaf, d, int(body["scene"]) if body.get("scene") else None, bits, body.get("endian", "be") != "le",
@@ -1885,7 +1895,11 @@ def start_aaf(eid: str, body: dict = Body(default={})):
 
 @app.get("/api/episodes/{eid}/export/aaf/status")
 def aaf_status(eid: str):
-    return export_state(ep_dir(eid))
+    d = ep_dir(eid)
+    st = export_state(d)
+    if st.get("status") == "a preparar" and d.name not in _aaf_live:
+        st = {**st, "status": "erro", "message": "A preparação do AAF foi interrompida (o servidor reiniciou ou ficou sem memória). Tenta outra vez."}
+    return st
 
 
 @app.get("/api/episodes/{eid}/export/aaf/file")

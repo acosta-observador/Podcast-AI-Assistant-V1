@@ -1893,7 +1893,8 @@ async function exportAaf(sceneN, fmt, narrationOnly = false) {
   const note = document.getElementById('stnote'), say = t => { if (note) note.textContent = t; };
   const btn = document.getElementById('expaaf'); if (btn) btn.disabled = true;
   try {
-    await api(`/api/episodes/${ST.id}/export/aaf`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: sceneN, bits: +bits, endian, format, narration_only: narrationOnly }) });
+    try { await api(`/api/episodes/${ST.id}/export/aaf`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: sceneN, bits: +bits, endian, format, narration_only: narrationOnly }) }); }
+    catch (e) { if (!/já está a ser preparado/.test(e.message)) throw e; say('Já havia um AAF a ser preparado. A esperar por ele…'); }
     for (;;) {
       await new Promise(r => setTimeout(r, 2000));
       if (location.hash.indexOf('#/estrutura') !== 0) return;
