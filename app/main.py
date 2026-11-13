@@ -261,45 +261,95 @@ def run_clip(d: Path, cid: str) -> None:
     gen_clip(d, cid)
 
 
+def free_mb() -> int:
+    try:
+        return int(shutil.disk_usage(DATA).free / 1048576)
+    except OSError:
+        return -1
+
+
+def free_space() -> None:
+    """Liberta espaço no disco: as exportações (AAF, WAV) e os ficheiros temporários voltam a fazer-se quando é preciso."""
+    for d in DATA.iterdir():
+        if d.is_dir():
+            shutil.rmtree(d / "export", ignore_errors=True)
+            for t in d.glob("*.tmp"):
+                t.unlink(missing_ok=True)
+
+
 @app.on_event("startup")
 def resume_unfinished():
-    # jobs interrompidos por um reinício do servidor voltam para a fila
+    # primeiro liberta espaço: com o disco cheio nem se consegue escrever o estado dos jobs
+    try:
+        free_space()
+    except OSError:
+        traceback.print_exc()
+    print(f"[arranque] espaço livre em {DATA}: {free_mb()} MB", flush=True)
     for d in DATA.iterdir():
-        mo = read_json(d / "maestro.json", {})
-        if mo.get("status") in {"a planear", "a gerar"}:
-            mo["status"], mo["message"] = "erro", "O servidor reiniciou a meio. Carrega outra vez para continuar."
-            for sc in mo.get("scenes", {}).values():
-                for p in sc.get("pieces", []):
-                    if p.get("state") == "a gerar":
-                        p["state"], p["message"] = "erro", "Interrompido pelo reinício do servidor."
-            write_json(d / "maestro.json", mo)
-        aa = read_json(d / "analysis.json", {})
-        if aa.get("status") == "a sugerir sons":
-            aa.update(status="erro", message="O servidor reiniciou a meio. Carrega em Sugerir sons para tentar outra vez.")
-            write_json(d / "analysis.json", aa)
-        ex = read_json(d / "export.json", {})
-        if ex.get("status") == "a preparar":
-            ex.update(status="erro", message="O servidor reiniciou a meio do AAF. Tenta outra vez.")
-            write_json(d / "export.json", ex)
-        ss = read_json(struct_path(d), {})
-        if ss.get("status") in {"a planear", "a gerar"}:
-            ss.update(status="erro", message="O servidor reiniciou a meio. Carrega em Create para tentar outra vez.", batch=0)
-            write_json(struct_path(d), ss)
-        st = read_json(d / "state.json", {})
-        if st.get("status") in {"na fila", "a preparar", "a transcrever", "a alinhar"}:
-            if st.get("attempts", 0) >= 2:
-                # o servidor já reiniciou duas vezes a meio deste episódio (provavelmente falta de memória)
-                set_state(d, status="erro", message="O servidor ficou sem memória a processar este episódio. "
-                                                    "Tenta um ficheiro mais curto ou um plano com mais memória.")
-                continue
-            set_state(d, status="na fila")
-            jobs.submit(run_autotake, d)
+        try:
+            _recover(d)
+        except Exception:                      # um episódio com problemas não pode impedir o servidor de arrancar
+            traceback.print_exc()
+
+
+def _recover(d: Path) -> None:
+    # jobs interrompidos por um reinício do servidor voltam para a fila
+    mo = read_json(d / "maestro.json", {})
+    if mo.get("status") in {"a planear", "a gerar"}:
+        mo["status"], mo["message"] = "erro", "O servidor reiniciou a meio. Carrega outra vez para continuar."
+        for sc in mo.get("scenes", {}).values():
+            for p in sc.get("pieces", []):
+                if p.get("state") == "a gerar":
+                    p["state"], p["message"] = "erro", "Interrompido pelo reinício do servidor."
+        write_json(d / "maestro.json", mo)
+    aa = read_json(d / "analysis.json", {})
+    if aa.get("status") == "a sugerir sons":
+        aa.update(status="erro", message="O servidor reiniciou a meio. Carrega em Sugerir sons para tentar outra vez.")
+        write_json(d / "analysis.json", aa)
+    ex = read_json(d / "export.json", {})
+    if ex.get("status") == "a preparar":
+        ex.update(status="erro", message="O servidor reiniciou a meio do AAF. Tenta outra vez.")
+        write_json(d / "export.json", ex)
+    ss = read_json(struct_path(d), {})
+    if ss.get("status") in {"a planear", "a gerar"}:
+        ss.update(status="erro", message="O servidor reiniciou a meio. Carrega em Create para tentar outra vez.", batch=0)
+        write_json(struct_path(d), ss)
+    st = read_json(d / "state.json", {})
+    if st.get("status") in {"na fila", "a preparar", "a transcrever", "a alinhar"}:
+        if st.get("attempts", 0) >= 2:
+            # o servidor já reiniciou duas vezes a meio deste episódio (provavelmente falta de memória)
+            set_state(d, status="erro", message="O servidor ficou sem memória a processar este episódio. "
+                                                "Tenta um ficheiro mais curto ou um plano com mais memória.")
+            return
+        set_state(d, status="na fila")
+        jobs.submit(run_autotake, d)
 
 
 # ---------- API ----------
 @app.get("/health")
 def health():
-    return {"ok": True, "scribe": bool(API_KEY), "anthropic": bool(ANTHROPIC_KEY)}
+    return {"ok": True, "scribe": bool(API_KEY), "anthropic": bool(ANTHROPIC_KEY), "disk_free_mb": free_mb()}
+
+
+@app.get("/api/storage")
+def storage():
+    """Onde está a ir o espaço do disco: total, livre e o peso de cada episódio por pasta."""
+    u = shutil.disk_usage(DATA)
+
+    def size(p: Path) -> int:
+        if p.is_file():
+            return p.stat().st_size
+        return sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
+    eps = []
+    for d in DATA.iterdir():
+        if not d.is_dir():
+            continue
+        meta = read_json(d / "meta.json", {}) or {}
+        parts = {c.name: round(size(c) / 1048576, 1) for c in d.iterdir()}
+        eps.append({"id": d.name, "title": meta.get("title", d.name), "mb": round(sum(parts.values()), 1),
+                    "maiores": dict(sorted(parts.items(), key=lambda kv: -kv[1])[:5])})
+    eps.sort(key=lambda e: -e["mb"])
+    return {"total_mb": int(u.total / 1048576), "usado_mb": int(u.used / 1048576), "livre_mb": int(u.free / 1048576), "episodios": eps}
 
 
 @app.get("/api/episodes")
@@ -1872,7 +1922,8 @@ def run_aaf(d: Path, scene: int | None, bits: int = 16, big_endian: bool = True,
         update_export(d, status="pronto", file=dst.name)
     except Exception as e:
         traceback.print_exc()
-        update_export(d, status="erro", message=str(e))
+        full = "No space left" in str(e) or getattr(e, "errno", None) == 28
+        update_export(d, status="erro", message="O disco do servidor está cheio. Apaga episódios antigos ou aumenta o disco na Render." if full else str(e))
     finally:
         _aaf_live.discard(d.name)
 
@@ -1885,6 +1936,11 @@ def start_aaf(eid: str, body: dict = Body(default={})):
         raise HTTPException(400, "O episódio ainda não foi processado")
     if d.name in _aaf_live:
         raise HTTPException(409, "O AAF já está a ser preparado")
+    for o in DATA.iterdir():                              # só fica a exportação deste episódio
+        if o.is_dir() and o != d:
+            shutil.rmtree(o / "export", ignore_errors=True)
+    if 0 <= free_mb() < 1500:
+        raise HTTPException(507, f"O disco do servidor está quase cheio ({free_mb()} MB livres). Apaga episódios antigos ou aumenta o disco na Render.")
     _aaf_live.add(d.name)
     update_export(d, status="a preparar", message="", done=0, total=0, file=None, scene=body.get("scene") or None)
     bits = 24 if int(body.get("bits") or 16) == 24 else 16
