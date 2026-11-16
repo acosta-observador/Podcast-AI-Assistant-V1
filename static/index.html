@@ -2176,7 +2176,7 @@ function renderEpisode() {
 
   $app.innerHTML = shell('autotake', topbar({
     left: backLink, title: meta.title,
-    actions: `<button class="btn" onclick="exportReaper()" ${S.demo ? 'disabled' : ''}>${I.dl}Reaper</button>
+    actions: `<button class="btn" id="epaaf" onclick="exportEpAaf()" ${S.demo ? 'disabled' : ''} title="Todos os takes escolhidos, já cortados, numa faixa para o Pro Tools"><span class="bl">${I.dl}</span><span id="epaaft">AAF para o Pro Tools</span></button>
               <button class="btn blue" onclick="exportWav()" ${S.demo || rendering ? 'disabled' : ''}>${rendering ? 'A montar…' : r === 'pronto' ? 'Descarregar áudio' : 'Exportar áudio'}</button>`,
   }) + `
   <div class="wrap">
@@ -2294,6 +2294,28 @@ function togglePlay() { S.playing ? stopAudio(true) : playCurrent(); }
 
 /* ---------- exportações ---------- */
 function exportBlock() { if (!S.demo) location.href = `/api/episodes/${S.ep.meta.id}/blocks/${S.ep.result.blocks[S.cur].id}/export`; }
+/* AAF da narração do AutoTake: um clip por corte, nos sítios certos, para abrir no Pro Tools */
+let EPAAF = false;
+async function exportEpAaf() {
+  if (S.demo || EPAAF) return;
+  const id = S.ep.meta.id, say = t => { const e = document.getElementById('epaaft'); if (e) e.textContent = t; };
+  EPAAF = true; say('A preparar…');
+  try {
+    try { await api(`/api/episodes/${id}/export/aaf`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ narration_only: true, format: 'linked', bits: 24, endian: 'le' }) }); }
+    catch (e) { if (!/já está a ser preparado/.test(e.message)) throw e; }
+    for (;;) {
+      await new Promise(r => setTimeout(r, 2000));
+      if (location.hash.indexOf('#/ep/') !== 0) return;
+      const s = await api(`/api/episodes/${id}/export/aaf/status`);
+      if (s.status === 'erro') throw new Error(s.message || 'a exportação falhou');
+      if (s.status === 'pronto') break;
+      say(`A preparar… ${s.done} de ${s.total || '?'}`);
+    }
+    say('AAF para o Pro Tools');
+    location.href = `/api/episodes/${id}/export/aaf/file`;
+  } catch (e) { say('AAF para o Pro Tools'); alert(e.message); }
+  EPAAF = false;
+}
 function exportReaper() { if (!S.demo) location.href = `/api/episodes/${S.ep.meta.id}/export/reaper`; }
 async function exportWav() {
   if (S.ep.state.render === 'pronto') { location.href = `/api/episodes/${S.ep.meta.id}/export/wav`; return; }
