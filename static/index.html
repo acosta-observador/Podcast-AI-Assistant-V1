@@ -738,35 +738,40 @@ h1,.page-t{text-wrap:balance}
 
 /* guião no formato do documento (Arial, página branca, CENA a negrito) + caixas de indicações ao lado */
 .doc{margin-top:8px;padding:24px;border-radius:32px;background:var(--panel)}
-.doc-r{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:32px;align-items:stretch}
-.doc-l{background:#fff;padding:0 64px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.8;color:#111}
+.doc-r{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:24px;align-items:stretch}
+.doc-l{background:#fff;padding:0 48px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.8;color:#111}
 .doc-l p{margin:0;padding:11px 0;max-width:70ch}
-.doc>.doc-r:first-child .doc-l{padding-top:44px;border-radius:24px 24px 0 0}
+.doc-hd + .doc-r .doc-l{padding-top:44px;border-radius:24px 24px 0 0}
 .doc-r:last-child .doc-l{padding-bottom:44px;border-radius:0 0 24px 24px}
-.doc-h .doc-l{padding-top:34px}.doc>.doc-h:first-child .doc-l{padding-top:44px}
+.doc-h .doc-l{padding-top:34px}.doc-hd + .doc-h .doc-l{padding-top:44px}
 .doc-h h2{margin:0;font:700 19px/1.4 Arial,Helvetica,sans-serif;letter-spacing:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .doc-h h2 .pill{font-size:12px}
 .doc-mk .doc-l p{color:#666}
 .doc-iv .doc-l p{color:#222}
+.doc-iv .doc-l .mk{color:#777;font-size:14px;padding-bottom:0}
 .doc-sub .doc-l p{font-weight:700}
-.doc-s{padding:8px 0;display:flex;flex-direction:column;gap:10px;min-width:0}
+.doc-s{padding:8px 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start;min-width:0}
 .doc-s:empty{padding:0}
-.doc-s .ind-i{display:flex;flex-direction:column;gap:8px;margin:0;padding:14px 16px;border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(14,34,56,.06);border-left:4px solid var(--c,#999)}
+.doc-c{display:flex;flex-direction:column;gap:10px;min-width:0}
+.doc-c::before{content:attr(data-l);display:none;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.doc-f{grid-column:1/-1}
+.doc-f .ind-cat{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--c)}
+.doc-hd{position:sticky;top:0;z-index:3;margin:-24px -24px 6px;padding:16px 24px 10px;background:var(--panel);border-radius:32px 32px 0 0}
+.doc-hd .doc-s{padding:0}
+.doc-hd span{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.doc-hd span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c);margin-right:7px}
+.doc-s .ind-i{display:flex;flex-direction:column;gap:8px;margin:0;padding:12px 14px;border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(14,34,56,.06);border-top:3px solid var(--c,#999)}
 .doc-s .ind-w{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.doc-s .ind-i .t{font-size:15px;line-height:1.5}
+.doc-s .ind-i .t{font-size:14px;line-height:1.5}
 .doc-s .ind-i .ac{justify-content:flex-start}
-.doc-s .ind-i .ac .btn{padding:0 12px}
-.ct{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;font-size:12px;font-weight:800;color:var(--c);background:color-mix(in srgb,var(--c) 14%,#fff)}
+.doc-s .ind-i .ac .btn{padding:0 10px}
+.ct{display:none}
 .cat-ambiente{--c:#2f7d5b}.cat-efeitos{--c:#b26a12}.cat-musica{--c:#6b4fbb}
-.doc-add{align-self:flex-start;min-height:32px;padding:0 12px;border-radius:999px;border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:700;transition:background-color .15s ease,color .15s ease,opacity .15s ease,transform .16s var(--ease-out)}
-.doc-add:active{transform:scale(.97)}
-@media (hover:hover) and (pointer:fine){.doc-add{opacity:0}.doc-r:hover .doc-add,.doc-add:focus-visible{opacity:1}.doc-add:hover{background:rgba(255,255,255,.8);color:var(--text)}}
-.ind-f.doc-f{background:#fff;padding:14px;border-radius:16px;box-shadow:0 1px 2px rgba(14,34,56,.06)}
-.cat-pick{display:flex;gap:6px;flex-wrap:wrap}
-.cat-pick button{height:30px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:#fff;font:inherit;font-size:13px;font-weight:700;color:var(--muted);transition:background-color .15s ease,border-color .15s ease,color .15s ease,transform .16s var(--ease-out)}
-.cat-pick button:active{transform:scale(.96)}
-.cat-pick button[aria-pressed=true]{border-color:var(--c);color:var(--c);background:color-mix(in srgb,var(--c) 12%,#fff)}
-@media (max-width:1000px){.doc{padding:14px}.doc-r{grid-template-columns:1fr;gap:0}.doc-l{padding:0 22px}.doc-s{padding:2px 14px 12px 22px}.doc-s:empty{display:none}}
+.doc-add{align-self:flex-start;width:32px;height:32px;padding:0;border-radius:50%;border:1.5px dashed rgba(14,34,56,.28);background:transparent;color:var(--muted);font:inherit;font-size:16px;line-height:1;transition:background-color .15s ease,border-color .15s ease,color .15s ease,opacity .15s ease,transform .16s var(--ease-out)}
+.doc-add:active{transform:scale(.94)}
+@media (hover:hover) and (pointer:fine){.doc-add{opacity:0}.doc-r:hover .doc-add,.doc-add:focus-visible{opacity:1}.doc-add:hover{background:rgba(255,255,255,.85);border-color:rgba(14,34,56,.55);color:var(--text)}}
+.ind-f.doc-f{background:#fff;padding:14px;border-radius:16px;box-shadow:0 1px 2px rgba(14,34,56,.06);border-top:3px solid var(--c)}
+@media (max-width:1000px){.doc{padding:14px}.doc-r{grid-template-columns:1fr;gap:0}.doc-l{padding:0 22px}.doc-s{grid-template-columns:1fr;gap:10px;padding:2px 14px 12px 22px}.doc-s:empty{display:none}.doc-c::before{display:block}.doc-c:not(:has(.ind-i)):not(:has(.doc-add)){display:none}.doc-hd{display:none}.doc-add{opacity:1!important}}
 </style>
 </head>
 <body>
@@ -1183,7 +1188,7 @@ function renderIndic() {
   const CATS = [['ambiente', 'Ambiente'], ['efeitos', 'Efeitos sonoros'], ['musica', 'Música']];
   const catOf = i => i.cat || 'efeitos', catName = k => (CATS.find(c => c[0] === k) || CATS[1])[1];
   const comp = (sc, item) => IN.comp && IN.comp.scene === sc && IN.comp.item === item
-    ? `<form class="ind-f doc-f" id="indf"><div class="cat-pick" role="group" aria-label="Categoria">${CATS.map(([k, lab]) => `<button type="button" class="cat-${k}" data-cat="${k}" aria-pressed="${IN.comp.cat === k}">${lab}</button>`).join('')}</div><textarea id="indt" maxlength="2000" placeholder="${item ? 'O que queres ouvir neste parágrafo?' : 'O que queres ouvir nesta cena?'}" aria-label="Indicação"></textarea>
+    ? `<form class="ind-f doc-f cat-${IN.comp.cat}" id="indf"><span class="ind-cat">${catName(IN.comp.cat)}</span><textarea id="indt" maxlength="2000" placeholder="${item ? 'O que queres ouvir neste parágrafo?' : 'O que queres ouvir nesta cena?'}" aria-label="Indicação"></textarea>
         <div><button class="btn blue" type="submit">Guardar</button><button class="btn" type="button" id="indx">Cancelar</button></div></form>` : '';
   const row = i => {
     const own = dir && i.author === role.name;
@@ -1194,8 +1199,25 @@ function renderIndic() {
   };
   /* uma linha = o texto do guião (à esquerda, como no documento) + a caixa das indicações (à direita) */
   const line = (cls, left, mine, sc, item) => {
-    const open = IN.comp && IN.comp.scene === sc && IN.comp.item === item;
-    return `<div class="doc-r ${cls}"><div class="doc-l">${left}</div><div class="doc-s">${mine.map(row).join('')}${comp(sc, item)}${dir && !open ? `<button class="doc-add" data-add="${sc}:${item == null ? '' : item}">+ ${mine.length ? 'Outra indicação' : 'Indicação'}</button>` : ''}</div></div>`;
+    const active = IN.comp && IN.comp.scene === sc && IN.comp.item === item ? IN.comp.cat : null;
+    return `<div class="doc-r ${cls}"><div class="doc-l">${left}</div><div class="doc-s">${CATS.map(([k, lab]) => {
+      const m = mine.filter(i => catOf(i) === k);
+      return `<div class="doc-c" data-l="${lab}">${m.map(row).join('')}${dir && active !== k ? `<button class="doc-add" data-add="${sc}:${item == null ? '' : item}:${k}" aria-label="Indicação de ${lab}">+</button>` : ''}</div>`;
+    }).join('')}${comp(sc, item)}</div></div>`;
+  };
+  /* parágrafos: frases/linhas seguidas da narração juntam-se num parágrafo; a entrevista (marca + citação) é um bloco */
+  const blocks = items => {
+    const out = []; let cur = null;
+    items.forEach(x => {
+      if (x.type === 'narracao') {
+        if (cur && cur.kind === 'n' && cur.len < 320) { cur.parts.push(x); cur.len += x.text.length; }
+        else { cur = { kind: 'n', parts: [x], len: x.text.length }; out.push(cur); }
+      } else if (x.type === 'nota' && x.marker === 'entrevista') { cur = { kind: 'i', parts: [x], len: 0 }; out.push(cur); }
+      else if (x.type === 'entrevista' && cur && cur.kind === 'i') cur.parts.push(x);
+      else if (x.type === 'entrevista') { cur = { kind: 'i', parts: [x], len: 0 }; out.push(cur); }
+      else { cur = null; out.push({ kind: x.type, parts: [x], len: 0 }); }
+    });
+    return out;
   };
   const rendered = new Set();
   const body = scenes.map(sc => {
@@ -1204,26 +1226,26 @@ function renderIndic() {
     const mineScene = inds.filter(i => i.scene === sc.n && (i.item == null || !items.some(x => x.id === i.item)));
     const sOpen = inds.filter(i => i.scene === sc.n && i.status !== 'feita').length;
     return line('doc-h', `<h2>CENA ${sc.n}${sOpen ? `<span class="pill warn">${sOpen} por tratar</span>` : ''}</h2>`, mineScene, sc.n, null)
-      + items.map(x => {
-        const mine = inds.filter(i => i.scene === sc.n && i.item === x.id);
-        const cls = x.type === 'titulo' ? 'doc-sub' : x.type === 'nota' ? 'doc-mk' : x.type === 'entrevista' ? 'doc-iv' : '';
-        const canAdd = x.type === 'narracao' || x.type === 'entrevista';
-        return canAdd ? line(cls, `<p>${esc(x.text)}</p>`, mine, sc.n, x.id) : `<div class="doc-r ${cls}"><div class="doc-l"><p>${esc(x.text)}</p></div><div class="doc-s"></div></div>`;
+      + blocks(items).map(bk => {
+        const ids = bk.parts.map(x => x.id), first = ids[0], mine = inds.filter(i => i.scene === sc.n && ids.includes(i.item));
+        if (bk.kind === 'n') return line('', `<p>${esc(bk.parts.map(x => x.text).join(' '))}</p>`, mine, sc.n, first);
+        if (bk.kind === 'i') return line('doc-iv', bk.parts.map(x => x.type === 'nota' ? `<p class="mk">${esc(x.text)}</p>` : `<p>${esc(x.text)}</p>`).join(''), mine, sc.n, first);
+        const cls = bk.kind === 'titulo' ? 'doc-sub' : 'doc-mk';
+        return `<div class="doc-r ${cls}"><div class="doc-l"><p>${esc(bk.parts[0].text)}</p></div><div class="doc-s"></div></div>`;
       }).join('');
   }).join('');
   const y = window.scrollY;
   $app.innerHTML = inShell(`<p class="rv-back" style="margin:0 0 10px"><a class="back" href="#/indicacoes">${I.chevL}Episódios</a></p>
     <h1 class="page-t" style="margin-top:0">${esc(d.meta.title)}</h1>
     <p class="page-s" style="margin-bottom:18px">${total ? `${total} ${pl(total, 'indicação', 'indicações')}${open ? `, ${open} por tratar` : ', todas tratadas'}` : (dir ? 'Clica numa caixa ao lado do guião para escrever uma indicação.' : 'A Direção ainda não deixou indicações.')}</p>
-    <div class="doc">${body}</div>`);
+    <div class="doc"><div class="doc-hd doc-r"><div></div><div class="doc-s">${CATS.map(c => `<span class="cat-${c[0]}">${c[1]}</span>`).join('')}</div></div>${body}</div>`);
   window.scrollTo(0, y);
   const patch = (id, b) => api(`/api/episodes/${IN.id}/indications/${id}`, jsonOpts('PATCH', b)).then(loadIndic).catch(e => alert(e.message));
   const find = id => inds.find(i => i.id === id);
-  $app.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { const [sc, it] = b.dataset.add.split(':'); IN.comp = { scene: +sc, item: it ? +it : null, cat: IN.lastCat || 'efeitos' }; renderIndic(); const t = document.getElementById('indt'); if (t) { t.focus(); t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } });
+  $app.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { const [sc, it, cat] = b.dataset.add.split(':'); IN.comp = { scene: +sc, item: it ? +it : null, cat }; renderIndic(); const t = document.getElementById('indt'); if (t) { t.focus(); t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } });
   const f = document.getElementById('indf');
   if (f) {
     document.getElementById('indx').onclick = () => { IN.comp = null; renderIndic(); };
-    f.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { IN.comp.cat = IN.lastCat = b.dataset.cat; f.querySelectorAll('[data-cat]').forEach(x => x.setAttribute('aria-pressed', x === b)); document.getElementById('indt').focus(); });
     f.onsubmit = e => { e.preventDefault(); const text = document.getElementById('indt').value.trim(); if (!text) return; const c = IN.comp; IN.comp = null;
       api(`/api/episodes/${IN.id}/indications`, jsonOpts('POST', { scene: c.scene, item: c.item, cat: c.cat, text, author: me })).then(loadIndic).catch(e2 => alert(e2.message)); };
   }
