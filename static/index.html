@@ -748,7 +748,8 @@ h1,.page-t{text-wrap:balance}
 .doc-h h2 .pill{font-size:12px}
 .doc-mk .doc-l p{color:#666}
 .doc-iv .doc-l p{color:#222}
-.doc-iv .doc-l .mk{color:#777;font-size:14px;padding-bottom:0}
+.hl-c{background:#ffe97a;padding:3px 12px;border-radius:6px}
+.doc-iv .doc-l .mk{display:table;background:#e7dffa;color:#4a3a82;font-size:14px;font-weight:600;line-height:1.5;padding:4px 12px;margin:11px 0 3px;border-radius:6px}
 .doc-sub .doc-l p{font-weight:700}
 .doc-s{padding:8px 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start;min-width:0}
 .doc-s:empty{padding:0}
@@ -1226,7 +1227,7 @@ function renderIndic() {
     items.forEach(x => rendered.add(x.id));
     const mineScene = inds.filter(i => i.scene === sc.n && (i.item == null || !items.some(x => x.id === i.item)));
     const sOpen = inds.filter(i => i.scene === sc.n && i.status !== 'feita').length;
-    return line('doc-h', `<h2>CENA ${sc.n}${sOpen ? `<span class="pill warn">${sOpen} por tratar</span>` : ''}</h2>`, mineScene, sc.n, null)
+    return line('doc-h', `<h2><span class="hl-c">CENA ${sc.n}</span>${sOpen ? `<span class="pill warn">${sOpen} por tratar</span>` : ''}</h2>`, mineScene, sc.n, null)
       + blocks(items).map(bk => {
         const ids = bk.parts.map(x => x.id), first = ids[0], mine = inds.filter(i => i.scene === sc.n && ids.includes(i.item));
         if (bk.kind === 'n') return line('', `<p>${esc(bk.parts.map(x => x.text).join(' '))}</p>`, mine, sc.n, first);
