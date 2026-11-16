@@ -728,6 +728,13 @@ h1,.page-t{text-wrap:balance}
 .esp-l{display:flex;flex-direction:column;gap:12px}.esp-r{padding:16px 20px}
 .esp-t{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.esp-t b{font-size:16px}.esp-t .sp{flex:1}.esp-n{font-variant-numeric:tabular-nums}
 .esp-a{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+
+.dlg-bg{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:20px;background:rgba(14,34,56,.38);animation:dlgbg .18s ease both}
+.dlg{width:min(420px,100%);padding:26px 26px 22px;border-radius:24px;background:#fff;box-shadow:0 20px 60px rgba(14,34,56,.3);animation:dlgin .22s var(--ease-out) both}
+.dlg h2{margin:0 0 8px;font-size:22px;font-weight:800;letter-spacing:-.03em}.dlg p{margin:0 0 20px;font-size:15px;line-height:1.5;color:var(--muted)}.dlg p b{color:var(--text)}
+.dlg-a{display:flex;gap:8px;justify-content:flex-end}.dlg-a .btn{height:38px;padding:0 18px}
+@keyframes dlgbg{from{opacity:0}to{opacity:1}}
+@keyframes dlgin{from{opacity:0;transform:scale(.95) translateY(6px)}to{opacity:1;transform:none}}
 </style>
 </head>
 <body>
@@ -827,7 +834,7 @@ function side(active) {
     <a class="back" href="#/">${I.chevL}Projetos</a>
     <div class="proj-n"><b>${esc(PROJECT.name)}</b><span>${PROJECT.total} episódios</span></div>
     <p class="sec">Projeto</p>${it('geral', '#/projeto/' + PROJECT.id, I.grid, 'Visão geral')}${it('espaco', '#/espaco', I.disk, 'Espaço do servidor')}
-    <p class="sec">Funcionalidades</p>${it('autotake', '#/autotake', I.wave, 'AutoTake')}${it('analise', '#/analise', I.doc, 'Análise de Guião')}${it('maestro', '#/maestro', I.music, 'Maestro')}${it('estrutura', '#/estrutura', I.layers, 'Estrutura Plus')}
+    <p class="sec">Funcionalidades</p>${it('autotake', '#/autotake', I.wave, 'AutoTake')}${it('analise', '#/analise', I.doc, 'Análise de Guião')}${it('maestro', '#/maestro', I.music, 'Maestro')}${it('estrutura', '#/estrutura', I.layers, 'Esqueleto')}
     <p class="sec">Revisão</p>${it('indic', '#/indicacoes', I.doc, 'Indicações da Direção')}${it('notas', '#/notas', I.note, 'Notas da Direção')}
     <div class="who"><span>Perfil: <b>Sonoplastia</b></span><a href="#" onclick="switchRole();return false">Mudar</a></div>
   </aside>`;
@@ -995,7 +1002,7 @@ function renderAnalysis() {
 
   if (!sc) {
     $app.innerHTML = shell('analise', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios.</div>' : ''}<div class="wrap">${head}
-      <p class="st-note" style="margin:0 0 16px">${scenes.length} cenas, ${total} sons escritos. A Estrutura Plus vai buscar estes sons e monta a linha do tempo.</p>
+      <p class="st-note" style="margin:0 0 16px">${scenes.length} cenas, ${total} sons escritos. O Esqueleto vai buscar estes sons e monta a linha do tempo.</p>
       <div class="projs" style="margin-top:0">${scenes.map(s => { const np = visible(s).filter(it => it.type === 'narracao').length, ns = soundsIn(s); return `
         <a class="card fcard" href="#/analise/${AN.id}/${s.n}"><b style="font-size:13px;color:var(--muted);letter-spacing:.04em">CENA ${s.n}</b>
           <b style="font-size:17px;line-height:1.3">${esc(scLabel(s))}</b>
@@ -1021,7 +1028,7 @@ function renderAnalysis() {
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn" id="anclr" ${S.demo || busy || !soundsIn(sc) ? 'disabled' : ''} title="Apagar os sons escritos desta cena">${I.trash}Limpar sons</button>
             <button class="btn" id="ansug" ${S.demo || busy || !d.claude ? 'disabled' : ''} title="O Claude acrescenta sons sem apagar os que já escreveste">${I.spark}Sugerir sons</button>
-            <a class="btn blue" href="#/estrutura/${AN.id}/${sc.n}">${I.layers}Montar na Estrutura Plus</a></div></div>
+            <a class="btn blue" href="#/estrutura/${AN.id}/${sc.n}">${I.layers}Montar no Esqueleto</a></div></div>
         <p class="note" style="margin:12px 0 0">Em cada parágrafo escreve um som e carrega em <b>Enter</b> (português ou inglês). Clica num som para o editar; o <b>✕</b> apaga-o.
           Opcional: <b>@ palavras do texto</b> no fim para escolher onde entra (ex.: <i>porta pesada a fechar @ A sede da Polícia</i>) e <b>música:</b> no início para pedir música. Guarda sozinho.</p>
         <div class="an-grid" style="margin-top:12px"><div class="an-head">PARÁGRAFOS</div><div class="an-head">SONS A IR BUSCAR À ELEVENLABS</div>${rows}</div></div></div>`);
@@ -1301,7 +1308,7 @@ function renderVersions() {
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
       <input type="text" id="vlabel" placeholder="Nome da versão (opcional)" style="height:36px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font:inherit;color:var(--text);min-width:200px">
       <label class="btn blue" style="cursor:pointer">${I.dl}Nova versão (áudio final)<input type="file" id="vfile" accept="audio/*,.wav,.mp3,.m4a,.aif,.aiff,.flac" hidden></label>
-      ${d.can_mix ? `<button class="btn" id="vgen" title="Mistura a narração do AutoTake com os sons e músicas da Estrutura Plus">${I.layers}Gerar a partir da Estrutura Plus</button>` : ''}
+      ${d.can_mix ? `<button class="btn" id="vgen" title="Mistura a narração do AutoTake com os sons e músicas do Esqueleto">${I.layers}Gerar a partir do Esqueleto</button>` : ''}
       ${d.meta.kind === 'review' ? '<button class="chip" id="vdelep">Apagar episódio</button>' : ''}
       <span class="note" id="vnote"></span></div></div>`;
   box.querySelectorAll('[data-delv]').forEach(b => holdDelete(b, async () => {
@@ -1323,7 +1330,7 @@ function renderVersions() {
   }, 'Apagar este episódio, todas as versões e todas as notas? Não se pode desfazer.');
   const vgen = document.getElementById('vgen');
   if (vgen) vgen.onclick = async () => {
-    if (!confirm('Gerar uma versão a partir da narração e das faixas de sons e música da Estrutura Plus? Pode demorar alguns minutos.')) return;
+    if (!confirm('Gerar uma versão a partir da narração e das faixas de sons e música do Esqueleto? Pode demorar alguns minutos.')) return;
     try { await api(`/api/episodes/${RV.id}/review/versions/from-app`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: document.getElementById('vlabel').value, by: 'Sonoplastia' }) }); } catch (e) { alert(e.message); return; }
     loadReview();
   };
@@ -1515,11 +1522,11 @@ function renderMaestro() {
   const errs = Object.entries(mo.errors || {}).map(([n, m]) => `<div class="errbox" style="margin:0 0 12px">Cena ${n}: ${esc(m)}</div>`).join('');
   const post = (path, body) => api(`/api/episodes/${MA.id}/maestro/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
   const head = `<div class="ep-head"><div><h1 class="page-t">Maestro</h1>
-      <p class="page-s">${sc ? `Cena ${sc.n}: ${esc(scLabel(sc))}` : 'O Claude lê cada cena e decide as músicas e os stems (3 a 5 por cena), todos diferentes. A ElevenLabs gera-os e eles entram sozinhos na timeline da Estrutura Plus.'}</p></div>
+      <p class="page-s">${sc ? `Cena ${sc.n}: ${esc(scLabel(sc))}` : 'O Claude lê cada cena e decide as músicas e os stems (3 a 5 por cena), todos diferentes. A ElevenLabs gera-os e eles entram sozinhos na timeline do Esqueleto.'}</p></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><select class="epsel" id="maep" aria-label="Episódio">${epOpts}</select>
         ${sc ? '' : `<button class="btn blue" id="maplanall" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${busy ? 'A trabalhar…' : 'Planear as cenas'}</button>
         <button class="btn" id="magenall" ${S.demo || busy || !d.eleven ? 'disabled' : ''}>${I.music}Gerar todas as músicas</button>
-        <button class="btn" id="mamontall" ${S.demo || busy || !scenes.some(s => piecesOf(s.n).some(p => p.state === 'gerado')) ? 'disabled' : ''} title="Põe todas as músicas geradas na timeline da Estrutura Plus">${I.layers}Montar tudo no Plus</button>`}</div></div>
+        <button class="btn" id="mamontall" ${S.demo || busy || !scenes.some(s => piecesOf(s.n).some(p => p.state === 'gerado')) ? 'disabled' : ''} title="Põe todas as músicas geradas na timeline do Esqueleto">${I.layers}Montar tudo no Esqueleto</button>`}</div></div>
       ${status ? `<p class="st-note" style="margin:0 0 16px">${esc(status)}</p>` : ''}${errs}
       ${mo.status === 'erro' ? `<div class="errbox" style="margin:0 0 16px">${esc(mo.message)}</div>` : ''}`;
 
@@ -1574,9 +1581,9 @@ function renderMaestro() {
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn" id="maplan" ${S.demo || busy || !d.claude ? 'disabled' : ''}>${I.spark}${ps.length ? 'Planear de novo' : 'Planear com o Claude'}</button>
             <button class="btn" id="magen" ${S.demo || busy || !d.eleven || !ps.some(p => p.state === 'novo' || p.state === 'erro') ? 'disabled' : ''}>${I.music}Gerar tudo</button>
-            <button class="btn blue" id="masend" ${S.demo || busy || !ps.some(p => p.state === 'gerado') ? 'disabled' : ''} title="Põe as músicas geradas desta cena na timeline da Estrutura Plus">${I.layers}Montar no Plus</button></div></div>
+            <button class="btn blue" id="masend" ${S.demo || busy || !ps.some(p => p.state === 'gerado') ? 'disabled' : ''} title="Põe as músicas geradas desta cena na timeline do Esqueleto">${I.layers}Montar no Esqueleto</button></div></div>
         ${info.direction ? `<p style="margin:14px 0 0"><b style="font-size:12px;color:var(--muted);letter-spacing:.04em">ARCO MUSICAL</b><br>${esc(info.direction)}</p>` : ''}
-        <p class="note" style="margin:10px 0 0">Depois de gerar, as músicas entram sozinhas na timeline da Estrutura Plus. Para músicas que já tinhas geradas, usa <b>Montar no Plus</b>: as camas vão para a faixa <b>Música</b> e os stems, stingers e transições para a <b>Música 2</b>, no parágrafo escolhido.</p>
+        <p class="note" style="margin:10px 0 0">Depois de gerar, as músicas entram sozinhas na timeline do Esqueleto. Para músicas que já tinhas geradas, usa <b>Montar no Esqueleto</b>: as camas vão para a faixa <b>Música</b> e os stems, stingers e transições para a <b>Música 2</b>, no parágrafo escolhido.</p>
       </div>
       ${ps.length ? ps.map(card).join('') : `<div class="card empty" style="margin-top:14px">Esta cena ainda não tem músicas. Carrega em <b>Planear com o Claude</b>, ou acrescenta uma à mão abaixo.</div>`}
       <div class="card mp"><b>Acrescentar uma música</b>
@@ -1623,7 +1630,7 @@ function renderMaestro() {
   document.getElementById('maep').onchange = e => { location.hash = '#/maestro/' + e.target.value + (sc ? '/' + sc.n : ''); };
 }
 
-/* ---------- Estrutura Plus ---------- */
+/* ---------- Esqueleto ---------- */
 const ST = { id: null, data: null, scene: 0, sel: null, t: 0, v0: 0, v1: 60, playing: false, raf: 0, t0: 0, tBase: 0, audios: {}, poll: null, prev: null, zoom: 1, gz: 1, draft: {}, add: null };
 const clock = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 const fmtT = s => { s = Math.max(0, s); const m = Math.floor(s / 60); return m + ':' + (s % 60).toFixed(1).padStart(4, '0'); };
@@ -1635,8 +1642,7 @@ async function estruturaPage(wanted, scene) {
   S.list = S.list.filter(inProject);
   const ready = S.list.filter(e => e.state?.status === 'pronto');
   if (!ready.length) {
-    $app.innerHTML = shell('estrutura', `<div class="wrap"><h1 class="page-t">Estrutura Plus</h1>
-      <p class="page-s" style="margin-bottom:32px">Cria a estrutura de sound design do episódio a partir do guião.</p>
+    $app.innerHTML = shell('estrutura', `<div class="wrap"><h1 class="page-t" style="margin-bottom:24px">Esqueleto</h1>
       <div class="card empty">Ainda não há nenhum episódio processado.<br>Carrega a gravação e o guião no <a href="#/autotake">AutoTake</a> primeiro.</div></div>`);
     return;
   }
@@ -1660,7 +1666,7 @@ async function loadStructure() {
   try { ST.data = await api(`/api/episodes/${ST.id}/structure`); }
   catch (e) { $app.innerHTML = shell('estrutura', `<div class="wrap"><div class="errbox">${esc(e.message)}</div></div>`); return; }
   const scenes = ST.data.timeline.scenes;
-  if (ST.scene === null || (ST.scene !== 0 && !scenes.some(x => x.n === ST.scene))) ST.scene = scenes.length ? scenes[0].n : 0;
+  if (ST.scene === null || (ST.scene !== 0 && !scenes.some(x => x.n === ST.scene))) ST.scene = 0;
   setView();
   renderStructure();
   if (running(ST.data.structure)) ST.poll = setTimeout(() => loadStructure(), 2500);
@@ -1713,16 +1719,13 @@ function renderStructure() {
 
   $app.innerHTML = shell('estrutura', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios e não há áudio nem geração.</div>' : ''}
     <div class="wrap">
-      <div class="ep-head"><div><h1 class="page-t">Estrutura Plus</h1>
-        <p class="page-s">Cria o sound design do episódio cena a cena: efeitos e música em faixas por baixo dos takes.</p></div>
+      <div class="ep-head"><div><h1 class="page-t">Esqueleto</h1></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <select class="epsel" id="epsel" aria-label="Episódio">${epOpts}</select>
           <select class="epsel" id="aaffmt" aria-label="Formato da exportação para o Pro Tools" title="AAF com os WAV numa pasta ao lado (recomendado)">
             <option value="linked-24-le">AAF + WAV 24-bit</option><option value="linked-16-le">AAF + WAV 16-bit</option>
             <option value="bwf-24-le">Só ficheiros BWF</option></select>
           <button class="btn" id="expaaf" ${S.demo || !tl.blocks.length ? 'disabled' : ''} title="Para o Pro Tools: narração já cortada (um clip por take)${n ? ' e uma faixa por tipo de som' : ', sem sons ainda'}${scene ? ' (' + scene.title + ')' : ' (episódio todo)'}">${I.dl}Exportar AAF</button>
-          <button class="btn" id="exptr" ${S.demo || !n ? 'disabled' : ''} title="Uma WAV por faixa${scene ? ' (' + scene.title + ')' : ''}">${I.dl}Exportar faixas</button>
-          <button class="btn" id="exp" ${S.demo || !n ? 'disabled' : ''}>${I.dl}Exportar Reaper</button>
           <button class="btn" id="createall" ${S.demo || busy || d.missing.length ? 'disabled' : ''}>${I.spark}Create todas as cenas</button>
           <button class="btn" id="clear" ${S.demo || busy || !(scene ? sceneClips(scene.n).length : n) ? 'disabled' : ''} title="Apagar todos os sons ${scene ? 'desta cena' : 'do episódio'}">${I.trash}${scene ? 'Limpar cena' : 'Limpar tudo'}</button>
           ${scene ? `<button class="btn blue" id="create" ${S.demo || busy || d.missing.length ? 'disabled' : ''}>${I.spark}${busy ? 'A criar…' : `Create · ${esc(scene.title)}`}</button>` : ''}
@@ -1794,10 +1797,7 @@ function renderStructure() {
     ST.add = { lane: +el.dataset.lane, t, x: e.clientX, y: e.clientY }; renderPop();
   });
   renderPop();
-  document.getElementById('exp').onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/structure`; };
   document.getElementById('expaaf').onclick = () => exportAaf(scene ? scene.n : null, document.getElementById('aaffmt').value);
-  const q = scene ? `?scene=${scene.n}` : '';
-  document.getElementById('exptr').onclick = () => { if (!S.demo) location.href = `/api/episodes/${ST.id}/export/tracks${q}`; };
   document.querySelector('[data-dlnar]').onclick = e => dlMenu(e.currentTarget, [
     ['Áudio (WAV)', () => scene ? (location.href = `/api/episodes/${ST.id}/export/narration?scene=${scene.n}`) : downloadMontage()],
     ['AAF para o Pro Tools', () => exportAaf(scene ? scene.n : null, document.getElementById('aaffmt').value, true)]]);
@@ -1906,6 +1906,19 @@ function renderSelected() {
   };
 }
 
+/* janela de confirmação da app (em vez do confirm() do browser) */
+function askConfirm({ title, text, ok = 'Continuar' }) {
+  return new Promise(res => {
+    const w = document.createElement('div'); w.className = 'dlg-bg';
+    w.innerHTML = `<div class="dlg" role="alertdialog" aria-modal="true" aria-labelledby="dlgt"><h2 id="dlgt">${esc(title)}</h2><p>${text}</p><div class="dlg-a"><button class="btn" type="button" data-n>Cancelar</button><button class="btn blue" type="button" data-y>${esc(ok)}</button></div></div>`;
+    const done = v => { w.remove(); document.removeEventListener('keydown', key, true); res(v); };
+    const key = e => { if (e.key === 'Escape') done(false); };
+    w.onclick = e => { if (e.target === w) done(false); };
+    w.querySelector('[data-n]').onclick = () => done(false); w.querySelector('[data-y]').onclick = () => done(true);
+    document.addEventListener('keydown', key, true); document.body.appendChild(w); w.querySelector('[data-n]').focus();
+  });
+}
+
 /* pequeno menu junto a um botão (fica fora do scroll da timeline) */
 function dlMenu(btn, items) {
   document.querySelectorAll('.dlmenu').forEach(x => x.remove());
@@ -1973,9 +1986,10 @@ async function clearScene() {
 
 async function createAll() {
   const d = ST.data, scenes = d.timeline.scenes, missing = scenes.filter(x => !d.structure.clips.some(c => c.scene === x.n));
-  const target = missing.length ? missing : scenes, planned = target.reduce((a, x) => a + (d.planned[String(x.n)] || 0), 0);
+  const target = missing.length ? missing : scenes, planned = target.reduce((a, x) => a + ((d.planned || {})[String(x.n)] || 0), 0);
   const what = missing.length ? `${missing.length} cena(s) sem sons` : 'todas as cenas (substitui os sons que já existem)';
-  if (!confirm(`Criar o sound design de ${what}${planned ? `, cerca de ${planned} sons da análise` : ''}? Gasta créditos da ElevenLabs e pode demorar alguns minutos.`)) return;
+  if (!await askConfirm({ title: 'Tem a certeza?', ok: 'Criar todas as cenas',
+    text: `Vais criar o sound design de <b>${what}</b>${planned ? `, cerca de ${planned} sons` : ''}.<br>Gasta créditos da ElevenLabs e pode demorar alguns minutos.` })) return;
   stopStructure(true);
   try { await api(`/api/episodes/${ST.id}/structure/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scene: 'all', missing_only: missing.length > 0 }) }); } catch (e) { alert(e.message); return; }
   ST.sel = null; loadStructure();
@@ -2146,7 +2160,7 @@ function renderProcessing(id, st) {
   if (!err) S.poll = setTimeout(() => openEpisode(id), 3000);
 }
 function reprocessEp() {
-  if (!confirm('Volta a alinhar o episódio com o guião (usa a transcrição já feita, sem gastar Scribe). Os takes que escolheste e os blocos revistos mantêm-se nos blocos cujo texto não mudou. Se os blocos mudarem, os sons da Estrutura Plus têm de ser criados outra vez. Continuar?')) return;
+  if (!confirm('Volta a alinhar o episódio com o guião (usa a transcrição já feita, sem gastar Scribe). Os takes que escolheste e os blocos revistos mantêm-se nos blocos cujo texto não mudou. Se os blocos mudarem, os sons do Esqueleto têm de ser criados outra vez. Continuar?')) return;
   reprocess(S.ep.meta.id);
 }
 async function reprocess(id) { await api(`/api/episodes/${id}/reprocess`, { method: 'POST' }); openEpisode(id); }
