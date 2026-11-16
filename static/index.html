@@ -903,7 +903,7 @@ async function projectPage() {
     const only = !e.audio_file && e.state?.status === 'só guião';
     const links = only
       ? `<a href="#/analise/${e.id}">Análise</a><a href="#/maestro/${e.id}">Maestro</a><a href="#/indicacoes/${e.id}">Indicações</a>${up('epc-up', 'script', e.id, 'Trocar guião', SCRIPT_EXT)}${up('epc-up', 'audio', e.id, 'Carregar gravação', AUDIO_EXT)}`
-      : `<a href="#/ep/${e.id}">Takes</a><a href="#/analise/${e.id}">Análise</a><a href="#/maestro/${e.id}">Maestro</a><a href="#/estrutura/${e.id}">Estrutura</a><a href="#/indicacoes/${e.id}">Indicações</a>`;
+      : `<a href="#/ep/${e.id}">Takes</a><a href="#/analise/${e.id}">Análise</a><a href="#/maestro/${e.id}">Maestro</a><a href="#/estrutura/${e.id}">Estrutura</a><a href="#/indicacoes/${e.id}">Indicações</a>${up('epc-up', 'script', e.id, 'Trocar guião', SCRIPT_EXT)}`;
     return `<div class="card epc"><a class="epc-m" href="${only ? '#/analise/' + e.id : '#/ep/' + e.id}"><span class="epc-n">${n ? 'EP ' + n : 'EP'}</span><b>${esc(e.title)}</b>${only ? '<span class="pill">Só guião</span>' : statusPill(e.state)}</a>
       <div class="epc-l">${links}</div></div>`;
   };
@@ -922,6 +922,7 @@ async function projectPage() {
     inp.onchange = async () => {
       const f = inp.files[0]; if (!f) return;
       const fd = new FormData(), kind = l.dataset.up;
+      if (kind === 'script' && !(await askConfirm({ title: 'Trocar o guião?', text: 'O guião atual vai ser apagado e substituído por <b>' + esc(f.name) + '</b>. A análise das cenas é refeita; as indicações da Direção mantêm-se.', ok: 'Trocar guião' }))) { inp.value = ''; return; }
       let path;
       if (kind === 'new') { fd.append('script', f); fd.append('ep', l.dataset.n); fd.append('project', PROJECT.id); path = '/api/episodes/script'; }
       else if (kind === 'script') { fd.append('script', f); path = `/api/episodes/${l.dataset.id}/script`; }

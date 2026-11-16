@@ -501,8 +501,6 @@ def create_script_episode(ep: int = Form(0), title: str = Form(""), project: str
 @app.post("/api/episodes/{eid}/script")
 def replace_script(eid: str, script: UploadFile = File(...)):
     d = ep_dir(eid)
-    if read_json(d / "result.json"):
-        raise HTTPException(409, "Este episódio já foi processado com o guião anterior. Cria um episódio novo no AutoTake.")
     meta = read_json(d / "meta.json")
     old = meta.get("script_file")
     meta["script_file"] = _save_script(d, script)
