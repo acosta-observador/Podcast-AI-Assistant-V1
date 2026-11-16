@@ -541,10 +541,17 @@ def _montage_total(d: Path):
 @app.get("/api/episodes/{eid}")
 def get_episode(eid: str):
     d = ep_dir(eid)
+    result = read_json(d / "result.json")
+    try:
+        scenes = [{"n": sc["n"], "subtitle": sc.get("subtitle", ""), "blocks": sc["blocks"]} for sc in scenes_of(d, result)] if result else []
+    except Exception:
+        traceback.print_exc()
+        scenes = []
     return {
+        "scenes": scenes,
         "meta": read_json(d / "meta.json"),
         "state": read_json(d / "state.json", {}),
-        "result": read_json(d / "result.json"),
+        "result": result,
         "selections": read_json(d / "selections.json", {}),
         "reviewed": read_json(d / "reviewed.json", []),
         "montage": _montage_total(d),

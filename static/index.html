@@ -399,6 +399,15 @@ form.new h2{margin:0;font-size:19px;font-weight:600}
 .ep-head p{margin:4px 0 0;color:var(--muted)}
 .layout{display:grid;grid-template-columns:360px minmax(0,1fr);gap:24px;align-items:start}
 .blocks{overflow:hidden;max-height:calc(100vh - 190px);overflow-y:auto;position:sticky;top:72px}
+.scn-bar{display:flex;gap:6px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card,#fff);z-index:2}
+.scn-bar button{height:28px;padding:0 11px;border-radius:999px;background:var(--panel);font-size:13px;font-weight:600;color:var(--muted);transition:background-color .15s ease,color .15s ease,transform .16s var(--ease-out)}
+.scn-bar button:active{transform:scale(.96)}
+.scn-bar button[aria-pressed=true]{background:var(--accent);color:#fff}
+.scn-bar button i{font-style:normal;color:var(--warn);margin-left:5px}
+.scn-h{display:flex;align-items:center;gap:8px;padding:14px 14px 8px;border-top:1px solid var(--line);background:#fff8d6}
+.scn-h b{font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+.scn-h span{font-size:12px;color:var(--muted)}
+.scn-h em{font-style:normal;margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
 .blk{display:grid;grid-template-columns:18px 1fr auto;gap:10px;align-items:start;width:100%;text-align:left;padding:12px 14px;border-top:1px solid var(--line)}
 .blk:first-child{border-top:0}
 @media (hover:hover) and (pointer:fine){.blk:hover{background:var(--panel)}}
@@ -806,7 +815,7 @@ const I = {
 };
 
 /* ---------- estado ---------- */
-const S = { demo:false, list:[], ep:null, cur:0, playing:false, poll:null };
+const S = { demo:false, list:[], ep:null, cur:0, playing:false, poll:null, scn:0 };
 const $app = document.getElementById('app');
 const player = document.getElementById('player');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -2205,6 +2214,7 @@ async function openEpisode(id) {
   }
   if (st.status !== 'pronto' || !S.ep.result) return renderProcessing(id, st);
   if (!S.demo) player.src = `/api/episodes/${id}/audio`;
+  if (S.lastEp !== id) { S.lastEp = id; S.scn = 0; }
   S.cur = Math.min(S.cur, S.ep.result.blocks.length - 1);
   renderEpisode();
   if (st.render && st.render !== 'pronto' && st.render !== 'erro') pollRender();
@@ -2243,16 +2253,35 @@ function segsOf(b) {
 }
 const segDur = segs => segs.reduce((a, [s, e]) => a + e - s, 0);
 
+/* cenas do guião: cada bloco pertence a uma cena (pelo índice do bloco) */
+const sceneOfBlock = b => (S.ep.scenes || []).find(sc => sc.blocks.includes(b.index));
+const blocksOfScene = n => S.ep.result.blocks.map((b, i) => [b, i]).filter(([b]) => !n || sceneOfBlock(b)?.n === n);
+
 function renderEpisode() {
-  const { meta, result, state } = S.ep, blocks = result.blocks;
+  const { meta, result, state } = S.ep, blocks = result.blocks, scenes = S.ep.scenes || [];
+  if (S.scn && !scenes.some(sc => sc.n === S.scn)) S.scn = 0;
   const total = S.ep.montage ?? (blocks.reduce((a, b) => a + segDur(segsOf(b)), 0) + blocks.length * 2);
   const toReview = blocks.filter(needsReview).length;
   const r = state.render, rendering = r === 'a montar' || r === 'na fila';
 
-  const list = blocks.map((b, i) => `<button class="blk ${i === S.cur ? 'cur' : ''}" data-i="${i}">
+  const blkHtml = (b, i) => `<button class="blk ${i === S.cur ? 'cur' : ''}" data-i="${i}">
       <span class="n">${b.index}</span><span class="t">${esc(b.text)}</span>
       <span class="r">${needsReview(b) ? '<span class="dot" title="Por rever"></span>' : `<span class="tick">${I.check}</span>`}<span class="ch">${choiceLabel(b)}</span></span>
-    </button>`).join('');
+    </button>`;
+  let list = '', last = null;
+  blocksOfScene(S.scn).forEach(([b, i]) => {
+    const sc = sceneOfBlock(b), key = sc ? sc.n : -1;
+    if (scenes.length && key !== last) {
+      const mine = blocks.filter(x => (sceneOfBlock(x)?.n ?? -1) === key), rv = mine.filter(needsReview).length;
+      list += `<div class="scn-h"><b>${sc ? 'Cena ' + sc.n : 'Sem cena'}</b>${sc && sc.subtitle ? `<span>${esc(sc.subtitle)}</span>` : ''}<em>${mine.length} ${pl(mine.length, 'bloco', 'blocos')}${rv ? `, ${rv} por rever` : ''}</em></div>`;
+      last = key;
+    }
+    list += blkHtml(b, i);
+  });
+  const bar = scenes.length ? `<div class="scn-bar" role="group" aria-label="Cenas"><button type="button" data-scn="0" aria-pressed="${!S.scn}">Todas</button>${scenes.map(sc => {
+    const rv = blocks.filter(b => sceneOfBlock(b)?.n === sc.n && needsReview(b)).length;
+    return `<button type="button" data-scn="${sc.n}" aria-pressed="${S.scn === sc.n}">Cena ${sc.n}${rv ? `<i>${rv}</i>` : ''}</button>`;
+  }).join('')}</div>` : '';
 
   $app.innerHTML = shell('autotake', topbar({
     left: backLink, title: meta.title,
@@ -2266,12 +2295,14 @@ function renderEpisode() {
         <button class="link" style="margin-top:6px" onclick="reprocessEp()">Voltar a alinhar com o guião</button></div>
     </div>
     <div class="layout">
-      <div class="card blocks" id="blocks">${list}</div>
+      <div class="card blocks" id="blocks">${bar}${list}</div>
       <div class="card detail" id="detail"></div>
     </div>
   </div>`);
 
   document.getElementById('blocks').addEventListener('click', e => {
+    const sb = e.target.closest('[data-scn]');
+    if (sb) { S.scn = +sb.dataset.scn; stopAudio(); const f = blocksOfScene(S.scn); if (f.length && !f.some(([, i]) => i === S.cur)) S.cur = f[0][1]; renderEpisode(); return; }
     const el = e.target.closest('[data-i]'); if (!el) return;
     stopAudio(); S.cur = +el.dataset.i; renderEpisode();
   });
@@ -2318,7 +2349,9 @@ function renderDetail() {
 
 function go(d) {
   const n = S.ep.result.blocks.length; stopAudio();
-  S.cur = Math.max(0, Math.min(n - 1, S.cur + d)); renderEpisode();
+  S.cur = Math.max(0, Math.min(n - 1, S.cur + d));
+  if (S.scn) { const sc = sceneOfBlock(S.ep.result.blocks[S.cur]); if (sc && sc.n !== S.scn) S.scn = sc.n; }
+  renderEpisode();
   document.querySelector('.blk.cur')?.scrollIntoView({ block: 'nearest' });
 }
 
@@ -2478,7 +2511,7 @@ const Demo = {
     return { meta: this.ep.meta, ready: true, missing: [], structure: { status: 'pronto', message: '', done: 8, total: 8, scene: null, clips: cl }, timeline: { blocks: bl, segments: [], total: 57.2, scenes } };
   },
   async api(path, opts = {}) {
-    if (!this.ep) this.ep = this.build();
+    if (!this.ep) { this.ep = this.build(); const bl = this.ep.result.blocks, h = Math.ceil(bl.length / 2); this.ep.scenes = [{ n: 1, subtitle: 'O dia de festa', blocks: bl.slice(0, h).map(b => b.index) }, { n: 2, subtitle: 'O maremoto', blocks: bl.slice(h).map(b => b.index) }]; }
     if (path === '/api/episodes/script' && opts.method === 'POST') { this.scripts = this.scripts || []; const n = +opts.body.get('ep'); const e = { id: 'sg' + n, title: PROJECT.name + ' EP ' + n, created: Date.now() / 1000, project: PROJECT.id, ep: n, state: { status: 'só guião' } }; this.scripts.push(e); return e; }
     if (path === '/api/episodes') return [{ id: 'demo', title: this.ep.meta.title, created: Date.now() / 1000, state: { status: 'pronto' } }, ...(this.scripts || [])];
     if (path === '/api/projects') { this.projs = this.projs || [{ id: DEFAULT_PID, name: 'As Sombras de Duarte Lima', total: 6 }]; if (opts.method === 'POST') { const nm = JSON.parse(opts.body).name; const p = { id: 'p' + (this.projs.length + 1), name: nm, total: 6 }; this.projs.push(p); return p; } return this.projs; }
