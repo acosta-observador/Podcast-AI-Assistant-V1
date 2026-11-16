@@ -749,7 +749,9 @@ h1,.page-t{text-wrap:balance}
 .doc-mk .doc-l p{color:#666}
 .doc-iv .doc-l p{color:#222}
 .hl-c{background:#ffe97a;padding:3px 12px;border-radius:6px}
-.doc-iv .doc-l .mk{display:table;background:#e7dffa;color:#4a3a82;font-size:14px;font-weight:600;line-height:1.5;padding:4px 12px;margin:11px 0 3px;border-radius:6px}
+.doc-iv .doc-l .iv-box{background:#efeafb;border-radius:10px;padding:10px 18px;margin:11px 0}
+.doc-iv .doc-l .iv-box p{padding:5px 0}
+.doc-iv .doc-l .mk{color:#4a3a82;font-size:14px;font-weight:700;line-height:1.5}
 .doc-sub .doc-l p{font-weight:700}
 .doc-s{padding:8px 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start;min-width:0}
 .doc-s:empty{padding:0}
@@ -1231,7 +1233,7 @@ function renderIndic() {
       + blocks(items).map(bk => {
         const ids = bk.parts.map(x => x.id), first = ids[0], mine = inds.filter(i => i.scene === sc.n && ids.includes(i.item));
         if (bk.kind === 'n') return line('', `<p>${esc(bk.parts.map(x => x.text).join(' '))}</p>`, mine, sc.n, first);
-        if (bk.kind === 'i') return line('doc-iv', bk.parts.map(x => x.type === 'nota' ? `<p class="mk">${esc(x.text)}</p>` : `<p>${esc(x.text)}</p>`).join(''), mine, sc.n, first);
+        if (bk.kind === 'i') return line('doc-iv', '<div class="iv-box">' + bk.parts.map(x => x.type === 'nota' ? `<p class="mk">${esc(x.text)}</p>` : `<p>${esc(x.text)}</p>`).join('') + '</div>', mine, sc.n, first);
         const cls = bk.kind === 'titulo' ? 'doc-sub' : 'doc-mk';
         return `<div class="doc-r ${cls}"><div class="doc-l"><p>${esc(bk.parts[0].text)}</p></div><div class="doc-s"></div></div>`;
       }).join('');
