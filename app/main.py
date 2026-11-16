@@ -1428,6 +1428,9 @@ def export_narration(eid: str, scene: int):
 
 
 # ---------- Indicações Sonoplastia: a Direção escreve, no guião e por cena, o que quer ouvir antes de a Sonoplastia editar ----------
+INDIC_CATS = ("ambiente", "efeitos", "musica")      # as 3 colunas; as indicações antigas (sem categoria) contam como "efeitos"
+
+
 def indic_path(d: Path) -> Path:
     return d / "indications.json"
 
@@ -1478,11 +1481,12 @@ def add_indication(eid: str, body: dict = Body(...)):
     except (TypeError, ValueError):
         raise HTTPException(400, "Cena inválida")
     item = body.get("item")
+    cat = body.get("cat") if body.get("cat") in INDIC_CATS else "efeitos"
     made = {}
 
     def apply(ind):
         n = ind.get("next", 1)
-        it = {"id": f"i{n}", "scene": scene, "item": int(item) if isinstance(item, int) or str(item or "").isdigit() else None, "text": text,
+        it = {"id": f"i{n}", "scene": scene, "item": int(item) if isinstance(item, int) or str(item or "").isdigit() else None, "cat": cat, "text": text,
               "author": str(body.get("author", ""))[:40], "created": time.time(), "status": "aberta", "reply": ""}
         ind["next"] = n + 1
         ind["items"].append(it)
@@ -1502,6 +1506,8 @@ def patch_indication(eid: str, iid: str, body: dict = Body(...)):
             if it["id"] == iid:
                 if "text" in body and str(body["text"]).strip():
                     it["text"] = str(body["text"]).strip()[:2000]
+                if body.get("cat") in INDIC_CATS:
+                    it["cat"] = body["cat"]
                 if body.get("status") in ("aberta", "feita"):
                     it["status"] = body["status"]
                     it["done_by"] = str(body.get("by", ""))[:40] if body["status"] == "feita" else ""
