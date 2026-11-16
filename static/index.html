@@ -735,6 +735,30 @@ h1,.page-t{text-wrap:balance}
 .dlg-a{display:flex;gap:8px;justify-content:flex-end}.dlg-a .btn{height:38px;padding:0 18px}
 @keyframes dlgbg{from{opacity:0}to{opacity:1}}
 @keyframes dlgin{from{opacity:0;transform:scale(.95) translateY(6px)}to{opacity:1;transform:none}}
+
+/* guião no formato do documento (Arial, página branca, CENA a negrito) + caixas de indicações ao lado */
+.doc{margin-top:8px;padding:20px;border-radius:32px;background:var(--panel)}
+.doc-r{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;align-items:stretch}
+.doc-l{background:#fff;padding:0 44px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.75;color:#111}
+.doc-l p{margin:0;padding:9px 0;max-width:68ch}
+.doc-r:first-child .doc-l{padding-top:36px;border-radius:24px 24px 0 0}
+.doc-r:last-child .doc-l{padding-bottom:36px;border-radius:0 0 24px 24px}
+.doc-h .doc-l{padding-top:26px}.doc-h:first-child .doc-l{padding-top:36px}
+.doc-h h2{margin:0;font:700 18px/1.4 Arial,Helvetica,sans-serif;letter-spacing:0;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.doc-h h2 .pill{font-size:12px}
+.doc-mk .doc-l p{color:#555}
+.doc-iv .doc-l p{color:#222}
+.doc-sub .doc-l p{font-weight:700}
+.doc-s{padding:6px 0;display:flex;flex-direction:column;gap:8px;min-width:0}
+.doc-s:empty{padding:0}
+.doc-add{align-self:flex-start;min-height:34px;padding:0 14px;border-radius:12px;border:1.5px dashed rgba(14,34,56,.3);background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:700;transition:background-color .15s ease,border-color .15s ease,color .15s ease,transform .16s var(--ease-out)}
+.doc-add.has{min-height:28px;padding:0 10px}
+.doc-add:active{transform:scale(.97)}
+@media (hover:hover) and (pointer:fine){.doc-add{opacity:.55}.doc-r:hover .doc-add,.doc-add:focus-visible{opacity:1}.doc-add:hover{background:var(--accent-soft);border-color:rgba(14,34,56,.55);color:var(--text)}}
+.doc-s .ind-i{display:flex;flex-direction:column;gap:6px;margin:0;padding:12px 14px;border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(14,34,56,.06)}
+.doc-s .ind-w{display:flex;gap:6px;align-items:center}
+.doc-s .ind-i .ac{justify-content:flex-start}
+@media (max-width:900px){.doc-r{grid-template-columns:1fr;gap:0}.doc-l{padding:0 22px}.doc-s{padding:2px 14px 10px 22px}.doc-s:empty{display:none}}
 </style>
 </head>
 <body>
@@ -1144,42 +1168,45 @@ async function loadIndic() {
 
 function renderIndic() {
   const d = IN.data, role = getRole(), dir = role.mode === 'direcao', me = dir ? role.name : 'Sonoplastia';
+  const script = d.script || [], inds = d.indications || [], total = inds.length, open = inds.filter(i => i.status !== 'feita').length;
   const scenes = d.scenes && d.scenes.length ? d.scenes : [{ n: 1, title: 'Guião', from: 0, to: 1e9 }];
-  const inds = d.indications || [], total = inds.length, open = inds.filter(i => i.status !== 'feita').length;
+  const isHead = x => x.type === 'titulo' && /^[\[(#\s]*(cena|scene)\s*\d+/i.test(x.text);
   const comp = (sc, item) => IN.comp && IN.comp.scene === sc && IN.comp.item === item
     ? `<form class="ind-f" id="indf"><textarea id="indt" maxlength="2000" placeholder="${item ? 'O que queres ouvir neste parágrafo?' : 'O que queres ouvir nesta cena?'}" aria-label="Indicação"></textarea>
         <div><button class="btn blue" type="submit">Guardar</button><button class="btn" type="button" id="indx">Cancelar</button></div></form>` : '';
   const row = i => {
     const own = dir && i.author === role.name;
-    return `<div class="ind-i ${i.status === 'feita' ? 'done' : ''}" data-i="${i.id}">${dchip(i.author)}
-      <div><p class="t">${esc(i.text)}</p>${i.reply ? `<p class="rp"><b>${esc(i.reply_by || 'Sonoplastia')}:</b> ${esc(i.reply)}</p>` : ''}</div>
+    return `<div class="ind-i ${i.status === 'feita' ? 'done' : ''}" data-i="${i.id}"><div class="ind-w">${dchip(i.author)}${i.status === 'feita' ? '<span class="pill ok">Feita</span>' : ''}</div>
+      <p class="t">${esc(i.text)}</p>${i.reply ? `<p class="rp"><b>${esc(i.reply_by || 'Sonoplastia')}:</b> ${esc(i.reply)}</p>` : ''}
       <div class="ac">${dir ? (own ? `<button class="btn" data-edit="${i.id}">Editar</button><button class="btn" data-del="${i.id}" aria-label="Apagar">${I.trash}</button>` : '')
         : `<button class="btn ${i.status === 'feita' ? '' : 'blue'}" data-done="${i.id}">${i.status === 'feita' ? 'Reabrir' : I.check + 'Feita'}</button><button class="btn" data-reply="${i.id}">Responder</button>`}</div></div>`;
   };
-  const card = sc => {
-    const mine = inds.filter(i => i.scene === sc.n), sOpen = mine.filter(i => i.status !== 'feita').length;
-    const lines = (d.script || []).filter(x => x.id >= sc.from && x.id <= sc.to && x.type !== 'titulo');
-    const shown = lines.filter(x => dir || IN.all || mine.some(i => i.item === x.id));
-    const sceneLevel = mine.filter(i => i.item == null || !lines.some(x => x.id === i.item));
-    return `<section class="card ind-sc" id="sc${sc.n}"><div class="ind-h"><span class="scn-n">Cena ${sc.n}</span><b>${esc(scLabel(sc))}</b><span class="sp"></span>
-        ${mine.length ? `<span class="pill ${sOpen ? 'warn' : 'ok'}">${sOpen ? `${sOpen} por tratar` : 'tratadas'}</span>` : ''}
-        ${dir ? `<button class="btn" data-add="${sc.n}:">+ Indicação para a cena</button>` : ''}</div>
-      ${sceneLevel.map(row).join('')}${comp(sc.n, null)}
-      ${shown.map(x => `<div class="ind-p ${x.type === 'nota' ? 'mk' : ''}">${x.speaker ? `<span class="spk">${esc(x.speaker)}</span>` : ''}<p class="tx">${esc(x.text)}</p>
-        ${mine.filter(i => i.item === x.id).map(row).join('')}${comp(sc.n, x.id)}
-        ${dir && x.type !== 'nota' ? `<button class="btn add" data-add="${sc.n}:${x.id}">+ Indicação aqui</button>` : ''}</div>`).join('')}
-      ${!dir && !mine.length ? '<p class="note">Sem indicações nesta cena.</p>' : ''}</section>`;
-  };
+  /* uma linha = o texto do guião (à esquerda, como no documento) + a caixa das indicações (à direita) */
+  const line = (cls, left, mine, sc, item, addLabel) => `<div class="doc-r ${cls}"><div class="doc-l">${left}</div>
+      <div class="doc-s">${mine.map(row).join('')}${comp(sc, item)}${dir && !(IN.comp && IN.comp.scene === sc && IN.comp.item === item) ? `<button class="doc-add ${mine.length ? 'has' : ''}" data-add="${sc}:${item == null ? '' : item}">${mine.length ? '+' : '+ ' + addLabel}</button>` : ''}</div></div>`;
+  const rendered = new Set();
+  const body = scenes.map(sc => {
+    const items = script.filter(x => x.id >= sc.from && x.id <= sc.to && !isHead(x));
+    items.forEach(x => rendered.add(x.id));
+    const mineScene = inds.filter(i => i.scene === sc.n && (i.item == null || !items.some(x => x.id === i.item)));
+    const sOpen = inds.filter(i => i.scene === sc.n && i.status !== 'feita').length;
+    return line('doc-h', `<h2>CENA ${sc.n}${sOpen ? `<span class="pill warn">${sOpen} por tratar</span>` : ''}</h2>`, mineScene, sc.n, null, 'Indicação para a cena')
+      + items.map(x => {
+        const mine = inds.filter(i => i.scene === sc.n && i.item === x.id);
+        const cls = x.type === 'titulo' ? 'doc-sub' : x.type === 'nota' ? 'doc-mk' : x.type === 'entrevista' ? 'doc-iv' : '';
+        const canAdd = x.type === 'narracao' || x.type === 'entrevista';
+        return canAdd ? line(cls, `<p>${esc(x.text)}</p>`, mine, sc.n, x.id, 'Indicação') : `<div class="doc-r ${cls}"><div class="doc-l"><p>${esc(x.text)}</p></div><div class="doc-s"></div></div>`;
+      }).join('');
+  }).join('');
   const y = window.scrollY;
   $app.innerHTML = inShell(`<p class="rv-back" style="margin:0 0 10px"><a class="back" href="#/indicacoes">${I.chevL}Episódios</a></p>
     <h1 class="page-t" style="margin-top:0">${esc(d.meta.title)}</h1>
-    <p class="page-s" style="margin-bottom:18px">${total ? `${total} ${pl(total, 'indicação', 'indicações')} em ${new Set(inds.map(i => i.scene)).size} ${pl(new Set(inds.map(i => i.scene)).size, 'cena', 'cenas')}${open ? `, ${open} por tratar` : ', todas tratadas'}` : (dir ? 'Ainda sem indicações. Escolhe uma cena ou um parágrafo do guião.' : 'A Direção ainda não deixou indicações.')}</p>
-    ${dir ? '' : `<div class="ind-gen"><button class="btn" id="indall">${IN.all ? 'Só o que tem indicações' : 'Ver o guião completo'}</button></div>`}
-    ${scenes.map(card).join('')}`);
+    <p class="page-s" style="margin-bottom:18px">${total ? `${total} ${pl(total, 'indicação', 'indicações')}${open ? `, ${open} por tratar` : ', todas tratadas'}` : (dir ? 'Clica numa caixa ao lado do guião para escrever uma indicação.' : 'A Direção ainda não deixou indicações.')}</p>
+    <div class="doc">${body}</div>`);
   window.scrollTo(0, y);
-  const patch = (id, body) => api(`/api/episodes/${IN.id}/indications/${id}`, jsonOpts('PATCH', body)).then(loadIndic).catch(e => alert(e.message));
+  const patch = (id, b) => api(`/api/episodes/${IN.id}/indications/${id}`, jsonOpts('PATCH', b)).then(loadIndic).catch(e => alert(e.message));
   const find = id => inds.find(i => i.id === id);
-  $app.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { const [sc, it] = b.dataset.add.split(':'); IN.comp = { scene: +sc, item: it ? +it : null }; renderIndic(); const t = document.getElementById('indt'); if (t) t.focus(); });
+  $app.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { const [sc, it] = b.dataset.add.split(':'); IN.comp = { scene: +sc, item: it ? +it : null }; renderIndic(); const t = document.getElementById('indt'); if (t) { t.focus(); t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } });
   const f = document.getElementById('indf');
   if (f) {
     document.getElementById('indx').onclick = () => { IN.comp = null; renderIndic(); };
@@ -1190,7 +1217,6 @@ function renderIndic() {
   $app.querySelectorAll('[data-del]').forEach(b => holdDelete(b, () => api(`/api/episodes/${IN.id}/indications/${b.dataset.del}`, { method: 'DELETE' }).then(loadIndic).catch(e => alert(e.message)), 'Apagar esta indicação?'));
   $app.querySelectorAll('[data-done]').forEach(b => b.onclick = () => { const i = find(b.dataset.done); patch(i.id, { status: i.status === 'feita' ? 'aberta' : 'feita', by: me }); });
   $app.querySelectorAll('[data-reply]').forEach(b => b.onclick = () => { const i = find(b.dataset.reply), t = prompt('Resposta à Direção', i.reply || ''); if (t !== null) patch(i.id, { reply: t, by: me }); });
-  const ia = document.getElementById('indall'); if (ia) ia.onclick = () => { IN.all = !IN.all; renderIndic(); };
 }
 
 /* ---------- Espaço do servidor: ver o que ocupa o disco e apagar áudios gerados ou episódios ---------- */
