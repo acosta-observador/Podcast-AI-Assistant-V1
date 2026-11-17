@@ -145,6 +145,8 @@ a{color:var(--accent);text-decoration:none}
 .gate-in{width:100%;max-width:640px;text-align:center}
 .gate-in .logo{justify-content:center;padding:0;margin-bottom:18px}.gate-in .logo i{width:44px;height:44px;border-radius:14px}.gate-in .logo i svg{width:24px;height:24px}
 .gate-in h1{margin:0 0 6px;font-size:32px;letter-spacing:-.03em}.gate-in p{margin:0 0 24px;color:var(--muted);font-size:17px}
+.gate-me{margin:22px 0 0;font-size:13px;color:var(--muted)}.gate-me b{color:var(--text);font-weight:600}
+.adm-l{display:flex;flex-direction:column;gap:10px}.adm-r{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px}.adm-r b{margin-right:8px}.adm-r small{display:block;color:var(--muted);margin-top:2px}.adm-r.bl b{text-decoration:line-through;opacity:.6}
 .gate-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
 .gate-card{padding:28px 22px;text-align:left;display:flex;flex-direction:column;gap:6px;cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:14px;color:var(--text)}
 @media (hover:hover) and (pointer:fine){.gate-card:hover{border-color:var(--accent);background:var(--accent-soft)}}
@@ -836,7 +838,7 @@ const I = {
 };
 
 /* ---------- estado ---------- */
-const S = { demo:false, list:[], ep:null, cur:0, playing:false, poll:null, scn:0 };
+const S = { me:null, demo:false, list:[], ep:null, cur:0, playing:false, poll:null, scn:0 };
 const $app = document.getElementById('app');
 const player = document.getElementById('player');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -857,6 +859,7 @@ window.addEventListener('hashchange', route);
 async function route() {
   stopAudio(); clearTimeout(S.poll); stopStructure(); clearTimeout(ST.poll); clearTimeout(AN.poll); clearTimeout(MA.poll); clearTimeout(RV.poll); stopReviewAudio(); player.onloadedmetadata = player.ontimeupdate = player.onpause = player.onplay = null; if (!player.paused) player.pause();
   const role = getRole();
+  if (location.hash === '#/admin') return adminPage();
   if (!role) return gatePage();
   if (role.mode === 'direcao' && !/^#\/(direcao|revisao|indicacoes)/.test(location.hash)) { location.hash = '#/direcao'; return; }
   if (role.mode === 'sonoplastia' && !/^#\/projeto/.test(location.hash)) await ensureProject();
@@ -908,7 +911,7 @@ function side(active) {
     <p class="sec">Projeto</p>${it('geral', '#/projeto/' + PROJECT.id, I.grid, 'Visão geral')}${it('espaco', '#/espaco', I.disk, 'Espaço do servidor')}
     <p class="sec">Funcionalidades</p>${it('autotake', '#/autotake', I.wave, 'AutoTake')}${it('analise', '#/analise', I.doc, 'Análise de Guião')}${it('maestro', '#/maestro', I.music, 'Maestro')}${it('estrutura', '#/estrutura', I.layers, 'Esqueleto')}
     <p class="sec">Revisão</p>${it('indic', '#/indicacoes', I.doc, 'Indicações da Redação')}${it('notas', '#/notas', I.note, 'Notas da Redação')}
-    <div class="who"><span>Perfil: <b>Sonoplastia</b></span><a href="#" onclick="switchRole();return false">Mudar</a><a href="/auth/logout" style="margin-left:10px">Sair</a></div>
+    <div class="who"><span>Perfil: <b>Sonoplastia</b></span><a href="#" onclick="switchRole();return false">Mudar</a>${S.me?.admin ? '<a href="#/admin" style="margin-left:10px">Admin</a>' : ''}<a href="/auth/logout" style="margin-left:10px">Sair</a></div>
   </aside>`;
 }
 const shell = (active, html) => `<div class="shell">${active ? side(active) : ''}<div class="main">${html}</div></div>`;
@@ -1162,7 +1165,10 @@ function gatePage(step) {
   $app.innerHTML = `<div class="gate"><div class="gate-in">${brand}<p>Entrar como</p>
     <div class="gate-cards">
       <button class="gate-card" id="gson"><b>Sonoplastia</b><span>Montar o episódio, o sound design e a música, e ler as notas da Redação.</span></button>
-      <button class="gate-card" id="gdir"><b>Redação</b><span>Ouvir os episódios e deixar notas na timeline.</span></button></div></div></div>`;
+      <button class="gate-card" id="gdir"><b>Redação</b><span>Ouvir os episódios e deixar notas na timeline.</span></button>
+      ${S.me?.admin ? '<button class="gate-card" id="gadm"><b>Administração</b><span>Ver quem entrou na plataforma e bloquear contas.</span></button>' : ''}</div>
+      ${S.me?.email ? `<p class="gate-me">Sessão iniciada como <b>${esc(S.me.email)}</b> · <a href="/auth/logout">Sair</a></p>` : ''}</div></div>`;
+  const ga = document.getElementById('gadm'); if (ga) ga.onclick = () => { location.hash = '#/admin'; };
   document.getElementById('gson').onclick = () => { setRole({ mode: 'sonoplastia' }); location.hash = '#/'; route(); };
   document.getElementById('gdir').onclick = () => gatePage('dir');
 }
@@ -1391,6 +1397,26 @@ function renderIndic() {
 
 /* ---------- Espaço do servidor: ver o que ocupa o disco e apagar áudios gerados ou episódios ---------- */
 const fmtMB = mb => mb >= 1024 ? (mb / 1024).toFixed(1).replace('.', ',') + ' GB' : Math.round(mb) + ' MB';
+async function adminPage() {
+  if (!S.me?.admin) { location.hash = '#/'; return; }
+  let d; try { d = await api('/api/admin/users'); } catch (e) { d = null; }
+  const when = t => t ? new Date(t * 1000).toLocaleString('pt-PT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'ainda não entrou';
+  const row = u => `<div class="card adm-r ${u.blocked ? 'bl' : ''}"><div><b>${esc(u.email)}</b>${u.admin ? '<span class="pill run"><i></i>Admin</span>' : ''}${u.blocked ? '<span class="pill">Bloqueado</span>' : ''}
+      <small>Última entrada: ${when(u.last)} · ${u.logins || 0} entradas</small></div>
+      ${u.admin ? '' : `<button class="btn" data-bl="${esc(u.email)}" data-to="${u.blocked ? 0 : 1}">${u.blocked ? 'Desbloquear' : 'Bloquear'}</button>`}</div>`;
+  $app.innerHTML = `<div class="top"><div class="top-in"><a class="logo" href="#/" style="padding:0"><i>${I.logo}</i><span style="font-size:15px">Podcast Plus <em style="display:inline;margin-left:4px">Administração</em></span></a><div></div><div class="top-actions"><a href="#/" style="font-size:13px">Voltar</a></div></div></div>
+  <div class="wrap"><h1 class="page-t">Utilizadores</h1>
+    <p class="page-s">Quem já entrou com uma conta @${esc(d?.domain || 'observador.pt')}. Uma conta bloqueada perde o acesso de imediato e não consegue voltar a entrar.</p>
+    ${d ? `<div class="adm-l">${d.users.map(row).join('') || '<div class="card empty">Ainda ninguém entrou.</div>'}</div>` : '<div class="card empty">Não consegui carregar os utilizadores.</div>'}
+    <p class="note" style="margin-top:16px">Os administradores definem-se no Render, na variável <b>ADMIN_EMAILS</b> (emails separados por vírgula).</p></div>`;
+  $app.querySelectorAll('[data-bl]').forEach(b => b.onclick = async () => {
+    const block = b.dataset.to === '1';
+    if (block && !(await askConfirm({ title: 'Bloquear esta conta?', text: `<b>${esc(b.dataset.bl)}</b> deixa de conseguir entrar na plataforma. Podes desbloquear quando quiseres.`, ok: 'Bloquear' }))) return;
+    try { await api('/api/admin/users/block', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: b.dataset.bl, blocked: block }) }); adminPage(); }
+    catch (e) { alert(e.message); }
+  });
+}
+
 async function espacoPage() {
   let d; try { d = await api('/api/storage'); } catch (e) { d = null; }
   if (!d) { $app.innerHTML = shell('espaco', `<div class="wrap"><h1 class="page-t">Espaço do servidor</h1><div class="card empty">Não consegui ler o disco do servidor.</div></div>`); return; }
@@ -2666,6 +2692,7 @@ const Demo = {
 (async function start() {
   try { const r = await fetch('/api/episodes'); if (r.status === 401) { location.href = '/'; return; } if (!r.ok || !r.headers.get('content-type')?.includes('json')) throw 0; }
   catch { S.demo = true; }
+  if (!S.demo) { try { S.me = await fetch('/api/me').then(r => r.json()); } catch {} }
   route();
 })();
 </script>

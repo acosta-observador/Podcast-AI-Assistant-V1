@@ -53,6 +53,7 @@ GOOGLE_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
 SESSION_SECRET = os.getenv("SESSION_SECRET", "").strip()
 ALLOWED_DOMAIN = os.getenv("ALLOWED_DOMAIN", "observador.pt").strip().lower()
 SESSION_DAYS = 30
+ADMINS = {e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()}
 AUTH_ON = bool(GOOGLE_ID and GOOGLE_SECRET and SESSION_SECRET)
 # No Render (variável RENDER=true) sem credenciais fecha tudo; em local sem credenciais fica aberto para desenvolver
 AUTH_LOCKED = not AUTH_ON and bool(os.getenv("RENDER"))
@@ -72,6 +73,24 @@ def _unsign(token: str) -> str | None:
     return payload if hmac.compare_digest(sig, good) else None
 
 
+def is_admin(email: str | None) -> bool:
+    return bool(email) and email.lower() in ADMINS
+
+
+_USERS = DATA.parent / "users.json"
+
+
+def _users() -> dict:
+    try:
+        return json.loads(_USERS.read_text())
+    except Exception:
+        return {}
+
+
+def _save_users(u: dict) -> None:
+    write_json(_USERS, u)
+
+
 def session_email(request: Request) -> str | None:
     raw = _unsign(request.cookies.get("pp_session", ""))
     if not raw:
@@ -82,7 +101,11 @@ def session_email(request: Request) -> str | None:
             return None
     except ValueError:
         return None
-    return email if email.endswith("@" + ALLOWED_DOMAIN) else None
+    if not email.endswith("@" + ALLOWED_DOMAIN):
+        return None
+    if _users().get(email, {}).get("blocked") and not is_admin(email):
+        return None
+    return email
 
 
 def _base(request: Request) -> str:
@@ -154,6 +177,14 @@ def auth_callback(request: Request, code: str = "", state: str = "", error: str 
     email = str(claims.get("email", "")).lower()
     if claims.get("aud") != GOOGLE_ID or claims.get("email_verified") is not True or not email.endswith("@" + ALLOWED_DOMAIN):
         return _login_page(f"Só contas @{ALLOWED_DOMAIN} podem entrar.", 403)
+    with _lock:
+        users = _users()
+        u = users.setdefault(email, {"first": time.time(), "logins": 0, "blocked": False})
+        if u.get("blocked") and not is_admin(email):
+            return _login_page("Esta conta foi bloqueada. Fala com o administrador.", 403)
+        u["last"] = time.time()
+        u["logins"] = u.get("logins", 0) + 1
+        _save_users(users)
     r = RedirectResponse("/", status_code=302)
     r.set_cookie("pp_session", _sign(f"{email}|{time.time() + SESSION_DAYS * 86400}"), max_age=SESSION_DAYS * 86400,
                  httponly=True, secure=SECURE_COOKIE, samesite="lax", path="/")
@@ -170,7 +201,43 @@ def auth_logout():
 
 @app.get("/api/me")
 def whoami(request: Request):
-    return {"email": session_email(request) if AUTH_ON else None}
+    e = session_email(request) if AUTH_ON else None
+    return {"email": e, "admin": is_admin(e)}
+
+
+def _need_admin(request: Request) -> str:
+    e = session_email(request) if AUTH_ON else None
+    if not is_admin(e):
+        raise HTTPException(403, "Só o administrador pode fazer isto")
+    return e
+
+
+@app.get("/api/admin/users")
+def admin_users(request: Request):
+    me = _need_admin(request)
+    users = _users()
+    for a in ADMINS:                                    # admins que ainda não entraram também aparecem
+        users.setdefault(a, {"first": None, "last": None, "logins": 0, "blocked": False})
+    rows = [{"email": e, "admin": is_admin(e), "me": e == me, **{k: u.get(k) for k in ("first", "last", "logins", "blocked")}}
+            for e, u in users.items()]
+    rows.sort(key=lambda r: (not r["admin"], -(r["last"] or 0)))
+    return {"users": rows, "domain": ALLOWED_DOMAIN}
+
+
+@app.post("/api/admin/users/block")
+def admin_block(request: Request, body: dict = Body(...)):
+    _need_admin(request)
+    email = str(body.get("email", "")).strip().lower()
+    if is_admin(email):
+        raise HTTPException(400, "Não se pode bloquear um administrador")
+    if not email.endswith("@" + ALLOWED_DOMAIN):
+        raise HTTPException(400, "Email inválido")
+    with _lock:
+        users = _users()
+        u = users.setdefault(email, {"first": None, "last": None, "logins": 0})
+        u["blocked"] = bool(body.get("blocked", True))
+        _save_users(users)
+    return {"ok": True}
 
 
 # ---------- helpers de armazenamento (uma pasta por episódio) ----------
