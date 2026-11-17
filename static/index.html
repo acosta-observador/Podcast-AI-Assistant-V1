@@ -516,7 +516,12 @@ body{letter-spacing:-.015em}
 .gate{background:var(--bg)}
 .gate-in h1{font-weight:800;letter-spacing:-.04em}
 .gate-names button{background:var(--card);border:0;border-radius:24px;font-weight:800}
-@media (hover:hover) and (pointer:fine){.gate-names button:hover{background:var(--accent);color:#fff}}
+@media (hover:hover) and (pointer:fine){.gate-names button:hover{background:var(--accent);color:#fff}.gate-plus:hover{background:var(--accent-soft)!important;color:var(--accent)!important;border-color:var(--accent)!important}}
+.gate-names button{position:relative;transition:background-color .15s ease,color .15s ease,transform .16s var(--ease-out)}.gate-names button:active{transform:scale(.97)}
+.gate-names .gate-plus{background:transparent;border:2px dashed rgba(14,34,56,.28);color:var(--muted);font-size:30px;font-weight:400;border-radius:24px}
+.gate-names.manage button[data-name]{background:#fdecea;color:#b3261e}.gate-names .rm{position:absolute;top:8px;right:14px;font-style:normal;font-size:20px;font-weight:700}
+.gate-add{grid-column:1/-1;display:flex;gap:8px}.gate-add input{flex:1;min-width:0;height:64px;border-radius:24px;border:2px solid var(--accent);padding:0 20px;font:inherit;font-size:19px;font-weight:600;background:#fff;color:var(--text)}
+.gate-add button{height:64px;padding:0 22px}.gate-add .ok{background:var(--accent);color:#fff}
 @media (hover:hover) and (pointer:fine){.gate-card:hover b,.gate-card:hover span{color:inherit}}
 .rv-bar{background:rgba(0,0,0,.1)}.rv-fill{background:rgba(0,0,0,.12)}.rv-head{background:var(--blue)}
 .rv-t{background:rgba(0,0,0,.1)}
@@ -901,7 +906,7 @@ function side(active) {
     <div class="proj-n"><b>${esc(PROJECT.name)}</b><span>${PROJECT.total} episódios</span></div>
     <p class="sec">Projeto</p>${it('geral', '#/projeto/' + PROJECT.id, I.grid, 'Visão geral')}${it('espaco', '#/espaco', I.disk, 'Espaço do servidor')}
     <p class="sec">Funcionalidades</p>${it('autotake', '#/autotake', I.wave, 'AutoTake')}${it('analise', '#/analise', I.doc, 'Análise de Guião')}${it('maestro', '#/maestro', I.music, 'Maestro')}${it('estrutura', '#/estrutura', I.layers, 'Esqueleto')}
-    <p class="sec">Revisão</p>${it('indic', '#/indicacoes', I.doc, 'Indicações da Direção')}${it('notas', '#/notas', I.note, 'Notas da Direção')}
+    <p class="sec">Revisão</p>${it('indic', '#/indicacoes', I.doc, 'Indicações da Redação')}${it('notas', '#/notas', I.note, 'Notas da Redação')}
     <div class="who"><span>Perfil: <b>Sonoplastia</b></span><a href="#" onclick="switchRole();return false">Mudar</a></div>
   </aside>`;
 }
@@ -964,7 +969,7 @@ async function projectPage() {
     inp.onchange = async () => {
       const f = inp.files[0]; if (!f) return;
       const fd = new FormData(), kind = l.dataset.up;
-      if (kind === 'script' && !(await askConfirm({ title: 'Trocar o guião?', text: 'O guião atual vai ser apagado e substituído por <b>' + esc(f.name) + '</b>. A análise das cenas é refeita; as indicações da Direção mantêm-se.', ok: 'Trocar guião' }))) { inp.value = ''; return; }
+      if (kind === 'script' && !(await askConfirm({ title: 'Trocar o guião?', text: 'O guião atual vai ser apagado e substituído por <b>' + esc(f.name) + '</b>. A análise das cenas é refeita; as indicações da Redação mantêm-se.', ok: 'Trocar guião' }))) { inp.value = ''; return; }
       let path;
       if (kind === 'new') { fd.append('script', f); fd.append('ep', l.dataset.n); fd.append('project', PROJECT.id); path = '/api/episodes/script'; }
       else if (kind === 'script') { fd.append('script', f); path = `/api/episodes/${l.dataset.id}/script`; }
@@ -1113,8 +1118,10 @@ function renderAnalysis() {
   document.getElementById('anep').onchange = e => { location.hash = '#/analise/' + e.target.value + (sc ? '/' + sc.n : ''); };
 }
 
-/* ---------- Perfil: Sonoplastia ou Direção ---------- */
+/* ---------- Perfil: Sonoplastia ou Redação ---------- */
 const ROLE_KEY = 'pp_role', DIRECTORS = ['Miguel', 'Sara', 'Tânia', 'João', 'Raquel'];
+const NAME_PAL = ['#d9822b', '#c2477a', '#2f8f6b', '#3b6fd1', '#7a52c7', '#b5483a', '#2a8aa6', '#8a7a1e'];
+const dcol = n => DCOL[n] || (n ? NAME_PAL[[...n].reduce((a, c) => a + c.charCodeAt(0), 0) % NAME_PAL.length] : '#111');
 const getRole = () => { try { return JSON.parse(localStorage.getItem(ROLE_KEY)); } catch { return null; } };
 const setRole = r => { try { r ? localStorage.setItem(ROLE_KEY, JSON.stringify(r)) : localStorage.removeItem(ROLE_KEY); } catch {} };
 function switchRole() { setRole(null); location.hash = '#/'; route(); }
@@ -1122,22 +1129,44 @@ function switchRole() { setRole(null); location.hash = '#/'; route(); }
 function gatePage(step) {
   const brand = `<a class="logo"><i>${I.logo}</i></a><h1>Podcast Plus AI Assistant</h1>`;
   if (step === 'dir') {
-    $app.innerHTML = `<div class="gate"><div class="gate-in">${brand}<p>Quem és tu?</p>
-      <div class="gate-names">${DIRECTORS.map(n => `<button data-name="${n}">${n}</button>`).join('')}</div>
-      <p style="margin:24px 0 0;font-size:14px"><a href="#" id="gback">Voltar</a></p></div></div>`;
-    $app.querySelectorAll('[data-name]').forEach(b => b.onclick = () => { setRole({ mode: 'direcao', name: b.dataset.name }); location.hash = '#/direcao'; route(); });
-    document.getElementById('gback').onclick = e => { e.preventDefault(); gatePage(); };
+    let names = DIRECTORS.slice(), manage = false, adding = false;
+    const draw = () => {
+      $app.innerHTML = `<div class="gate"><div class="gate-in">${brand}<p>Quem és tu?</p>
+        <div class="gate-names ${manage ? 'manage' : ''}">${names.map(n => `<button data-name="${esc(n)}" aria-label="${manage ? 'Remover ' + esc(n) : esc(n)}">${esc(n)}${manage ? '<i class="rm" aria-hidden="true">×</i>' : ''}</button>`).join('')}
+          ${adding ? `<form class="gate-add" id="gform"><input id="gname" maxlength="30" placeholder="Nome" autocomplete="off" aria-label="Nome"><button class="ok" type="submit">Adicionar</button><button type="button" id="gcancel" aria-label="Cancelar">×</button></form>`
+            : `<button class="gate-plus" id="gplus" aria-label="Adicionar à Redação">+</button>`}</div>
+        <p style="margin:24px 0 0;font-size:14px"><a href="#" id="gback">Voltar</a> · <a href="#" id="gmanage">${manage ? 'Concluir' : 'Remover alguém'}</a></p></div></div>`;
+      $app.querySelectorAll('[data-name]').forEach(b => b.onclick = async () => {
+        const n = b.dataset.name;
+        if (!manage) { setRole({ mode: 'direcao', name: n }); location.hash = '#/direcao'; route(); return; }
+        if (!(await askConfirm({ title: 'Remover da Redação?', text: `<b>${esc(n)}</b> deixa de aparecer na lista. As indicações e notas que já deixou ficam.`, ok: 'Remover' }))) return;
+        try { names = await api('/api/directors/' + encodeURIComponent(n), { method: 'DELETE' }); } catch (e) { alert(e.message); }
+        draw();
+      });
+      document.getElementById('gback').onclick = e => { e.preventDefault(); gatePage(); };
+      document.getElementById('gmanage').onclick = e => { e.preventDefault(); manage = !manage; adding = false; draw(); };
+      const plus = document.getElementById('gplus');
+      if (plus) plus.onclick = () => { adding = true; manage = false; draw(); document.getElementById('gname').focus(); };
+      const f = document.getElementById('gform');
+      if (f) {
+        document.getElementById('gcancel').onclick = () => { adding = false; draw(); };
+        f.onsubmit = async e => { e.preventDefault(); const v = document.getElementById('gname').value.trim(); if (!v) return;
+          try { names = await api('/api/directors', jsonOpts('POST', { name: v })); adding = false; draw(); } catch (er) { alert(er.message); } };
+      }
+    };
+    draw();
+    api('/api/directors').then(l => { if (Array.isArray(l) && l.length >= 0) { names = l; if (!adding) draw(); } }).catch(() => {});
     return;
   }
   $app.innerHTML = `<div class="gate"><div class="gate-in">${brand}<p>Entrar como</p>
     <div class="gate-cards">
-      <button class="gate-card" id="gson"><b>Sonoplastia</b><span>Montar o episódio, o sound design e a música, e ler as notas da Direção.</span></button>
-      <button class="gate-card" id="gdir"><b>Direção</b><span>Ouvir os episódios e deixar notas na timeline.</span></button></div></div></div>`;
+      <button class="gate-card" id="gson"><b>Sonoplastia</b><span>Montar o episódio, o sound design e a música, e ler as notas da Redação.</span></button>
+      <button class="gate-card" id="gdir"><b>Redação</b><span>Ouvir os episódios e deixar notas na timeline.</span></button></div></div></div>`;
   document.getElementById('gson').onclick = () => { setRole({ mode: 'sonoplastia' }); location.hash = '#/'; route(); };
   document.getElementById('gdir').onclick = () => gatePage('dir');
 }
 
-const dirTop = role => `<div class="top"><div class="top-in"><a class="logo" href="#/direcao" style="padding:0"><i>${I.logo}</i><span style="font-size:15px">Podcast Plus <em style="display:inline;margin-left:4px">Direção</em></span></a><div></div>
+const dirTop = role => `<div class="top"><div class="top-in"><a class="logo" href="#/direcao" style="padding:0"><i>${I.logo}</i><span style="font-size:15px">Podcast Plus <em style="display:inline;margin-left:4px">Redação</em></span></a><div></div>
   <div class="top-actions"><span style="font-size:13px;color:var(--muted)">${esc(role.name || '')}</span><a href="#" onclick="switchRole();return false" style="font-size:13px;margin-left:12px">Sair</a></div></div></div>`;
 
 async function directorHome() {
@@ -1156,9 +1185,9 @@ async function notesHome() {
   let list; try { list = await api('/api/review'); } catch { list = []; }
   list = list.filter(inProject);
   const rows = list.filter(e => e.kind === 'review' || e.versions);
-  $app.innerHTML = shell('notas', `<div class="wrap"><h1 class="page-t">Notas da Direção</h1>
-    <p class="page-s" style="margin-bottom:24px">Carrega aqui os episódios para a Direção ouvir, com som e música. Eles deixam notas com a hora exata e tu vês tudo aqui.</p>
-    <div class="card" style="padding:20px 22px;margin-bottom:24px"><b style="font-size:16px">Carregar episódio para a Direção</b>
+  $app.innerHTML = shell('notas', `<div class="wrap"><h1 class="page-t">Notas da Redação</h1>
+    <p class="page-s" style="margin-bottom:24px">Carrega aqui os episódios para a Redação ouvir, com som e música. Eles deixam notas com a hora exata e tu vês tudo aqui.</p>
+    <div class="card" style="padding:20px 22px;margin-bottom:24px"><b style="font-size:16px">Carregar episódio para a Redação</b>
       <p class="note" style="margin:4px 0 12px">Se já existir um episódio com o mesmo nome, o ficheiro entra como nova versão e as notas ficam separadas por versão.</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <input type="text" id="rtitle" list="rtitles" placeholder="Nome do episódio (ex.: As Sombras de Duarte Lima, EP 4)" style="height:40px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 12px;font:inherit;color:var(--text);flex:1 1 280px">
@@ -1168,7 +1197,7 @@ async function notesHome() {
         <label class="btn blue" style="cursor:pointer;height:40px">${I.dl}Carregar áudio final<input type="file" id="rfile" accept="audio/*,.wav,.mp3,.m4a,.aif,.aiff,.flac" hidden></label></div>
       <p class="note" id="rnote" style="margin:10px 0 0"></p></div>
     <div class="projs" style="margin-top:0">${rows.length ? rows.map(e => `<a class="card fcard" href="#/revisao/${e.id}${e.latest ? '/' + e.latest : ''}"><b style="font-size:18px;line-height:1.3">${esc(e.title)}</b>
-      <span>${e.versions ? `${e.versions} ${pl(e.versions, 'versão', 'versões')}${e.latest_label ? ', última: ' + esc(e.latest_label) : ''}` : 'A preparar…'} · ${e.notes ? `${e.notes} ${pl(e.notes, 'nota', 'notas')}${e.open ? `, <b style="color:var(--warn)">${e.open} abertas</b>` : ', todas tratadas'}` : 'sem notas'}</span></a>`).join('') : '<div class="card empty">Ainda não há episódios para a Direção. Carrega o primeiro acima.</div>'}</div></div>`);
+      <span>${e.versions ? `${e.versions} ${pl(e.versions, 'versão', 'versões')}${e.latest_label ? ', última: ' + esc(e.latest_label) : ''}` : 'A preparar…'} · ${e.notes ? `${e.notes} ${pl(e.notes, 'nota', 'notas')}${e.open ? `, <b style="color:var(--warn)">${e.open} abertas</b>` : ', todas tratadas'}` : 'sem notas'}</span></a>`).join('') : '<div class="card empty">Ainda não há episódios para a Redação. Carrega o primeiro acima.</div>'}</div></div>`);
   document.getElementById('rfile').onchange = e => {
     const f = e.target.files[0], title = document.getElementById('rtitle').value.trim(), note = document.getElementById('rnote');
     if (!f) return;
@@ -1186,7 +1215,7 @@ async function notesHome() {
   };
 }
 
-/* ---------- Indicações Sonoplastia: a Direção escreve por cena, a Sonoplastia lê antes de editar ---------- */
+/* ---------- Indicações Sonoplastia: a Redação escreve por cena, a Sonoplastia lê antes de editar ---------- */
 const IN = { id: null, data: null, comp: null, all: false };
 const dirTabs = a => `<div class="dtabs"><a class="${a === 'ind' ? 'on' : ''}" href="#/indicacoes">Indicações Sonoplastia</a><a class="${a === 'rev' ? 'on' : ''}" href="#/direcao">Revisão</a></div>`;
 const inShell = html => { const r = getRole(); return r.mode === 'direcao' ? dirTop(r) + `<div class="wrap">${dirTabs('ind')}${html}</div>` : shell('indic', `<div class="wrap">${html}</div>`); };
@@ -1197,7 +1226,7 @@ async function indicHome() {
   let list; try { list = await api('/api/indications'); } catch { list = []; }
   if (!dir) list = list.filter(inProject);
   $app.innerHTML = inShell(`<h1 class="page-t">Indicações Sonoplastia</h1>
-    <p class="page-s" style="margin-bottom:24px">${dir ? 'Escreve, por cena, o que queres ouvir no som do episódio. A Sonoplastia lê tudo antes de começar a editar.' : 'O que a Direção quer ouvir em cada cena. Lê antes de começares a editar.'}</p>
+    <p class="page-s" style="margin-bottom:24px">${dir ? 'Escreve, por cena, o que queres ouvir no som do episódio. A Sonoplastia lê tudo antes de começar a editar.' : 'O que a Redação quer ouvir em cada cena. Lê antes de começares a editar.'}</p>
     <div class="projs" style="margin-top:0">${list.length ? list.map(e => `<a class="card fcard" href="#/indicacoes/${e.id}"><b style="font-size:18px;line-height:1.3">${esc(e.title)}</b>
       <span>${e.total ? `${e.total} ${pl(e.total, 'indicação', 'indicações')}${e.open ? `, <b style="color:var(--warn)">${e.open} por tratar</b>` : ', todas tratadas'}` : (dir ? 'Sem indicações ainda' : 'Sem indicações')}</span></a>`).join('') : '<div class="card empty">Ainda não há episódios com guião.</div>'}</div>`);
 }
@@ -1209,7 +1238,7 @@ async function loadIndic() {
   renderIndic();
 }
 
-/* seleccionar uma frase ou palavra no guião (só a Direção) abre uma caixa: Ambiente, Efeito sonoro ou Música */
+/* seleccionar uma frase ou palavra no guião (só a Redação) abre uma caixa: Ambiente, Efeito sonoro ou Música */
 function bindSelect(CATS) {
   IN.cats = CATS;
   if (IN.selBound) return; IN.selBound = true;
@@ -1285,7 +1314,7 @@ function renderIndic() {
       return `<div class="doc-c cat-${k}" data-l="${lab}">${m.map(row).join('')}${dir && active !== k ? `<button class="doc-add" data-add="${sc}:${item == null ? '' : item}:${k}" aria-label="Indicação de ${lab}">+</button>` : ''}</div>`;
     }).join('')}${comp(sc, item)}</div></div>`;
   };
-  /* texto com highlight nas partes que a Direção seleccionou (a frase + a ordem em que aparece, para palavras repetidas) */
+  /* texto com highlight nas partes que a Redação seleccionou (a frase + a ordem em que aparece, para palavras repetidas) */
   const ptxt = (text, part, mine) => {
     const rs = [];
     mine.filter(i => i.quote && (i.part || 0) === part).forEach(i => {
@@ -1330,7 +1359,7 @@ function renderIndic() {
   const y = window.scrollY;
   $app.innerHTML = inShell(`<p class="rv-back" style="margin:0 0 10px"><a class="back" href="#/indicacoes">${I.chevL}Episódios</a></p>
     <h1 class="page-t" style="margin-top:0">${esc(d.meta.title)}</h1>
-    <p class="page-s" style="margin-bottom:18px">${total ? `${total} ${pl(total, 'indicação', 'indicações')}${open ? `, ${open} por tratar` : ', todas tratadas'}` : (dir ? 'Seleciona uma frase ou palavra do guião para a marcar, ou clica no + ao lado do parágrafo.' : 'A Direção ainda não deixou indicações.')}</p>
+    <p class="page-s" style="margin-bottom:18px">${total ? `${total} ${pl(total, 'indicação', 'indicações')}${open ? `, ${open} por tratar` : ', todas tratadas'}` : (dir ? 'Seleciona uma frase ou palavra do guião para a marcar, ou clica no + ao lado do parágrafo.' : 'A Redação ainda não deixou indicações.')}</p>
     <div class="doc"><div class="doc-hd doc-r"><div class="doc-now" aria-live="polite"><span class="hl-c" id="nowc"></span><span class="of" id="nowof"></span></div><div class="doc-s">${CATS.map(c => `<span class="cat-${c[0]}">${c[1]}</span>`).join('')}</div></div>${body}</div>`);
   window.scrollTo(0, y);
   updateNow();
@@ -1356,7 +1385,7 @@ function renderIndic() {
   $app.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { const i = find(b.dataset.edit), t = prompt('Editar indicação', i.text); if (t && t.trim()) patch(i.id, { text: t }); });
   $app.querySelectorAll('[data-del]').forEach(b => holdDelete(b, () => api(`/api/episodes/${IN.id}/indications/${b.dataset.del}`, { method: 'DELETE' }).then(loadIndic).catch(e => alert(e.message)), 'Apagar esta indicação?'));
   $app.querySelectorAll('[data-done]').forEach(b => b.onclick = () => { const i = find(b.dataset.done); patch(i.id, { status: i.status === 'feita' ? 'aberta' : 'feita', by: me }); });
-  $app.querySelectorAll('[data-reply]').forEach(b => b.onclick = () => { const i = find(b.dataset.reply), t = prompt('Resposta à Direção', i.reply || ''); if (t !== null) patch(i.id, { reply: t, by: me }); });
+  $app.querySelectorAll('[data-reply]').forEach(b => b.onclick = () => { const i = find(b.dataset.reply), t = prompt('Resposta à Redação', i.reply || ''); if (t !== null) patch(i.id, { reply: t, by: me }); });
 }
 
 /* ---------- Espaço do servidor: ver o que ocupa o disco e apagar áudios gerados ou episódios ---------- */
@@ -1366,7 +1395,7 @@ async function espacoPage() {
   if (!d) { $app.innerHTML = shell('espaco', `<div class="wrap"><h1 class="page-t">Espaço do servidor</h1><div class="card empty">Não consegui ler o disco do servidor.</div></div>`); return; }
   const used = d.usado_mb / d.total_mb * 100, low = d.livre_mb < 1500;
   const row = e => `<div class="card esp-r"><div class="esp-t"><b>${esc(e.title)}</b><span class="pill">${e.kind === 'review' ? 'Só revisão' : esc(e.project || 'Projeto')}</span><span class="sp"></span><b class="esp-n">${fmtMB(e.total_mb)}</b></div>
-      <p class="note">Áudios gerados ${fmtMB(e.gerado_mb)} · Gravação e guião ${fmtMB(e.original_mb)}${e.versoes_mb ? ` · Versões da Direção ${fmtMB(e.versoes_mb)}` : ''}</p>
+      <p class="note">Áudios gerados ${fmtMB(e.gerado_mb)} · Gravação e guião ${fmtMB(e.original_mb)}${e.versoes_mb ? ` · Versões da Redação ${fmtMB(e.versoes_mb)}` : ''}</p>
       <div class="esp-a"><button class="btn" data-purge="${e.id}" ${e.gerado_mb < 1 ? 'disabled' : ''} aria-label="Apagar os áudios gerados de ${esc(e.title)}">${I.trash}Apagar áudios gerados</button>
         <button class="btn" data-delep="${e.id}" data-kind="${e.kind}" aria-label="Apagar o episódio ${esc(e.title)}">${I.trash}Apagar episódio</button></div></div>`;
   $app.innerHTML = shell('espaco', `${S.demo ? '<div class="banner">Demonstração: os dados são fictícios.</div>' : ''}<div class="wrap">
@@ -1376,7 +1405,7 @@ async function espacoPage() {
       <p><b>${fmtMB(d.livre_mb)} livres</b> de ${fmtMB(d.total_mb)}${low ? ' · quase cheio: sem espaço o AAF e os uploads falham' : ''}</p></div>
     <p class="section-t" style="margin-top:24px">Episódios, do maior para o mais pequeno</p>
     <div class="esp-l">${d.episodios.length ? d.episodios.map(row).join('') : '<div class="card empty">Não há episódios no servidor.</div>'}</div>
-    <p class="note" style="margin-top:16px"><b>Apagar áudios gerados</b> remove os sons, as músicas, as exportações e a montagem. Os takes, o guião e as notas ficam, e os sons e músicas podem ser gerados outra vez (gasta créditos da ElevenLabs).<br><b>Apagar episódio</b> remove tudo, incluindo as notas da Direção, e não se desfaz.</p></div>`);
+    <p class="note" style="margin-top:16px"><b>Apagar áudios gerados</b> remove os sons, as músicas, as exportações e a montagem. Os takes, o guião e as notas ficam, e os sons e músicas podem ser gerados outra vez (gasta créditos da ElevenLabs).<br><b>Apagar episódio</b> remove tudo, incluindo as notas da Redação, e não se desfaz.</p></div>`);
   const done = () => { S.list = null; espacoPage(); };
   $app.querySelectorAll('[data-purge]').forEach(b => holdDelete(b, () => api(`/api/episodes/${b.dataset.purge}/purge-generated`, { method: 'POST' }).then(done).catch(e => alert(e.message)), 'Apagar os áudios gerados deste episódio?'));
   $app.querySelectorAll('[data-delep]').forEach(b => holdDelete(b, () => api(b.dataset.kind === 'review' ? `/api/review/episodes/${b.dataset.delep}` : `/api/episodes/${b.dataset.delep}`, { method: 'DELETE' }).then(done).catch(e => alert('Não foi possível apagar: ' + e.message)), 'Apagar este episódio e tudo o que tem? Não se desfaz.'));
@@ -1396,7 +1425,7 @@ function holdDelete(el, run, msg, ms = 1300) {
 /* ---------- Revisão: player com notas na timeline ---------- */
 const REEL_SVG = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="49" fill="#dfebf8"/><g fill="none" stroke="#0e2238" stroke-width="13" stroke-linecap="round"><path d="M50 18 A32 32 0 0 1 77 34"/><path d="M80 62 A32 32 0 0 1 56 81"/><path d="M26 71 A32 32 0 0 1 23 38"/></g><circle cx="50" cy="50" r="17" fill="#0e2238"/><path d="M46 43 L58 50 L46 57 Z" fill="#f4f8fc"/></svg>';
 const DCOL = { Miguel: '#d9822b', Sara: '#c2477a', 'Tânia': '#2f8f6b', 'João': '#3b6fd1', Raquel: '#7a52c7' };
-const dchip = n => `<span class="dchip" style="background:${DCOL[n] || '#111'}">${esc(n || 'Direção')}</span>`;
+const dchip = n => `<span class="dchip" style="background:${dcol(n)}">${esc(n || 'Redação')}</span>`;
 const sceneAt = (ver, t) => (ver.scenes || []).filter(x => x.start <= t + 0.05).pop() || null;
 const sceneTag = (ver, t) => { const sc = sceneAt(ver, t); return sc ? `<span class="scn">Cena ${sc.n}</span>` : ''; };
 const isMobile = () => window.matchMedia('(max-width: 640px)').matches;
@@ -1428,7 +1457,7 @@ async function loadReview(vid) {
 function renderReview() {
   const role = getRole(), d = RV.data, rv = d.review, son = role.mode === 'sonoplastia';
   const ready = rv.versions.filter(v => v.state === 'pronto'), ver = ready.find(v => v.id === RV.v);
-  const back = `<p class="rv-back" style="margin:0 0 10px"><a class="back" href="${son ? '#/notas' : '#/direcao'}">${I.chevL}${son ? 'Notas da Direção' : 'Episódios'}</a></p>`;
+  const back = `<p class="rv-back" style="margin:0 0 10px"><a class="back" href="${son ? '#/notas' : '#/direcao'}">${I.chevL}${son ? 'Notas da Redação' : 'Episódios'}</a></p>`;
   let body;
   if (ver) {
     const parts = d.meta.title.split(/\s*[,:·|–-]\s*/), first = parts[0], rest = parts.slice(1).join(' · ') || ver.label;
@@ -1455,7 +1484,7 @@ function renderReview() {
           <button type="submit" class="tb-send" id="rvadd" aria-label="Adicionar nota"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg><span>Adicionar</span></button></form></div>`}
     </div>`;
   } else {
-    body = `<h1 class="page-t" style="font-size:30px">${esc(d.meta.title)}</h1><div class="card empty" style="margin-top:20px">${rv.versions.some(v => v.state !== 'pronto' && v.state !== 'erro') ? 'A versão está a ser preparada…' : (son ? 'Ainda não há nenhuma versão para a Direção ouvir. Carrega uma acima.' : 'Ainda não há versão deste episódio para ouvir.')}</div>`;
+    body = `<h1 class="page-t" style="font-size:30px">${esc(d.meta.title)}</h1><div class="card empty" style="margin-top:20px">${rv.versions.some(v => v.state !== 'pronto' && v.state !== 'erro') ? 'A versão está a ser preparada…' : (son ? 'Ainda não há nenhuma versão para a Redação ouvir. Carrega uma acima.' : 'Ainda não há versão deste episódio para ouvir.')}</div>`;
   }
   const inner = `<div id="rvpage" class="rv-wrap wide${son ? '' : ' dir'}">${back}${son ? '<div id="rvvers"></div>' : ''}${body}</div>`;
   $app.innerHTML = son ? shell('notas', inner) : dirTop(role) + inner;
@@ -1466,7 +1495,7 @@ function renderReview() {
 function renderVersions() {
   const box = document.getElementById('rvvers'); if (!box) return;
   const d = RV.data, rv = d.review;
-  box.innerHTML = `<div class="card" style="padding:16px 18px;margin:14px 0 20px"><b style="font-size:15px">Versões para a Direção</b>
+  box.innerHTML = `<div class="card" style="padding:16px 18px;margin:14px 0 20px"><b style="font-size:15px">Versões para a Redação</b>
     ${rv.versions.length ? rv.versions.map(v => `<div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);margin-top:8px;flex-wrap:wrap">
       <span style="flex:1;min-width:160px"><b>${esc(v.label)}</b> <span class="note">${v.source === 'app' ? 'gerada pela app' : 'carregada'}${v.duration ? ' · ' + mmss(v.duration) : ''}</span></span>
       ${v.state === 'pronto' ? `<span class="pill ok">Pronta</span>` : v.state === 'erro' ? `<span class="pill warn" title="${esc(v.message)}">Erro</span>` : `<span class="pill run">${esc(v.state)}…</span>`}
@@ -1554,7 +1583,7 @@ function bindPlayer(ver) {
   const role = getRole(), a = document.getElementById('rvaudio'), bar = document.getElementById('rvbar');
   const dur = () => (a.duration && isFinite(a.duration)) ? a.duration : (ver.duration || 1);
   const notes = () => RV.data.review.notes.filter(n => n.version === ver.id).sort((x, y) => x.t - y.t);
-  const paintPins = () => { document.getElementById('rvpins').innerHTML = notes().map(n => `<button class="rv-pin ${n.status === 'feita' ? 'feita' : ''} ${RV.active === n.id ? 'on' : ''}" style="left:${Math.min(100, n.t / dur() * 100)}%;--c:${DCOL[n.author] || '#111'}" data-pin="${n.id}" title="${mmss(n.t)} · ${esc(n.author)}: ${esc(n.text.slice(0, 80))}" aria-label="Nota aos ${mmss(n.t)}"></button>`).join(''); document.querySelectorAll('[data-pin]').forEach(p => p.onclick = e => { e.stopPropagation(); const n = notes().find(x => x.id === p.dataset.pin); seek(n.t); setActive(n.id, true); }); };
+  const paintPins = () => { document.getElementById('rvpins').innerHTML = notes().map(n => `<button class="rv-pin ${n.status === 'feita' ? 'feita' : ''} ${RV.active === n.id ? 'on' : ''}" style="left:${Math.min(100, n.t / dur() * 100)}%;--c:${dcol(n.author)}" data-pin="${n.id}" title="${mmss(n.t)} · ${esc(n.author)}: ${esc(n.text.slice(0, 80))}" aria-label="Nota aos ${mmss(n.t)}"></button>`).join(''); document.querySelectorAll('[data-pin]').forEach(p => p.onclick = e => { e.stopPropagation(); const n = notes().find(x => x.id === p.dataset.pin); seek(n.t); setActive(n.id, true); }); };
   const stampText = t => { const sc = sceneAt(ver, t); return (sc ? 'C' + sc.n + ' · ' : '') + mmss(t); };
   const seek = t => { a.currentTime = Math.max(0, Math.min(dur(), t)); tick(); };
   const setActive = (id, scroll) => { RV.active = id; paintNotes(); paintPins(); if (scroll) document.querySelector(`[data-n="${id}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
@@ -1580,7 +1609,7 @@ function bindPlayer(ver) {
           <div style="display:flex;gap:8px;margin-top:6px"><button class="btn blue" data-save="${n.id}">Guardar</button><button class="btn" data-cancel>Cancelar</button></div>` : `<div class="rv-text">${esc(n.text)}</div>`}
         ${(n.agree || []).length || (own && n.author !== own) ? `<div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">${own && n.author !== own ? `<button class="rv-agree ${(n.agree || []).includes(own) ? 'on' : ''}" data-agree="${n.id}">Também reparei${(n.agree || []).length ? ' · ' + n.agree.length : ''}</button>` : `<span class="note">${n.agree.length} também reparou(aram)</span>`}${(n.agree || []).length && own && n.author !== own ? `<span class="note">${n.agree.map(esc).join(', ')}</span>` : ''}</div>` : ''}
         ${n.reply ? `<div class="rv-reply">${dchip(n.reply_by || 'Sonoplastia')} ${esc(n.reply)}</div>` : ''}
-        ${RV.replying === n.id ? `<textarea class="rv-edit" data-reply="${n.id}" style="width:100%;margin-top:8px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:8px 10px;font:inherit;color:var(--text)" rows="2" placeholder="Resposta para a Direção">${esc(n.reply || '')}</textarea>
+        ${RV.replying === n.id ? `<textarea class="rv-edit" data-reply="${n.id}" style="width:100%;margin-top:8px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:8px 10px;font:inherit;color:var(--text)" rows="2" placeholder="Resposta para a Redação">${esc(n.reply || '')}</textarea>
           <div style="display:flex;gap:8px;margin-top:6px"><button class="btn blue" data-savereply="${n.id}">Enviar resposta</button><button class="btn" data-cancel>Cancelar</button></div>` : ''}</div>
       <div class="rv-act">${son ? `<button data-done="${n.id}">${n.status === 'feita' ? 'Reabrir' : 'Marcar como feita'}</button><button data-rep="${n.id}">Responder</button>` : ''}
         ${(son || own === n.author) ? `<button data-edit-btn="${n.id}">Editar</button><button data-del="${n.id}">Apagar</button>` : ''}</div></div>`).join('')
@@ -2607,6 +2636,7 @@ const Demo = {
     if (path === '/api/episodes') return [{ id: 'demo', title: this.ep.meta.title, created: Date.now() / 1000, state: { status: 'pronto' } }, ...(this.scripts || [])];
     if (path === '/api/projects') { this.projs = this.projs || [{ id: DEFAULT_PID, name: 'As Sombras de Duarte Lima', total: 6 }]; if (opts.method === 'POST') { const nm = JSON.parse(opts.body).name; const p = { id: 'p' + (this.projs.length + 1), name: nm, total: 6 }; this.projs.push(p); return p; } return this.projs; }
     if (path === '/api/storage') return { total_mb: 10240, usado_mb: 9731, livre_mb: 509, episodios: [{ id: 'demo', title: this.ep.meta.title, kind: 'autotake', project: 'As Sombras de Duarte Lima', total_mb: 3480, gerado_mb: 1720, versoes_mb: 210, original_mb: 1550 }, { id: 'rev1', title: 'DUARTE LIMA EP6', kind: 'review', project: '', total_mb: 380, gerado_mb: 0, versoes_mb: 380, original_mb: 0 }] };
+    if (path.startsWith('/api/directors')) { this.mem = this.mem || ['Miguel', 'Sara', 'Tânia', 'João', 'Raquel']; const m = opts.method || 'GET'; if (m === 'POST') { const nm = JSON.parse(opts.body).name.trim(); if (this.mem.some(x => x.toLowerCase() === nm.toLowerCase())) throw new Error('Já existe alguém com esse nome na Redação'); this.mem.push(nm); } else if (m === 'DELETE') this.mem = this.mem.filter(x => x !== decodeURIComponent(path.split('/').pop())); return this.mem.slice(); }
     if (/\/purge-generated$/.test(path)) return { ok: true, freed_mb: 1720 };
     if (path === '/api/indications') { const l = this.inds || []; return [{ id: 'demo', title: this.ep.meta.title, project: DEFAULT_PID, total: l.length || 2, open: l.length ? l.filter(i => i.status !== 'feita').length : 2 }]; }
     const mi = path.match(/^\/api\/episodes\/demo\/indications(?:\/(\w+))?$/);

@@ -347,7 +347,7 @@ def _generated_size(d: Path) -> int:
 
 @app.get("/api/storage")
 def storage():
-    """Disco do servidor: total, livre e, por episódio, quanto é áudio gerado, versões para a Direção e gravação original."""
+    """Disco do servidor: total, livre e, por episódio, quanto é áudio gerado, versões para a Redação e gravação original."""
     u = shutil.disk_usage(DATA)
     mb = lambda n: round(n / 1048576, 1)
     projs = {p["id"]: p["name"] for p in _projects()}
@@ -367,7 +367,7 @@ def storage():
 @app.post("/api/episodes/{eid}/purge-generated")
 def purge_generated(eid: str):
     """Apaga o áudio gerado deste episódio (sons, músicas, exportações, montagem). Os takes, o guião, as notas e as versões
-    da Direção ficam; os sons e músicas passam a 'por gerar' e podem ser criados outra vez."""
+    da Redação ficam; os sons e músicas passam a 'por gerar' e podem ser criados outra vez."""
     d = ep_dir(eid)
     if struct_busy(d) or maestro_busy(d) or d.name in _aaf_live:
         raise HTTPException(409, "Há sons, músicas ou um AAF a ser preparados neste episódio. Espera que acabem.")
@@ -480,7 +480,7 @@ def _save_script(d: Path, up: UploadFile) -> str:
 
 @app.post("/api/episodes/script")
 def create_script_episode(ep: int = Form(0), title: str = Form(""), project: str = Form(""), script: UploadFile = File(...)):
-    """Episódio só com o guião (a gravação vem depois): já dá para analisar cenas, planear sons e a Direção deixar indicações."""
+    """Episódio só com o guião (a gravação vem depois): já dá para analisar cenas, planear sons e a Redação deixar indicações."""
     proj = project if any(p["id"] == project for p in _projects()) else DEFAULT_PROJECT["id"]
     pname = next((p["name"] for p in _projects() if p["id"] == proj), "")
     title = title.strip()[:120] or (f"{pname} EP {ep}" if ep else pname or "Episódio")
@@ -1434,7 +1434,7 @@ def export_narration(eid: str, scene: int):
                         background=BackgroundTask(shutil.rmtree, tmp.parent, ignore_errors=True))
 
 
-# ---------- Indicações Sonoplastia: a Direção escreve, no guião e por cena, o que quer ouvir antes de a Sonoplastia editar ----------
+# ---------- Indicações Sonoplastia: a Redação escreve, no guião e por cena, o que quer ouvir antes de a Sonoplastia editar ----------
 INDIC_CATS = ("ambiente", "efeitos", "musica")      # as 3 colunas; as indicações antigas (sem categoria) contam como "efeitos"
 
 
@@ -1455,7 +1455,7 @@ def update_indic(d: Path, fn) -> None:
 
 @app.get("/api/indications")
 def indications_overview():
-    """Episódios com guião e quantas indicações a Direção já deixou em cada um."""
+    """Episódios com guião e quantas indicações a Redação já deixou em cada um."""
     out = []
     for d in sorted(DATA.iterdir(), reverse=True):
         meta = read_json(d / "meta.json")
@@ -1474,7 +1474,7 @@ def get_indications(eid: str):
     if not meta.get("script_file"):
         raise HTTPException(400, "Este episódio não tem guião")
     an = load_analysis(d)
-    return {"meta": meta, "directors": DIRECTORS, "scenes": an.get("scenes", []), "script": an.get("items", []), "indications": read_indic(d)["items"]}
+    return {"meta": meta, "directors": members(), "scenes": an.get("scenes", []), "script": an.get("items", []), "indications": read_indic(d)["items"]}
 
 
 @app.post("/api/episodes/{eid}/indications")
@@ -1512,7 +1512,7 @@ def add_indication(eid: str, body: dict = Body(...)):
 
 @app.patch("/api/episodes/{eid}/indications/{iid}")
 def patch_indication(eid: str, iid: str, body: dict = Body(...)):
-    """Texto (a Direção) ou estado e resposta (a Sonoplastia)."""
+    """Texto (a Redação) ou estado e resposta (a Sonoplastia)."""
     d = ep_dir(eid)
     out = {}
 
@@ -1543,8 +1543,14 @@ def delete_indication(eid: str, iid: str):
     return {"ok": True}
 
 
-# ---------- Revisão: a Direção ouve versões do episódio e deixa notas na timeline ----------
-DIRECTORS = ["Miguel", "Sara", "Tânia", "João", "Raquel"]
+# ---------- Revisão: a Redação ouve versões do episódio e deixa notas na timeline ----------
+DEFAULT_MEMBERS = ["Miguel", "Sara", "Tânia", "João", "Raquel"]
+
+
+def members() -> list[str]:
+    """Quem faz parte da Redação (guardado em members.json, para sobreviver aos deploys)."""
+    m = read_json(DATA / "members.json")
+    return m if isinstance(m, list) else list(DEFAULT_MEMBERS)
 
 
 def review_path(d: Path) -> Path:
@@ -1697,12 +1703,34 @@ def _new_version(d: Path, label: str, source: str, by: str, state: str) -> dict:
 
 @app.get("/api/directors")
 def list_directors():
-    return DIRECTORS
+    return members()
+
+
+@app.post("/api/directors")
+def add_director(body: dict = Body(...)):
+    name = " ".join(str(body.get("name", "")).split())[:30]
+    if not name:
+        raise HTTPException(400, "Escreve o nome")
+    with _lock:
+        m = members()
+        if any(x.lower() == name.lower() for x in m):
+            raise HTTPException(409, "Já existe alguém com esse nome na Redação")
+        m.append(name)
+        write_json(DATA / "members.json", m)
+    return m
+
+
+@app.delete("/api/directors/{name}")
+def remove_director(name: str):
+    with _lock:
+        m = [x for x in members() if x != name]
+        write_json(DATA / "members.json", m)
+    return m
 
 
 @app.get("/api/review")
 def review_overview():
-    """Para cada episódio: versões e notas (para a lista inicial da Direção e da Sonoplastia)."""
+    """Para cada episódio: versões e notas (para a lista inicial da Redação e da Sonoplastia)."""
     out = []
     for d in sorted(DATA.iterdir(), reverse=True):
         meta = read_json(d / "meta.json")
@@ -1718,7 +1746,7 @@ def review_overview():
 
 @app.post("/api/review/episodes")
 def upload_review_episode(title: str = Form(...), label: str = Form(""), by: str = Form("Sonoplastia"), script_from: str = Form(""), project: str = Form(""), audio: UploadFile = File(...)):
-    """A Sonoplastia carrega um episódio para a Direção ouvir. Se já existir um com o mesmo título, entra como nova versão."""
+    """A Sonoplastia carrega um episódio para a Redação ouvir. Se já existir um com o mesmo título, entra como nova versão."""
     title = title.strip()[:120]
     if not title:
         raise HTTPException(400, "Escreve o nome do episódio")
@@ -1750,7 +1778,7 @@ def upload_review_episode(title: str = Form(...), label: str = Form(""), by: str
 def delete_review_episode(eid: str):
     d = ep_dir(eid)
     if read_json(d / "meta.json", {}).get("kind") != "review":
-        raise HTTPException(400, "Só se apagam aqui os episódios carregados para a Direção")
+        raise HTTPException(400, "Só se apagam aqui os episódios carregados para a Redação")
     shutil.rmtree(d)
     return {"ok": True}
 
@@ -1770,13 +1798,13 @@ def get_review(eid: str):
             marks = _clean_scenes(_scenes_from_script(d), v.get("duration") or 0)
             update_review(d, lambda r, vid=v["id"], m=marks: (_version(r, vid) or {}).update(scenes=m))
             v["scenes"] = marks
-    return {"meta": read_json(d / "meta.json"), "review": rv, "directors": DIRECTORS,
+    return {"meta": read_json(d / "meta.json"), "review": rv, "directors": members(),
             "can_mix": bool(read_json(d / "result.json")), "can_scenes": _scenes_source(d) is not None}
 
 
 @app.post("/api/episodes/{eid}/review/versions")
 def upload_version(eid: str, label: str = Form(""), by: str = Form("Sonoplastia"), audio: UploadFile = File(...)):
-    """A Sonoplastia carrega o episódio final (por exemplo, o bounce do Pro Tools) para a Direção ouvir."""
+    """A Sonoplastia carrega o episódio final (por exemplo, o bounce do Pro Tools) para a Redação ouvir."""
     d = ep_dir(eid)
     v = _new_version(d, label, "upload", by, "a converter")
     src = d / "review" / f"{v['id']}-original{Path(audio.filename or 'x.wav').suffix.lower()}"
@@ -1876,7 +1904,7 @@ def add_note(eid: str, body: dict = Body(...)):
 
 @app.patch("/api/episodes/{eid}/review/notes/{nid}")
 def patch_note(eid: str, nid: str, body: dict = Body(...)):
-    """Texto e hora (a Direção) ou estado e resposta (a Sonoplastia)."""
+    """Texto e hora (a Redação) ou estado e resposta (a Sonoplastia)."""
     d = ep_dir(eid)
     out = {}
 
