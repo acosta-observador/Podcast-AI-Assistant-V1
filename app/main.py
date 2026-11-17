@@ -1489,11 +1489,19 @@ def add_indication(eid: str, body: dict = Body(...)):
         raise HTTPException(400, "Cena inválida")
     item = body.get("item")
     cat = body.get("cat") if body.get("cat") in INDIC_CATS else "efeitos"
+    quote = {}
+    if str(body.get("quote", "")).strip():           # frase ou palavra seleccionada no guião: fica com highlight
+        def _n(k):
+            try:
+                return max(0, int(body.get(k) or 0))
+            except (TypeError, ValueError):
+                return 0
+        quote = {"quote": str(body["quote"]).strip()[:400], "occ": _n("occ"), "part": _n("part")}
     made = {}
 
     def apply(ind):
         n = ind.get("next", 1)
-        it = {"id": f"i{n}", "scene": scene, "item": int(item) if isinstance(item, int) or str(item or "").isdigit() else None, "cat": cat, "text": text,
+        it = {"id": f"i{n}", "scene": scene, "item": int(item) if isinstance(item, int) or str(item or "").isdigit() else None, "cat": cat, "text": text, **quote,
               "author": str(body.get("author", ""))[:40], "created": time.time(), "status": "aberta", "reply": ""}
         ind["next"] = n + 1
         ind["items"].append(it)
