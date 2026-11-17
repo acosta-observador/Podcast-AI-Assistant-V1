@@ -762,17 +762,18 @@ h1,.page-t{text-wrap:balance}
 .doc-iv .doc-l .iv-box p{padding:5px 0}
 .doc-iv .doc-l .mk{color:#4a3a82;font-size:14px;font-weight:700;line-height:1.5}
 .doc-sub .doc-l p{font-weight:700}
-.doc-s{padding:8px 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start;min-width:0}
+.doc-s{padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:stretch;min-width:0}
 .doc-s:empty{padding:0}
 .doc-r:not(.doc-hd) + .doc-r .doc-s:not(:empty){border-top:1px solid rgba(14,34,56,.1)}
-.doc-c{display:flex;flex-direction:column;gap:10px;min-width:0}
+.doc-c{display:flex;flex-direction:column;gap:10px;min-width:0;padding:10px 8px;background:color-mix(in srgb,var(--c) 13%,transparent);border-radius:12px}
 .doc-c::before{content:attr(data-l);display:none;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .doc-f{grid-column:1/-1}
 .doc-f .ind-cat{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--c)}
-.doc-hd{position:sticky;top:0;z-index:3;margin:-24px -24px 6px;padding:16px 24px 10px;background:var(--panel);border-radius:32px 32px 0 0}
-.doc-hd .doc-s{padding:0}
-.doc-hd span{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-.doc-hd span::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c);margin-right:7px}
+.doc-hd{position:sticky;top:var(--stk,0px);z-index:6;margin:-24px 0 0}
+.doc-hd.doc-r{pointer-events:none}
+.doc-hd .doc-s{padding:12px 0 8px;background:var(--panel);pointer-events:auto;border-radius:0 24px 0 0}
+.doc-hd span{display:flex;align-items:center;justify-content:center;gap:7px;height:32px;border-radius:10px;font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--c);background:color-mix(in srgb,var(--c) 18%,#fff)}
+.doc-hd span::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c)}
 .doc-s .ind-i{display:flex;flex-direction:column;gap:8px;margin:0;padding:12px 14px;border-radius:16px;background:#fff;box-shadow:0 1px 2px rgba(14,34,56,.06);border-top:3px solid var(--c,#999)}
 .doc-s .ind-w{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .doc-s .ind-i .t{font-size:14px;line-height:1.5}
@@ -1265,7 +1266,7 @@ function renderIndic() {
     const active = IN.comp && IN.comp.scene === sc && IN.comp.item === item ? IN.comp.cat : null;
     return `<div class="doc-r ${cls}" data-sc="${sc}" data-it="${item == null ? '' : item}"><div class="doc-l">${left}</div><div class="doc-s">${CATS.map(([k, lab]) => {
       const m = mine.filter(i => catOf(i) === k);
-      return `<div class="doc-c" data-l="${lab}">${m.map(row).join('')}${dir && active !== k ? `<button class="doc-add" data-add="${sc}:${item == null ? '' : item}:${k}" aria-label="Indicação de ${lab}">+</button>` : ''}</div>`;
+      return `<div class="doc-c cat-${k}" data-l="${lab}">${m.map(row).join('')}${dir && active !== k ? `<button class="doc-add" data-add="${sc}:${item == null ? '' : item}:${k}" aria-label="Indicação de ${lab}">+</button>` : ''}</div>`;
     }).join('')}${comp(sc, item)}</div></div>`;
   };
   /* texto com highlight nas partes que a Direção seleccionou (a frase + a ordem em que aparece, para palavras repetidas) */
@@ -1316,6 +1317,7 @@ function renderIndic() {
     <p class="page-s" style="margin-bottom:18px">${total ? `${total} ${pl(total, 'indicação', 'indicações')}${open ? `, ${open} por tratar` : ', todas tratadas'}` : (dir ? 'Seleciona uma frase ou palavra do guião para a marcar, ou clica no + ao lado do parágrafo.' : 'A Direção ainda não deixou indicações.')}</p>
     <div class="doc"><div class="doc-hd doc-r"><div></div><div class="doc-s">${CATS.map(c => `<span class="cat-${c[0]}">${c[1]}</span>`).join('')}</div></div>${body}</div>`);
   window.scrollTo(0, y);
+  { const dc = document.querySelector('.doc'), tp = document.querySelector('.top'); if (dc) dc.style.setProperty('--stk', (tp ? tp.getBoundingClientRect().height : 0) + 'px'); }
   const patch = (id, b) => api(`/api/episodes/${IN.id}/indications/${id}`, jsonOpts('PATCH', b)).then(loadIndic).catch(e => alert(e.message));
   const find = id => inds.find(i => i.id === id);
   $app.querySelectorAll('[data-add]').forEach(b => b.onclick = () => { const [sc, it, cat] = b.dataset.add.split(':'); IN.comp = { scene: +sc, item: it ? +it : null, cat }; renderIndic(); const t = document.getElementById('indt'); if (t) { t.focus(); t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } });
