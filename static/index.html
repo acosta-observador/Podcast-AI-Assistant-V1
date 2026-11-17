@@ -1390,7 +1390,11 @@ function renderIndic() {
   });
   if (dir) bindSelect(CATS);
   $app.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => { const i = find(b.dataset.edit), t = prompt('Editar indicação', i.text); if (t && t.trim()) patch(i.id, { text: t }); });
-  $app.querySelectorAll('[data-del]').forEach(b => holdDelete(b, () => api(`/api/episodes/${IN.id}/indications/${b.dataset.del}`, { method: 'DELETE' }).then(loadIndic).catch(e => alert(e.message)), 'Apagar esta indicação?'));
+  $app.querySelectorAll('[data-del]').forEach(b => b.onclick = async e => {
+    e.stopPropagation();
+    if (!(await askConfirm({ title: 'Apagar esta indicação?', text: 'A indicação deixa de aparecer no guião e não se desfaz.', ok: 'Apagar' }))) return;
+    try { await api(`/api/episodes/${IN.id}/indications/${b.dataset.del}`, { method: 'DELETE' }); loadIndic(); } catch (err) { alert(err.message); }
+  });
   $app.querySelectorAll('[data-done]').forEach(b => b.onclick = () => { const i = find(b.dataset.done); patch(i.id, { status: i.status === 'feita' ? 'aberta' : 'feita', by: me }); });
   $app.querySelectorAll('[data-reply]').forEach(b => b.onclick = () => { const i = find(b.dataset.reply), t = prompt('Resposta à Redação', i.reply || ''); if (t !== null) patch(i.id, { reply: t, by: me }); });
 }
