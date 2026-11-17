@@ -1251,7 +1251,7 @@ function renderIndic() {
   const CATS = [['ambiente', 'Ambiente'], ['efeitos', 'Efeitos sonoros'], ['musica', 'Música']];
   const catOf = i => i.cat || 'efeitos', catName = k => (CATS.find(c => c[0] === k) || CATS[1])[1];
   const comp = (sc, item) => IN.comp && IN.comp.scene === sc && IN.comp.item === item
-    ? `<form class="ind-f doc-f cat-${IN.comp.cat}" id="indf"><span class="ind-cat">${catName(IN.comp.cat)}</span>${IN.comp.quote ? `<p class="qt">“${esc(IN.comp.quote)}”</p>` : ''}<textarea id="indt" maxlength="2000" placeholder="${IN.comp.quote ? 'O que queres ouvir nesta parte?' : item ? 'O que queres ouvir neste parágrafo?' : 'O que queres ouvir nesta cena?'}" aria-label="Indicação"></textarea>
+    ? `<form class="ind-f doc-f cat-${IN.comp.cat}" id="indf"><span class="ind-cat">${catName(IN.comp.cat)}</span>${IN.comp.quote ? `<p class="qt">“${esc(IN.comp.quote)}”</p>` : ''}<textarea id="indt" maxlength="2000" placeholder="${IN.comp.quote ? 'O que queres ouvir nesta parte?' : item ? 'O que queres ouvir neste parágrafo?' : 'O que queres ouvir nesta cena?'}" aria-label="Indicação" enterkeyhint="send"></textarea>
         <div><button class="btn blue" type="submit">Guardar</button><button class="btn" type="button" id="indx">Cancelar</button></div></form>` : '';
   const row = i => {
     const own = dir && i.author === role.name;
@@ -1322,6 +1322,7 @@ function renderIndic() {
   const f = document.getElementById('indf');
   if (f) {
     document.getElementById('indx').onclick = () => { IN.comp = null; renderIndic(); };
+    document.getElementById('indt').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); f.requestSubmit(); } else if (e.key === 'Escape') { e.preventDefault(); IN.comp = null; renderIndic(); } };
     f.onsubmit = e => { e.preventDefault(); const text = document.getElementById('indt').value.trim(); if (!text) return; const c = IN.comp; IN.comp = null;
       api(`/api/episodes/${IN.id}/indications`, jsonOpts('POST', { scene: c.scene, item: c.item, cat: c.cat, text, author: me, quote: c.quote, occ: c.occ, part: c.part })).then(loadIndic).catch(e2 => alert(e2.message)); };
   }
