@@ -847,6 +847,7 @@ const capital = s => s ? s[0].toUpperCase() + s.slice(1) : s;
 async function api(path, opts = {}) {
   if (S.demo) return Demo.api(path, opts);
   const r = await fetch(path, opts);
+  if (r.status === 401) { location.href = '/'; throw new Error('Sessão expirada'); }
   if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail || m } catch {} throw new Error(m); }
   return r.headers.get('content-type')?.includes('json') ? r.json() : r.text();
 }
@@ -907,7 +908,7 @@ function side(active) {
     <p class="sec">Projeto</p>${it('geral', '#/projeto/' + PROJECT.id, I.grid, 'Visão geral')}${it('espaco', '#/espaco', I.disk, 'Espaço do servidor')}
     <p class="sec">Funcionalidades</p>${it('autotake', '#/autotake', I.wave, 'AutoTake')}${it('analise', '#/analise', I.doc, 'Análise de Guião')}${it('maestro', '#/maestro', I.music, 'Maestro')}${it('estrutura', '#/estrutura', I.layers, 'Esqueleto')}
     <p class="sec">Revisão</p>${it('indic', '#/indicacoes', I.doc, 'Indicações da Redação')}${it('notas', '#/notas', I.note, 'Notas da Redação')}
-    <div class="who"><span>Perfil: <b>Sonoplastia</b></span><a href="#" onclick="switchRole();return false">Mudar</a></div>
+    <div class="who"><span>Perfil: <b>Sonoplastia</b></span><a href="#" onclick="switchRole();return false">Mudar</a><a href="/auth/logout" style="margin-left:10px">Sair</a></div>
   </aside>`;
 }
 const shell = (active, html) => `<div class="shell">${active ? side(active) : ''}<div class="main">${html}</div></div>`;
@@ -2663,7 +2664,7 @@ const Demo = {
 };
 
 (async function start() {
-  try { const r = await fetch('/api/episodes'); if (!r.ok || !r.headers.get('content-type')?.includes('json')) throw 0; }
+  try { const r = await fetch('/api/episodes'); if (r.status === 401) { location.href = '/'; return; } if (!r.ok || !r.headers.get('content-type')?.includes('json')) throw 0; }
   catch { S.demo = true; }
   route();
 })();

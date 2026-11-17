@@ -31,7 +31,6 @@ DATA.mkdir(parents=True, exist_ok=True)
 API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY")
 GEN_WORKERS = int(os.getenv("GEN_WORKERS", "4"))
-APP_PASSWORD = os.getenv("APP_PASSWORD")
 
 GUIDE_PATH = DATA.parent / "guia_sound_design.md"
 
@@ -41,21 +40,137 @@ structure_jobs = ThreadPoolExecutor(max_workers=2)                              
 _lock = threading.Lock()
 
 
-# ---------- acesso: palavra-passe única da equipa (HTTP Basic) ----------
+# ---------- acesso: login com Google, só contas @observador.pt ----------
+import hashlib
+import hmac
+from urllib.parse import urlencode
+
+import httpx
+from fastapi.responses import HTMLResponse, RedirectResponse
+
+GOOGLE_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+GOOGLE_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+SESSION_SECRET = os.getenv("SESSION_SECRET", "").strip()
+ALLOWED_DOMAIN = os.getenv("ALLOWED_DOMAIN", "observador.pt").strip().lower()
+SESSION_DAYS = 30
+AUTH_ON = bool(GOOGLE_ID and GOOGLE_SECRET and SESSION_SECRET)
+# No Render (variável RENDER=true) sem credenciais fecha tudo; em local sem credenciais fica aberto para desenvolver
+AUTH_LOCKED = not AUTH_ON and bool(os.getenv("RENDER"))
+SECURE_COOKIE = bool(os.getenv("RENDER")) or os.getenv("COOKIE_SECURE") == "1"
+
+
+def _sign(payload: str) -> str:
+    sig = hmac.new(SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}.{sig}"
+
+
+def _unsign(token: str) -> str | None:
+    payload, _, sig = (token or "").rpartition(".")
+    if not payload:
+        return None
+    good = hmac.new(SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return payload if hmac.compare_digest(sig, good) else None
+
+
+def session_email(request: Request) -> str | None:
+    raw = _unsign(request.cookies.get("pp_session", ""))
+    if not raw:
+        return None
+    try:
+        email, exp = raw.rsplit("|", 1)
+        if float(exp) < time.time():
+            return None
+    except ValueError:
+        return None
+    return email if email.endswith("@" + ALLOWED_DOMAIN) else None
+
+
+def _base(request: Request) -> str:
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme).split(",")[0].strip()
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", "")).split(",")[0].strip()
+    return f"{proto}://{host}"
+
+
+def _login_page(msg: str = "", status: int = 200) -> HTMLResponse:
+    note = f'<p class="e">{msg}</p>' if msg else ""
+    html = f"""<!doctype html><html lang="pt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Podcast Plus · Entrar</title><style>
+:root{{color-scheme:light dark;--bg:#f6f5f1;--fg:#1c1b19;--mu:#6d6a63;--card:#fff;--ln:#e2dfd7}}
+@media(prefers-color-scheme:dark){{:root{{--bg:#151513;--fg:#f1efe9;--mu:#9b978d;--card:#1f1f1c;--ln:#33322e}}}}
+*{{box-sizing:border-box}}body{{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:16px}}
+.c{{background:var(--card);border:1px solid var(--ln);border-radius:16px;padding:36px 32px;max-width:380px;width:100%;text-align:center}}
+h1{{font-size:22px;margin:0 0 6px}}p{{color:var(--mu);margin:0 0 24px;font-size:15px}}.e{{color:#c0392b;margin:0 0 18px}}
+a.b{{display:inline-flex;align-items:center;gap:10px;padding:11px 20px;border-radius:10px;border:1px solid var(--ln);color:var(--fg);text-decoration:none;font-weight:600;transition:transform .15s cubic-bezier(.23,1,.32,1)}}
+a.b:active{{transform:scale(.96)}}@media(hover:hover) and (pointer:fine){{a.b:hover{{background:var(--bg)}}}}
+svg{{width:18px;height:18px}}</style></head><body><div class="c"><h1>Podcast Plus</h1><p>Entra com a tua conta @{ALLOWED_DOMAIN}.</p>{note}
+<a class="b" href="/auth/login"><svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7c-.5-1.4-.8-3-.8-4.7s.3-3.2.8-4.7l-7.9-6.1C.9 16.4 0 20.1 0 24s.9 7.6 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>Entrar com Google</a></div></body></html>"""
+    return HTMLResponse(html, status_code=status, headers={"Cache-Control": "no-store"})
+
+
 @app.middleware("http")
-async def password_gate(request: Request, call_next):
-    if APP_PASSWORD and request.url.path != "/health":
-        header = request.headers.get("authorization", "")
-        ok = False
-        if header.startswith("Basic "):
-            try:
-                _, pw = base64.b64decode(header[6:]).decode().split(":", 1)
-                ok = secrets.compare_digest(pw, APP_PASSWORD)
-            except Exception:
-                ok = False
-        if not ok:
-            return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="Podcast Plus"'})
+async def auth_gate(request: Request, call_next):
+    path = request.url.path
+    if path == "/health" or path.startswith("/auth/"):
+        return await call_next(request)
+    if AUTH_LOCKED:
+        return _login_page("Login não configurado no servidor (faltam GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET ou SESSION_SECRET).", 503)
+    if AUTH_ON and not session_email(request):
+        if path.startswith("/api/"):
+            return JSONResponse({"detail": "Sessão expirada"}, status_code=401)
+        return _login_page()
     return await call_next(request)
+
+
+@app.get("/auth/login")
+def auth_login(request: Request):
+    if not AUTH_ON:
+        return _login_page("Login com Google não configurado.", 503)
+    state = secrets.token_urlsafe(24)
+    q = urlencode({"client_id": GOOGLE_ID, "redirect_uri": _base(request) + "/auth/callback", "response_type": "code",
+                   "scope": "openid email", "state": state, "hd": ALLOWED_DOMAIN, "prompt": "select_account"})
+    r = RedirectResponse("https://accounts.google.com/o/oauth2/v2/auth?" + q, status_code=302)
+    r.set_cookie("pp_state", _sign(state), max_age=600, httponly=True, secure=SECURE_COOKIE, samesite="lax", path="/auth")
+    return r
+
+
+@app.get("/auth/callback")
+def auth_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+    if not AUTH_ON:
+        return _login_page("Login com Google não configurado.", 503)
+    if error:
+        return _login_page("O login foi cancelado.", 400)
+    expected = _unsign(request.cookies.get("pp_state", ""))
+    if not code or not expected or not hmac.compare_digest(expected, state):
+        return _login_page("O pedido de login expirou. Tenta outra vez.", 400)
+    try:
+        tok = httpx.post("https://oauth2.googleapis.com/token", timeout=15, data={
+            "code": code, "client_id": GOOGLE_ID, "client_secret": GOOGLE_SECRET,
+            "redirect_uri": _base(request) + "/auth/callback", "grant_type": "authorization_code"})
+        tok.raise_for_status()
+        idt = tok.json()["id_token"]
+        claims = json.loads(base64.urlsafe_b64decode(idt.split(".")[1] + "=" * (-len(idt.split(".")[1]) % 4)))
+    except Exception:
+        return _login_page("Não foi possível confirmar o login com a Google.", 502)
+    email = str(claims.get("email", "")).lower()
+    if claims.get("aud") != GOOGLE_ID or claims.get("email_verified") is not True or not email.endswith("@" + ALLOWED_DOMAIN):
+        return _login_page(f"Só contas @{ALLOWED_DOMAIN} podem entrar.", 403)
+    r = RedirectResponse("/", status_code=302)
+    r.set_cookie("pp_session", _sign(f"{email}|{time.time() + SESSION_DAYS * 86400}"), max_age=SESSION_DAYS * 86400,
+                 httponly=True, secure=SECURE_COOKIE, samesite="lax", path="/")
+    r.delete_cookie("pp_state", path="/auth")
+    return r
+
+
+@app.get("/auth/logout")
+def auth_logout():
+    r = RedirectResponse("/", status_code=302)
+    r.delete_cookie("pp_session", path="/")
+    return r
+
+
+@app.get("/api/me")
+def whoami(request: Request):
+    return {"email": session_email(request) if AUTH_ON else None}
 
 
 # ---------- helpers de armazenamento (uma pasta por episódio) ----------

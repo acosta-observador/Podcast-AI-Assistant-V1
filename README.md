@@ -37,7 +37,7 @@ Precisa de Python 3.11+ e ffmpeg.
 ```bash
 pip install -r requirements.txt
 export ELEVENLABS_API_KEY=...        # a chave do Scribe
-export APP_PASSWORD=...              # opcional
+# opcional (sem estas, o login fica desligado em local): GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET
 uvicorn app.main:app --reload
 ```
 
@@ -47,14 +47,14 @@ Ou com Docker:
 
 ```bash
 docker build -t podcast-plus-ai .
-docker run -p 8000:8000 -v $(pwd)/data:/data -e ELEVENLABS_API_KEY=... -e APP_PASSWORD=... podcast-plus-ai
+docker run -p 8000:8000 -v $(pwd)/data:/data -e ELEVENLABS_API_KEY=... podcast-plus-ai
 ```
 
 ## Pôr online (Render)
 
 1. Criar um repositório no GitHub e carregar estes ficheiros.
 2. No Render: New → Blueprint → escolher o repositório. O `render.yaml` cria o serviço com disco persistente.
-3. Quando pedir, preencher `ELEVENLABS_API_KEY` e `APP_PASSWORD`.
+3. Quando pedir, preencher `ELEVENLABS_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `SESSION_SECRET` (login Google, só @observador.pt).
 
 ## Pôr online (genérico)
 
@@ -62,7 +62,7 @@ A app é um único container com disco persistente. Funciona em Railway, Render,
 
 1. Criar o serviço a partir do repositório (usa o `Dockerfile`).
 2. Montar um **volume persistente** em `/data` (é onde ficam gravações, transcrições e escolhas).
-3. Definir `ELEVENLABS_API_KEY` e `APP_PASSWORD`.
+3. Definir `ELEVENLABS_API_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `SESSION_SECRET`.
 4. Confirmar que o proxy da plataforma aceita uploads grandes (gravações de 1h em WAV passam de 1 GB). Se não aceitar, enviar FLAC ou MP3 de alta qualidade.
 
 ## Afinar o algoritmo

@@ -13,7 +13,11 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: APP_PASSWORD
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SESSION_SECRET
         sync: false
       - key: DATA_DIR
         value: /data
