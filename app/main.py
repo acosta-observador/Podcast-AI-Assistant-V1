@@ -1639,13 +1639,15 @@ def update_indic(d: Path, fn) -> None:
 def indications_overview():
     """Episódios com guião e quantas indicações a Redação já deixou em cada um."""
     out = []
-    for d in sorted(DATA.iterdir(), reverse=True):
+    for d in DATA.iterdir():
         meta = read_json(d / "meta.json")
         if not meta or meta.get("kind") == "review" or not meta.get("script_file"):
             continue
         its = read_indic(d)["items"]
         out.append({"id": meta["id"], "title": meta["title"], "project": meta.get("project"), "total": len(its),
                     "open": sum(1 for i in its if i.get("status") != "feita")})
+    # Episódio 1 primeiro, depois o 2…: ordem natural do título (números como números)
+    out.sort(key=lambda e: [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", e["title"])])
     return out
 
 
